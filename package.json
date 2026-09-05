@@ -1,0 +1,17 @@
+{
+    "name": "guitar-chord-detector",
+    "version": "0.0.0",
+    "private": true,
+    "packageManager": "pnpm@11.7.0",
+    "scripts": {
+        "dev": "pnpm --filter @gcd/desktop run dev",
+        "build": "pnpm --filter @gcd/shared run typecheck && pnpm --filter @gcd/desktop run build",
+        "test": "pnpm --filter @gcd/desktop run test",
+        "lint": "echo 'Phase 0 bootstrap: lint script not implemented yet'",
+        "typecheck": "pnpm --filter @gcd/desktop run typecheck && pnpm --filter @gcd/shared run typecheck",
+        "typecheck:recursive": "pnpm -r run typecheck"
+    },
+    "devDependencies": {
+        "typescript": "^7.0.2"
+    }
+}

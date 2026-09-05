@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Node / pnpm
+node_modules/
+pnpm-lock.yaml
+
+# Build output
+dist/
+out/
+coverage/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Logs
+*.log

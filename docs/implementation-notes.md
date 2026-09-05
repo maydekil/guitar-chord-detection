@@ -1,0 +1,245 @@
+# Implementation Notes
+
+Use this document to record approved deviations, blockers, and technical decisions.
+
+## Entries
+
+- Phase 0: repository skeleton bootstrap initialized.
+- Phase 7 Task 7.1A:
+	- Added harmonic-focused preprocessing with deterministic HPSS fallback in feature extraction.
+	- Added beat-synchronous frame-boundary estimation plus deterministic boundary densification to avoid single-region collapse when beat detection is sparse.
+	- Added global key estimation and soft key prior in detector scoring; non-diatonic chords remain selectable.
+	- Improved-mode stabilization uses beat-synchronous aggregation plus controlled segment minimum 350ms for flicker reduction (baseline path unchanged).
+	- Added baseline-vs-improved comparison helper and local real-song benchmark test hook via GCD_REAL_SONG_PATH.
+	- Expanded deterministic diagnostics for baseline/improved: algorithm/version, key+confidence, segment duration stats, short-segment buckets (<250ms/<500ms/<1s), chord occurrence and duration percentages, diatonic/non-diatonic counts and durations, and suspicious short non-diatonic segment list.
+	- Benchmark diagnostics are reporting-only; non-diatonic chords are never auto-replaced by diagnostic flow.
+	- Local benchmark file path remains environment-driven (GCD_REAL_SONG_PATH) and is not hardcoded or committed.
+	- Before/After metrics:
+		- segmentCount: 297 -> 213
+		- meanSegmentDuration: 0.9511s -> 1.3262s
+		- medianSegmentDuration: 0.6966s -> 1.0681s
+		- excessiveShortSegmentRate(<250ms): 0.0 -> 0.0
+		- globalKey: F#m -> F#m
+		- chordFamilyDistribution:
+			- baseline major/minor/N = 180/117/0
+			- improved major/minor/N = 127/86/0
+	- Controlled benchmark skip is preserved when GCD_REAL_SONG_PATH is unset so CI and clean local runs do not require copyrighted audio.
+	- Added context-aware short-segment correction subtask:
+		- correction stage runs after segmentation and before final analysis output;
+		- uses local context (prev/candidate/next), duration, confidence, and soft harmonic plausibility;
+		- short duration only is insufficient to trigger correction;
+		- non-diatonic status only is insufficient to trigger correction;
+		- strong short chords are preserved by confidence guard;
+		- dominant-major-in-minor plausibility (e.g., C# in F#m) remains explicitly supported as musically plausible.
+	- Context-correction thresholds/config:
+		- short candidate max duration: 1.00s;
+		- strong short preserve confidence min: 0.78;
+		- weak short candidate confidence max: 0.76;
+		- neighbor min duration: 0.40s;
+		- neighbor min confidence: 0.60;
+		- candidate support min: 0.58;
+		- correction score min: 0.24.
+	- Context-correction benchmark (same local file, improved-before vs improved-after):
+		- segmentCount: 213 -> 202;
+		- meanSegmentDuration: 1.3262s -> 1.3984s;
+		- medianSegmentDuration: 1.0681s -> 1.0681s;
+		- segments <500ms: 21.13% -> 18.32%;
+		- segments <1s: 45.54% -> 40.59%;
+		- nonDiatonicSegmentCount: 13 -> 7;
+		- nonDiatonicDuration: 7.2214s -> 5.7353s;
+		- detected global key: F#m -> F#m;
+		- key confidence: 0.7513 -> 0.7513;
+		- correction events applied: 8.
+	- Added subtask: Musical-Time Harmonic Persistence:
+		- Introduced beat-timing metadata with reliability flag (tempo, beat count, reliable/unreliable).
+		- Added beat-region observation stage and deterministic keep-vs-switch hysteresis before smoothing.
+		- Switch logic is asymmetric vs keep logic and uses:
+			- candidate evidence (confidence + score advantage),
+			- duration support in musical time,
+			- consecutive/neighbor persistence support,
+			- harmonic plausibility,
+			- guarded immediate switch paths (strong-immediate / dominant-override).
+		- Added decision diagnostics in benchmark output:
+			- musicalPersistence.decisionCount,
+			- musicalPersistence.rejectedTransitions (keep),
+			- musicalPersistence.acceptedTransitions (switch).
+		- Extended benchmark summary metrics:
+			- transitionCount,
+			- transitionsPerMinute,
+			- estimatedTempoBpm,
+			- beatCount,
+			- beatReliable,
+			- transitionsPerBeat (only when beatReliable=true).
+		- Added deterministic tests for musical-time persistence behaviors:
+			- reject single-region melody-like false switch,
+			- reject moving-bass instability,
+			- reject passing-note switch,
+			- preserve genuine C->G transition,
+			- preserve short genuine strong chord,
+			- deterministic repeatability.
+		- Local real-song benchmark (same file, baseline vs improved):
+			- segmentCount: 297 -> 167;
+			- transitionCount: 296 -> 166;
+			- transitionsPerMinute: 62.8715 -> 35.2590;
+			- transitionsPerBeat: 0.3723 -> 0.2080 (tempo ~172.27 BPM, beatReliable=true);
+			- meanSegmentDuration: 0.9511s -> 1.6915s;
+			- medianSegmentDuration: 0.6966s -> 1.4164s;
+			- segments <500ms: 35.35% -> 3.59%;
+			- segments <1s: 69.36% -> 22.75%.
+		- Example persistence decisions from benchmark:
+			- rejected: E->D# (reason: keep-insufficient-switch-evidence),
+			- accepted: E->Em (reason: dominant-override).
+		- In this benchmark run, context correction did not apply additional changes after persistence (appliedCount=0).
+	- Added final subtask: Transition Acceptance Refinement:
+		- Refined transition acceptance so ordinary override cannot accept with switchScore <= keepScore.
+		- Added explicit exceptional override path when switchScore <= keepScore, guarded by stronger multi-beat/context requirements and diagnosable reason (`exceptional-multibeat-context-override`).
+		- Added stronger hysteresis for root-preserving quality switches (same root major <-> minor) to reduce contamination-induced flicker.
+		- Added harmonic-change evidence comparing candidate-vs-current support across neighboring musical-time observations and integrated it into keep/switch scoring.
+		- Added benchmark diagnostics:
+			- acceptedTransitionReasonCounts,
+			- rootPreservingQualitySwitchCount,
+			- weakAcceptedOverrideCount (accepted with switchScore <= keepScore),
+			- transitionComparison (before/after transition count + transitions/minute).
+		- Added deterministic tests:
+			- stable E major does not flicker to Em,
+			- stable A major does not flicker to Am,
+			- genuine E -> Em sustained transition preserved,
+			- genuine C#m -> C# sustained transition preserved,
+			- ordinary lower-switch-score acceptance rejected,
+			- explicit exceptional multi-beat override can still switch with diagnosable reason,
+			- no non-exceptional weak switch acceptance,
+			- progression and determinism regressions remain covered and passing.
+		- Local benchmark outcome (same file):
+			- transitionCount: 296 -> 157;
+			- transitionsPerMinute: 62.8715 -> 33.3474;
+			- segmentCount: 297 -> 158;
+			- rootPreservingQualitySwitchCount: 1;
+			- weakAcceptedOverrideCount: 0;
+			- acceptedTransitionReasonCounts: dominant-override=168, strong-immediate=3, persistent-support=3.
+		- Observed examples:
+			- rejected quality-flicker candidate: E -> Em (keep-quality-switch-hysteresis),
+			- preserved genuine transitions: multiple sustained accepted switches remain, e.g., E -> A and A -> E.
+	- Added subtask: Root-Aware Harmonic Scoring:
+		- Added deterministic low-frequency chroma extraction as supporting bass evidence (non-absolute).
+		- Implemented region-level root-aware scoring that separates:
+			- root evidence (pitch-class root/fifth + low-frequency support),
+			- quality evidence (major-third vs minor-third with root/fifth support),
+			- existing template evidence (kept and combined, not replaced blindly).
+		- Added quality ambiguity handling: weak third-margin observations are explicitly treated as ambiguous, reducing unstable major/minor switching.
+		- Integrated root-aware region scoring into existing beat-aware aggregation and persistence pipeline without changing public API shape.
+		- Added benchmark diagnostics:
+			- root candidate scores,
+			- selected root confidence,
+			- major/minor quality evidence,
+			- quality margin,
+			- template top chord/score,
+			- root-aware combined score,
+			- root-change count,
+			- quality-change count,
+			- ambiguous-quality decision count.
+		- Added deterministic tests for:
+			- all 12 major roots (synthetic),
+			- all 12 minor roots (synthetic),
+			- C major vs C minor,
+			- A major vs A minor,
+			- E major melody contamination stability,
+			- A major moving-bass root stability,
+			- inversion-like bass non-root-flip behavior,
+			- weak-third ambiguity stability,
+			- genuine major -> minor detectability,
+			- regression/progression/silence/determinism preservation.
+		- Local benchmark outcome (same file):
+			- segmentCount: 297 -> 152;
+			- transitionsPerMinute: 62.8715 -> 32.0730;
+			- rootChangeCount: 268 -> 150;
+			- qualityChangeCount: 28 -> 1;
+			- rootPreservingQualitySwitchCount: 1;
+			- weakAcceptedOverrideCount: 0;
+			- meanSegmentDuration: 0.9511s -> 1.8584s;
+			- medianSegmentDuration: 0.6966s -> 1.4396s;
+			- ambiguousQualityDecisionCount: 12.
+		- Added subtask: Ground-Truth Chord Evaluation:
+			- Added deterministic local evaluation workflow for comparing engine chord output against manually annotated ground truth.
+			- Added new module `engine/chord_engine/evaluation.py` with:
+				- annotation JSON loading/validation,
+				- optional clip window support (`clipStart` / `clipEnd` and CLI overrides),
+				- deterministic timeline metrics and transition alignment.
+			- Added new CLI command:
+				- `python -m chord_engine.cli evaluate-ground-truth <audio_path> <annotation_path> [--clip-start ...] [--clip-end ...]`.
+			- Added controlled evaluation error envelope (JSON stdout contract), including parse/validation/file-not-found failures.
+			- Added deterministic evaluation metrics:
+				- `timeWeightedChordAccuracy`,
+				- `exactChordMatchPercentage`,
+				- `rootAccuracy`,
+				- `qualityAccuracy`,
+				- `falseTransitionCount`,
+				- `missedTransitionCount`,
+				- `boundaryTimingErrorSeconds`,
+				- top confusion pairs by mismatched-time percentage.
+			- Added tests:
+				- `engine/tests/test_evaluation.py` for annotation parsing, clip handling, metric determinism, and monkeypatched end-to-end evaluation.
+				- `engine/tests/test_cli.py` coverage for `evaluate-ground-truth` success payload and controlled invalid-annotation failure.
+			- Verification:
+				- `./.venv/bin/python -m pytest engine/tests/test_evaluation.py -q` -> 3 passed.
+				- `./.venv/bin/python -m pytest engine/tests/test_cli.py -q` -> 9 passed.
+				- `./.venv/bin/python -m pytest engine/tests -q` -> 135 passed, 1 skipped.
+			- Local real-song benchmark (same file, baseline vs improved) remains unchanged after evaluation subtask implementation:
+				- segmentCount: 297 -> 152;
+				- transitionsPerMinute: 62.8715 -> 32.0730;
+				- rootChangeCount: 268 -> 150;
+				- qualityChangeCount: 28 -> 1;
+				- meanSegmentDuration: 0.9511s -> 1.8584s;
+				- medianSegmentDuration: 0.6966s -> 1.4396s;
+				- rootPreservingQualitySwitchCount: 1;
+				- weakOverrideCount: 0.
+			- Detector behavior/thresholds were not retuned in this subtask; scope remained evaluation-only.
+		- Added subtask: Harmonic Change-Point Segmentation and Global Chord Decoding:
+			- Implemented boundary-first improved path in `engine/chord_engine/analyze.py`:
+				- harmonic-focused features (existing HPSS path),
+				- beat-synchronous representation,
+				- deterministic harmonic novelty/change-point detection,
+				- stable harmonic-region construction,
+				- region-level chord scoring (root-aware + quality + template + soft key prior),
+				- deterministic global sequence decoding (DP/Viterbi-style).
+			- Novelty calculation:
+				- beat-profile novelty = `1 - cosine_similarity(profile_t, profile_t+1)` on beat-synchronous harmonic profiles,
+				- adaptive threshold = `max(min_peak, median(novelty) + scale * MAD(novelty))`,
+				- boundary acceptance requires local peak + sustained evidence (persistence check) with explicit chord-change-supported fallback,
+				- rejected novelty peaks are retained as diagnostics with reasons.
+			- Boundary-selection method:
+				- deterministic local-peak filtering,
+				- adaptive thresholding + prominence + persistence checks,
+				- reported accepted boundary timestamps represent decoded harmonic changes (post-global decoding collapse).
+			- Harmonic-region representation:
+				- each region stores start/end, duration, local best chord, decoded chord, top candidates, root candidate scores, quality evidence, and template diagnostics.
+			- Global decoder method:
+				- dynamic programming over top-k region candidates,
+				- objective combines local evidence, evidence margin, stability bonus, and soft transition penalty,
+				- transition model is soft only (no hard bans), includes harmonic relationship weighting and local confidence.
+			- Replaced/retained stages in improved path:
+				- retained: harmonic preprocessing, beat estimation, key soft prior, root-aware evidence stack;
+				- superseded/bypassed in improved path: old post-classification musical persistence and context short-segment correction are not used as primary repair layers;
+				- baseline path remains unchanged for BEFORE/AFTER comparison.
+			- Added/updated tests in `engine/tests/test_analyze.py`:
+				- sustained A + moving melody remains one region,
+				- sustained A + moving bass no false decoded boundary,
+				- passing tones do not create harmonic boundary,
+				- genuine A -> E boundary preserved,
+				- C -> G -> Am -> F regression preserved with 4 regions,
+				- rapid genuine two-chord survival,
+				- same-root major/minor sustained boundary support,
+				- silence/N valid,
+				- deterministic repeated runs.
+			- Verification:
+				- `./.venv/bin/python -m pytest engine/tests -q` -> 144 passed, 1 skipped.
+			- Local real-song benchmark (Album Lama, baseline vs new improved path):
+				- segmentCount: 297 -> 124;
+				- transitionsPerMinute: 62.8715 -> 26.1257;
+				- harmonicBoundaryCount: 123;
+				- harmonicRegionsPerMinute: 26.3381;
+				- meanHarmonicRegionDuration: 2.2782s;
+				- medianHarmonicRegionDuration: 2.1478s;
+				- rejectedNoveltyPeaks (reported sample): 30;
+				- acceptedBoundaryTimestamps: 123;
+				- globalDecoderPathScore: 22.3219;
+				- regionDecisionsChangedByGlobalDecoding: 1.

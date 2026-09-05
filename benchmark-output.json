@@ -1,0 +1,1461 @@
+{
+  "baseline": {
+    "algorithm": "chroma-template-v1",
+    "beatCount": 795,
+    "beatReliable": true,
+    "chordBreakdown": [
+      {
+        "chord": "A",
+        "count": 56,
+        "durationPercentageOfSong": 25.666486747006495,
+        "durationSeconds": 72.50294784580493
+      },
+      {
+        "chord": "A#m",
+        "count": 1,
+        "durationPercentageOfSong": 0.13152009422181768,
+        "durationSeconds": 0.37151927437641774
+      },
+      {
+        "chord": "Am",
+        "count": 9,
+        "durationPercentageOfSong": 1.685101207217038,
+        "durationSeconds": 4.760090702947849
+      },
+      {
+        "chord": "B",
+        "count": 15,
+        "durationPercentageOfSong": 2.038561460438139,
+        "durationSeconds": 5.7585487528343755
+      },
+      {
+        "chord": "Bm",
+        "count": 23,
+        "durationPercentageOfSong": 8.25288591241903,
+        "durationSeconds": 23.312834467120133
+      },
+      {
+        "chord": "C#",
+        "count": 7,
+        "durationPercentageOfSong": 1.027500736107967,
+        "durationSeconds": 2.9024943310658102
+      },
+      {
+        "chord": "C#m",
+        "count": 36,
+        "durationPercentageOfSong": 16.900332107503523,
+        "durationSeconds": 47.74022675736955
+      },
+      {
+        "chord": "Cm",
+        "count": 1,
+        "durationPercentageOfSong": 0.09042006477749949,
+        "durationSeconds": 0.25541950113378675
+      },
+      {
+        "chord": "D",
+        "count": 31,
+        "durationPercentageOfSong": 11.680628368075178,
+        "durationSeconds": 32.99555555555559
+      },
+      {
+        "chord": "D#",
+        "count": 1,
+        "durationPercentageOfSong": 0.10686007655522672,
+        "durationSeconds": 0.301859410430839
+      },
+      {
+        "chord": "Dm",
+        "count": 3,
+        "durationPercentageOfSong": 0.7315805241088842,
+        "durationSeconds": 2.06657596371889
+      },
+      {
+        "chord": "E",
+        "count": 55,
+        "durationPercentageOfSong": 17.75521271994536,
+        "durationSeconds": 50.155102040816324
+      },
+      {
+        "chord": "Em",
+        "count": 8,
+        "durationPercentageOfSong": 1.4385010305511332,
+        "durationSeconds": 4.063492063492076
+      },
+      {
+        "chord": "F",
+        "count": 3,
+        "durationPercentageOfSong": 0.6904804946645535,
+        "durationSeconds": 1.9504761904762233
+      },
+      {
+        "chord": "F#",
+        "count": 7,
+        "durationPercentageOfSong": 1.956361401549516,
+        "durationSeconds": 5.526349206349153
+      },
+      {
+        "chord": "F#m",
+        "count": 24,
+        "durationPercentageOfSong": 6.896584940756603,
+        "durationSeconds": 19.481541950113517
+      },
+      {
+        "chord": "Fm",
+        "count": 1,
+        "durationPercentageOfSong": 0.2630401884436404,
+        "durationSeconds": 0.7430385487528497
+      },
+      {
+        "chord": "G",
+        "count": 2,
+        "durationPercentageOfSong": 0.41922030033203483,
+        "durationSeconds": 1.1842176870748062
+      },
+      {
+        "chord": "G#",
+        "count": 3,
+        "durationPercentageOfSong": 0.4767603415540768,
+        "durationSeconds": 1.3467573696144797
+      },
+      {
+        "chord": "G#m",
+        "count": 9,
+        "durationPercentageOfSong": 1.3480809657736368,
+        "durationSeconds": 3.808072562358298
+      },
+      {
+        "chord": "Gm",
+        "count": 2,
+        "durationPercentageOfSong": 0.44388031799863936,
+        "durationSeconds": 1.2538775510204232
+      }
+    ],
+    "chordDurationPercentageOfSong": {
+      "A": 25.666486747006495,
+      "A#m": 0.13152009422181768,
+      "Am": 1.685101207217038,
+      "B": 2.038561460438139,
+      "Bm": 8.25288591241903,
+      "C#": 1.027500736107967,
+      "C#m": 16.900332107503523,
+      "Cm": 0.09042006477749949,
+      "D": 11.680628368075178,
+      "D#": 0.10686007655522672,
+      "Dm": 0.7315805241088842,
+      "E": 17.75521271994536,
+      "Em": 1.4385010305511332,
+      "F": 0.6904804946645535,
+      "F#": 1.956361401549516,
+      "F#m": 6.896584940756603,
+      "Fm": 0.2630401884436404,
+      "G": 0.41922030033203483,
+      "G#": 0.4767603415540768,
+      "G#m": 1.3480809657736368,
+      "Gm": 0.44388031799863936
+    },
+    "chordDurationSeconds": {
+      "A": 72.50294784580493,
+      "A#m": 0.37151927437641774,
+      "Am": 4.760090702947849,
+      "B": 5.7585487528343755,
+      "Bm": 23.312834467120133,
+      "C#": 2.9024943310658102,
+      "C#m": 47.74022675736955,
+      "Cm": 0.25541950113378675,
+      "D": 32.99555555555559,
+      "D#": 0.301859410430839,
+      "Dm": 2.06657596371889,
+      "E": 50.155102040816324,
+      "Em": 4.063492063492076,
+      "F": 1.9504761904762233,
+      "F#": 5.526349206349153,
+      "F#m": 19.481541950113517,
+      "Fm": 0.7430385487528497,
+      "G": 1.1842176870748062,
+      "G#": 1.3467573696144797,
+      "G#m": 3.808072562358298,
+      "Gm": 1.2538775510204232
+    },
+    "chordFamilyDistribution": {
+      "N": 0,
+      "major": 180,
+      "minor": 117
+    },
+    "chordOccurrenceCount": {
+      "A": 56,
+      "A#m": 1,
+      "Am": 9,
+      "B": 15,
+      "Bm": 23,
+      "C#": 7,
+      "C#m": 36,
+      "Cm": 1,
+      "D": 31,
+      "D#": 1,
+      "Dm": 3,
+      "E": 55,
+      "Em": 8,
+      "F": 3,
+      "F#": 7,
+      "F#m": 24,
+      "Fm": 1,
+      "G": 2,
+      "G#": 3,
+      "G#m": 9,
+      "Gm": 2
+    },
+    "contractVersion": "1",
+    "diatonicity": {
+      "diatonicDuration": 249.99628117913835,
+      "diatonicSegmentCount": 234,
+      "noChordDuration": 0.0,
+      "noChordSegmentCount": 0,
+      "nonDiatonicDuration": 32.48471655328798,
+      "nonDiatonicSegmentCount": 63,
+      "referenceKey": "F#m"
+    },
+    "estimatedTempoBpm": 172.265625,
+    "excessiveShortSegmentRate": 0.0,
+    "globalKey": "F#m",
+    "globalKeyConfidence": 0.7354946136474609,
+    "maxSegmentDuration": 3.5758730158730145,
+    "meanSegmentDuration": 0.9511144704795499,
+    "medianSegmentDuration": 0.6965986394557859,
+    "minSegmentDuration": 0.25541950113378675,
+    "segmentCount": 297,
+    "shortSegments": {
+      "lt1s": {
+        "count": 206,
+        "percentage": 69.36026936026936
+      },
+      "lt250ms": {
+        "count": 0,
+        "percentage": 0.0
+      },
+      "lt500ms": {
+        "count": 105,
+        "percentage": 35.35353535353536
+      }
+    },
+    "songDuration": 282.4809977324263,
+    "suspiciousShortNonDiatonicSegments": [
+      {
+        "chord": "D#",
+        "confidence": 0.6433609433968861,
+        "duration": 0.301859410430839,
+        "end": 0.301859410430839,
+        "start": 0.0
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6869144894584777,
+        "duration": 0.46439909297052157,
+        "end": 0.7662585034013606,
+        "start": 0.301859410430839
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6516759864864645,
+        "duration": 0.3947392290249434,
+        "end": 4.4117913832199545,
+        "start": 4.017052154195011
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6302026764919731,
+        "duration": 0.4179591836734673,
+        "end": 16.253968253968253,
+        "start": 15.836009070294786
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6543590355977562,
+        "duration": 0.9520181405895691,
+        "end": 17.205986394557822,
+        "start": 16.253968253968253
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6716635609242627,
+        "duration": 0.5340589569161018,
+        "end": 25.2865306122449,
+        "start": 24.752471655328797
+      },
+      {
+        "chord": "B",
+        "confidence": 0.7039301376438484,
+        "duration": 0.41795918367347085,
+        "end": 27.074467120181406,
+        "start": 26.656507936507936
+      },
+      {
+        "chord": "A#m",
+        "confidence": 0.6842889217157211,
+        "duration": 0.37151927437641774,
+        "end": 37.08226757369614,
+        "start": 36.710748299319725
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6520184646469575,
+        "duration": 0.34829931972789296,
+        "end": 39.91510204081633,
+        "start": 39.566802721088436
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6703138870531711,
+        "duration": 0.4179591836734673,
+        "end": 41.26185941043084,
+        "start": 40.84390022675737
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6358801542388068,
+        "duration": 0.34829931972789296,
+        "end": 45.11637188208617,
+        "start": 44.76807256235828
+      },
+      {
+        "chord": "Cm",
+        "confidence": 0.629864076246517,
+        "duration": 0.25541950113378675,
+        "end": 46.37024943310658,
+        "start": 46.11482993197279
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6736429673930011,
+        "duration": 0.37151927437641774,
+        "end": 48.13496598639456,
+        "start": 47.763446712018144
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6602427422303373,
+        "duration": 0.34829931972789296,
+        "end": 62.15981859410431,
+        "start": 61.811519274376415
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6626491897446768,
+        "duration": 0.3250793650793753,
+        "end": 102.4,
+        "start": 102.07492063492063
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6506773676423213,
+        "duration": 0.7430385487528355,
+        "end": 103.14303854875284,
+        "start": 102.4
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6464587325648032,
+        "duration": 0.3018594104308363,
+        "end": 103.44489795918368,
+        "start": 103.14303854875284
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6676039876999579,
+        "duration": 0.37151927437641064,
+        "end": 121.57968253968254,
+        "start": 121.20816326530613
+      },
+      {
+        "chord": "G#",
+        "confidence": 0.7281697331697908,
+        "duration": 0.3250793650793611,
+        "end": 124.1338775510204,
+        "start": 123.80879818594104
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6709701868185505,
+        "duration": 0.5572789115646231,
+        "end": 137.43891156462584,
+        "start": 136.88163265306122
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6599925081213038,
+        "duration": 0.3018594104308363,
+        "end": 139.0643083900227,
+        "start": 138.76244897959185
+      },
+      {
+        "chord": "F",
+        "confidence": 0.6478837690937019,
+        "duration": 0.37151927437642485,
+        "end": 139.83056689342405,
+        "start": 139.45904761904762
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.7233619644929475,
+        "duration": 0.6733786848072612,
+        "end": 140.80580498866215,
+        "start": 140.13242630385488
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.668290591700052,
+        "duration": 0.34829931972788586,
+        "end": 143.40643990929706,
+        "start": 143.05814058956918
+      },
+      {
+        "chord": "Dm",
+        "confidence": 0.6429978570315455,
+        "duration": 0.37151927437642485,
+        "end": 145.42657596371882,
+        "start": 145.0550566893424
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.6407694449463144,
+        "duration": 0.580498866213162,
+        "end": 149.95446712018142,
+        "start": 149.37396825396826
+      },
+      {
+        "chord": "Em",
+        "confidence": 0.6880201079458201,
+        "duration": 0.3250793650793753,
+        "end": 154.2269387755102,
+        "start": 153.90185941043083
+      },
+      {
+        "chord": "F#",
+        "confidence": 0.6947819813134902,
+        "duration": 0.5108390022675735,
+        "end": 155.03963718820862,
+        "start": 154.52879818594104
+      },
+      {
+        "chord": "B",
+        "confidence": 0.642632751872439,
+        "duration": 0.44117913832198496,
+        "end": 155.89877551020408,
+        "start": 155.4575963718821
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6544086049000424,
+        "duration": 0.3715192743763964,
+        "end": 158.4065306122449,
+        "start": 158.0350113378685
+      },
+      {
+        "chord": "G#",
+        "confidence": 0.6662611321442654,
+        "duration": 0.27863945578232574,
+        "end": 161.6108843537415,
+        "start": 161.33224489795919
+      },
+      {
+        "chord": "Dm",
+        "confidence": 0.6639076268672942,
+        "duration": 0.27863945578232574,
+        "end": 170.20226757369616,
+        "start": 169.92362811791384
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6482370297114056,
+        "duration": 0.2786394557822973,
+        "end": 172.96544217687074,
+        "start": 172.68680272108844
+      },
+      {
+        "chord": "F#",
+        "confidence": 0.67607277245926,
+        "duration": 0.3715192743763964,
+        "end": 179.97786848072562,
+        "start": 179.60634920634922
+      },
+      {
+        "chord": "G",
+        "confidence": 0.6503341481920771,
+        "duration": 0.6733786848072327,
+        "end": 181.3014058956916,
+        "start": 180.62802721088437
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.7237478207936363,
+        "duration": 0.3482993197279143,
+        "end": 181.64970521541952,
+        "start": 181.3014058956916
+      },
+      {
+        "chord": "Gm",
+        "confidence": 0.6223193289071055,
+        "duration": 0.7894784580498708,
+        "end": 182.95002267573696,
+        "start": 182.1605442176871
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.6842508565295827,
+        "duration": 0.27863945578232574,
+        "end": 184.34321995464853,
+        "start": 184.0645804988662
+      },
+      {
+        "chord": "F#",
+        "confidence": 0.6598290594580581,
+        "duration": 0.7198185941043107,
+        "end": 191.95936507936509,
+        "start": 191.23954648526077
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6643926555831944,
+        "duration": 0.4876190476190345,
+        "end": 194.44390022675736,
+        "start": 193.95628117913833
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6841503642416664,
+        "duration": 0.3715192743763964,
+        "end": 212.23038548752834,
+        "start": 211.85886621315194
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.6560076282930974,
+        "duration": 0.39473922902496383,
+        "end": 212.6251247165533,
+        "start": 212.23038548752834
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6681344309059251,
+        "duration": 0.5108390022675735,
+        "end": 215.99201814058958,
+        "start": 215.481179138322
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6749504907113134,
+        "duration": 0.37151927437642485,
+        "end": 216.6189569160998,
+        "start": 216.24743764172337
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6696687653276711,
+        "duration": 0.3250793650793753,
+        "end": 220.12517006802722,
+        "start": 219.80009070294784
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6654144601717766,
+        "duration": 0.417959183673446,
+        "end": 227.4162358276644,
+        "start": 226.99827664399095
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6514421691014853,
+        "duration": 0.3947392290249354,
+        "end": 239.58349206349206,
+        "start": 239.18875283446712
+      },
+      {
+        "chord": "F#",
+        "confidence": 0.6544959016696557,
+        "duration": 0.3018594104308363,
+        "end": 239.8853514739229,
+        "start": 239.58349206349206
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6555725053054525,
+        "duration": 0.9287981859410479,
+        "end": 244.11138321995466,
+        "start": 243.1825850340136
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.658772459454405,
+        "duration": 0.4411791383220134,
+        "end": 251.12380952380954,
+        "start": 250.68263038548753
+      },
+      {
+        "chord": "G",
+        "confidence": 0.6566286213779863,
+        "duration": 0.5108390022675735,
+        "end": 252.54022675736962,
+        "start": 252.02938775510205
+      },
+      {
+        "chord": "G#",
+        "confidence": 0.6679579827918078,
+        "duration": 0.7430385487527928,
+        "end": 256.9984580498866,
+        "start": 256.2554195011338
+      },
+      {
+        "chord": "B",
+        "confidence": 0.6574757888785795,
+        "duration": 0.3018594104308363,
+        "end": 257.9040362811791,
+        "start": 257.6021768707483
+      },
+      {
+        "chord": "F",
+        "confidence": 0.6392477331090641,
+        "duration": 0.4643990929705524,
+        "end": 263.8251247165533,
+        "start": 263.36072562358277
+      },
+      {
+        "chord": "C#",
+        "confidence": 0.6781469808022184,
+        "duration": 0.2786394557822973,
+        "end": 268.6548752834467,
+        "start": 268.3762358276644
+      },
+      {
+        "chord": "F#",
+        "confidence": 0.6378293721051447,
+        "duration": 0.8591383219954309,
+        "end": 275.11002267573696,
+        "start": 274.2508843537415
+      },
+      {
+        "chord": "Gm",
+        "confidence": 0.6298187818487014,
+        "duration": 0.4643990929705524,
+        "end": 277.0837188208617,
+        "start": 276.61931972789114
+      },
+      {
+        "chord": "Am",
+        "confidence": 0.6610205686547302,
+        "duration": 0.998458049886608,
+        "end": 280.96145124716554,
+        "start": 279.96299319727893
+      },
+      {
+        "chord": "Fm",
+        "confidence": 0.6527583856195979,
+        "duration": 0.7430385487528497,
+        "end": 282.1921088435374,
+        "start": 281.4490702947846
+      }
+    ],
+    "transitionCount": 296,
+    "transitionsPerBeat": 0.3723270440251572,
+    "transitionsPerMinute": 62.87148566652527
+  },
+  "contextCorrection": {
+    "appliedCount": 0,
+    "appliedExamples": []
+  },
+  "improved": {
+    "algorithm": "chroma-template-v1",
+    "beatCount": 798,
+    "beatReliable": true,
+    "chordBreakdown": [
+      {
+        "chord": "A",
+        "count": 35,
+        "durationPercentageOfSong": 29.373709402884018,
+        "durationSeconds": 82.9751473922903
+      },
+      {
+        "chord": "Bm",
+        "count": 20,
+        "durationPercentageOfSong": 11.047687914632684,
+        "durationSeconds": 31.20761904761909
+      },
+      {
+        "chord": "C#m",
+        "count": 24,
+        "durationPercentageOfSong": 18.6922933912758,
+        "durationSeconds": 52.80217687074827
+      },
+      {
+        "chord": "D",
+        "count": 15,
+        "durationPercentageOfSong": 8.8036263069729,
+        "durationSeconds": 24.868571428571407
+      },
+      {
+        "chord": "Dm",
+        "count": 1,
+        "durationPercentageOfSong": 1.1343608126631828,
+        "durationSeconds": 3.204353741496618
+      },
+      {
+        "chord": "E",
+        "count": 39,
+        "durationPercentageOfSong": 20.18833446304899,
+        "durationSeconds": 57.02820861678006
+      },
+      {
+        "chord": "F#",
+        "count": 2,
+        "durationPercentageOfSong": 0.9946207125524918,
+        "durationSeconds": 2.809614512471647
+      },
+      {
+        "chord": "F#m",
+        "count": 17,
+        "durationPercentageOfSong": 8.515926100862673,
+        "durationSeconds": 24.05587301587299
+      },
+      {
+        "chord": "G#m",
+        "count": 5,
+        "durationPercentageOfSong": 1.2494408951072566,
+        "durationSeconds": 3.5294331065759366
+      }
+    ],
+    "chordDurationPercentageOfSong": {
+      "A": 29.373709402884018,
+      "Bm": 11.047687914632684,
+      "C#m": 18.6922933912758,
+      "D": 8.8036263069729,
+      "Dm": 1.1343608126631828,
+      "E": 20.18833446304899,
+      "F#": 0.9946207125524918,
+      "F#m": 8.515926100862673,
+      "G#m": 1.2494408951072566
+    },
+    "chordDurationSeconds": {
+      "A": 82.9751473922903,
+      "Bm": 31.20761904761909,
+      "C#m": 52.80217687074827,
+      "D": 24.868571428571407,
+      "Dm": 3.204353741496618,
+      "E": 57.02820861678006,
+      "F#": 2.809614512471647,
+      "F#m": 24.05587301587299,
+      "G#m": 3.5294331065759366
+    },
+    "chordFamilyDistribution": {
+      "N": 0,
+      "major": 91,
+      "minor": 67
+    },
+    "chordOccurrenceCount": {
+      "A": 35,
+      "Bm": 20,
+      "C#m": 24,
+      "D": 15,
+      "Dm": 1,
+      "E": 39,
+      "F#": 2,
+      "F#m": 17,
+      "G#m": 5
+    },
+    "contractVersion": "1",
+    "diatonicity": {
+      "diatonicDuration": 276.4670294784581,
+      "diatonicSegmentCount": 155,
+      "noChordDuration": 0.0,
+      "noChordSegmentCount": 0,
+      "nonDiatonicDuration": 6.013968253968265,
+      "nonDiatonicSegmentCount": 3,
+      "referenceKey": "F#m"
+    },
+    "estimatedTempoBpm": 172.265625,
+    "excessiveShortSegmentRate": 0.0,
+    "globalKey": "F#m",
+    "globalKeyConfidence": 0.7512597560882569,
+    "maxSegmentDuration": 5.745578231292541,
+    "meanSegmentDuration": 1.7878544160280148,
+    "medianSegmentDuration": 1.4396371882086214,
+    "minSegmentDuration": 0.3715192743763964,
+    "segmentCount": 158,
+    "shortSegments": {
+      "lt1s": {
+        "count": 31,
+        "percentage": 19.62025316455696
+      },
+      "lt250ms": {
+        "count": 0,
+        "percentage": 0.0
+      },
+      "lt500ms": {
+        "count": 5,
+        "percentage": 3.1645569620253164
+      }
+    },
+    "songDuration": 282.4809977324263,
+    "suspiciousShortNonDiatonicSegments": [],
+    "transitionCount": 157,
+    "transitionsPerBeat": 0.19674185463659147,
+    "transitionsPerMinute": 33.34737584339347
+  },
+  "improvedBeforeContextCorrection": {
+    "algorithm": "chroma-template-v1",
+    "beatCount": 798,
+    "beatReliable": true,
+    "chordBreakdown": [
+      {
+        "chord": "A",
+        "count": 35,
+        "durationPercentageOfSong": 29.373709402884018,
+        "durationSeconds": 82.9751473922903
+      },
+      {
+        "chord": "Bm",
+        "count": 20,
+        "durationPercentageOfSong": 11.047687914632684,
+        "durationSeconds": 31.20761904761909
+      },
+      {
+        "chord": "C#m",
+        "count": 24,
+        "durationPercentageOfSong": 18.6922933912758,
+        "durationSeconds": 52.80217687074827
+      },
+      {
+        "chord": "D",
+        "count": 15,
+        "durationPercentageOfSong": 8.8036263069729,
+        "durationSeconds": 24.868571428571407
+      },
+      {
+        "chord": "Dm",
+        "count": 1,
+        "durationPercentageOfSong": 1.1343608126631828,
+        "durationSeconds": 3.204353741496618
+      },
+      {
+        "chord": "E",
+        "count": 39,
+        "durationPercentageOfSong": 20.18833446304899,
+        "durationSeconds": 57.02820861678006
+      },
+      {
+        "chord": "F#",
+        "count": 2,
+        "durationPercentageOfSong": 0.9946207125524918,
+        "durationSeconds": 2.809614512471647
+      },
+      {
+        "chord": "F#m",
+        "count": 17,
+        "durationPercentageOfSong": 8.515926100862673,
+        "durationSeconds": 24.05587301587299
+      },
+      {
+        "chord": "G#m",
+        "count": 5,
+        "durationPercentageOfSong": 1.2494408951072566,
+        "durationSeconds": 3.5294331065759366
+      }
+    ],
+    "chordDurationPercentageOfSong": {
+      "A": 29.373709402884018,
+      "Bm": 11.047687914632684,
+      "C#m": 18.6922933912758,
+      "D": 8.8036263069729,
+      "Dm": 1.1343608126631828,
+      "E": 20.18833446304899,
+      "F#": 0.9946207125524918,
+      "F#m": 8.515926100862673,
+      "G#m": 1.2494408951072566
+    },
+    "chordDurationSeconds": {
+      "A": 82.9751473922903,
+      "Bm": 31.20761904761909,
+      "C#m": 52.80217687074827,
+      "D": 24.868571428571407,
+      "Dm": 3.204353741496618,
+      "E": 57.02820861678006,
+      "F#": 2.809614512471647,
+      "F#m": 24.05587301587299,
+      "G#m": 3.5294331065759366
+    },
+    "chordFamilyDistribution": {
+      "N": 0,
+      "major": 91,
+      "minor": 67
+    },
+    "chordOccurrenceCount": {
+      "A": 35,
+      "Bm": 20,
+      "C#m": 24,
+      "D": 15,
+      "Dm": 1,
+      "E": 39,
+      "F#": 2,
+      "F#m": 17,
+      "G#m": 5
+    },
+    "contractVersion": "1",
+    "diatonicity": {
+      "diatonicDuration": 276.4670294784581,
+      "diatonicSegmentCount": 155,
+      "noChordDuration": 0.0,
+      "noChordSegmentCount": 0,
+      "nonDiatonicDuration": 6.013968253968265,
+      "nonDiatonicSegmentCount": 3,
+      "referenceKey": "F#m"
+    },
+    "estimatedTempoBpm": 172.265625,
+    "excessiveShortSegmentRate": 0.0,
+    "globalKey": "F#m",
+    "globalKeyConfidence": 0.7512597560882569,
+    "maxSegmentDuration": 5.745578231292541,
+    "meanSegmentDuration": 1.7878544160280148,
+    "medianSegmentDuration": 1.4396371882086214,
+    "minSegmentDuration": 0.3715192743763964,
+    "segmentCount": 158,
+    "shortSegments": {
+      "lt1s": {
+        "count": 31,
+        "percentage": 19.62025316455696
+      },
+      "lt250ms": {
+        "count": 0,
+        "percentage": 0.0
+      },
+      "lt500ms": {
+        "count": 5,
+        "percentage": 3.1645569620253164
+      }
+    },
+    "songDuration": 282.4809977324263,
+    "suspiciousShortNonDiatonicSegments": [],
+    "transitionCount": 157,
+    "transitionsPerBeat": 0.19674185463659147,
+    "transitionsPerMinute": 33.34737584339347
+  },
+  "musicalPersistence": {
+    "acceptedTransitionCount": 174,
+    "acceptedTransitionReasonCounts": {
+      "dominant-override": 168,
+      "persistent-support": 3,
+      "strong-immediate": 3
+    },
+    "acceptedTransitions": [
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 3.5526530612244898,
+        "fromChord": "E",
+        "harmonicChangeEvidence": 0.6030931318676959,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.47791217206126907,
+        "reason": "dominant-override",
+        "regionIndex": 10,
+        "start": 3.2043537414965986,
+        "switchScore": 0.7435688740430004,
+        "toChord": "A"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 5.6656689342403626,
+        "fromChord": "A",
+        "harmonicChangeEvidence": 0.47053939385816684,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 16,
+        "start": 5.317369614512471,
+        "switchScore": 0.8371184544388144,
+        "toChord": "E"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 6.3854875283446715,
+        "fromChord": "E",
+        "harmonicChangeEvidence": 0.34820518131216904,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.3983068010215868,
+        "reason": "dominant-override",
+        "regionIndex": 18,
+        "start": 6.03718820861678,
+        "switchScore": 0.7246407060491991,
+        "toChord": "C#m"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 9.195102040816327,
+        "fromChord": "C#m",
+        "harmonicChangeEvidence": 0.4986344067057316,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4772337549341944,
+        "reason": "dominant-override",
+        "regionIndex": 26,
+        "start": 8.846802721088435,
+        "switchScore": 0.7342966113921037,
+        "toChord": "D"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 12.051156462585034,
+        "fromChord": "D",
+        "harmonicChangeEvidence": 0.2495782182915084,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4786758882963414,
+        "reason": "dominant-override",
+        "regionIndex": 34,
+        "start": 11.679637188208616,
+        "switchScore": 0.6693337399913069,
+        "toChord": "E"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 14.883990929705215,
+        "fromChord": "E",
+        "harmonicChangeEvidence": 0.35560474393481684,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4519171588962924,
+        "reason": "dominant-override",
+        "regionIndex": 42,
+        "start": 14.512471655328799,
+        "switchScore": 0.7579390979842777,
+        "toChord": "A"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 17.69360544217687,
+        "fromChord": "A",
+        "harmonicChangeEvidence": 0.5182054231362003,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4786232485777874,
+        "reason": "dominant-override",
+        "regionIndex": 50,
+        "start": 17.345306122448978,
+        "switchScore": 0.7365495006931682,
+        "toChord": "C#m"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 20.54965986394558,
+        "fromChord": "C#m",
+        "harmonicChangeEvidence": 0.6632971455036012,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 58,
+        "start": 20.17814058956916,
+        "switchScore": 0.7904157726356382,
+        "toChord": "D"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 23.359274376417233,
+        "fromChord": "D",
+        "harmonicChangeEvidence": 0.6958029744288189,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 66,
+        "start": 23.010975056689343,
+        "switchScore": 0.8752834284374487,
+        "toChord": "E"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 25.843809523809522,
+        "fromChord": "E",
+        "harmonicChangeEvidence": 0.5304821079448105,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4638405906601509,
+        "reason": "dominant-override",
+        "regionIndex": 73,
+        "start": 25.472290249433108,
+        "switchScore": 0.7420109262182423,
+        "toChord": "A"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 29.024943310657598,
+        "fromChord": "A",
+        "harmonicChangeEvidence": 0.4462584594653498,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4526884837707506,
+        "reason": "dominant-override",
+        "regionIndex": 82,
+        "start": 28.676643990929705,
+        "switchScore": 0.7617858189207021,
+        "toChord": "C#m"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 31.857777777777777,
+        "fromChord": "C#m",
+        "harmonicChangeEvidence": 0.5624716856538391,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.452875380340227,
+        "reason": "dominant-override",
+        "regionIndex": 90,
+        "start": 31.509478458049887,
+        "switchScore": 0.7772232108508957,
+        "toChord": "D"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 32.57759637188209,
+        "fromChord": "D",
+        "harmonicChangeEvidence": 0.12475434718711276,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5495550198951386,
+        "reason": "dominant-override",
+        "regionIndex": 92,
+        "start": 32.229297052154195,
+        "switchScore": 0.6336012954793953,
+        "toChord": "A"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 37.52344671201814,
+        "fromChord": "A",
+        "harmonicChangeEvidence": 0.7073725473247432,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 106,
+        "start": 37.17514739229025,
+        "switchScore": 0.8006262764433902,
+        "toChord": "Bm"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 38.98630385487528,
+        "fromChord": "Bm",
+        "harmonicChangeEvidence": 0.8233816642249581,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4648490692986507,
+        "reason": "dominant-override",
+        "regionIndex": 110,
+        "start": 38.638004535147395,
+        "switchScore": 0.8573659767093664,
+        "toChord": "E"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 40.35628117913832,
+        "fromChord": "E",
+        "harmonicChangeEvidence": 0.7346390459499764,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 114,
+        "start": 40.00798185941043,
+        "switchScore": 0.8070341516022392,
+        "toChord": "C#m"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 41.77269841269841,
+        "fromChord": "C#m",
+        "harmonicChangeEvidence": 0.5329217363345697,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.44,
+        "reason": "dominant-override",
+        "regionIndex": 118,
+        "start": 41.424399092970525,
+        "switchScore": 0.7853638469527257,
+        "toChord": "F#"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 43.21233560090703,
+        "fromChord": "F#",
+        "harmonicChangeEvidence": 0.291954806184179,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.31,
+        "reason": "dominant-override",
+        "regionIndex": 122,
+        "start": 42.840816326530614,
+        "switchScore": 0.7706673883716982,
+        "toChord": "Bm"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 45.3253514739229,
+        "fromChord": "Bm",
+        "harmonicChangeEvidence": 0.4790512860420389,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4647280989069862,
+        "reason": "dominant-override",
+        "regionIndex": 128,
+        "start": 44.977052154195015,
+        "switchScore": 0.782532506930197,
+        "toChord": "F#m"
+      },
+      {
+        "acceptedWithLowerSwitchScore": false,
+        "end": 46.021950113378686,
+        "fromChord": "F#m",
+        "harmonicChangeEvidence": 0.4036525774818016,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.36,
+        "reason": "dominant-override",
+        "regionIndex": 130,
+        "start": 45.67365079365079,
+        "switchScore": 0.7170518340849759,
+        "toChord": "E"
+      }
+    ],
+    "decisionCount": 363,
+    "rejectedTransitionCount": 189,
+    "rejectedTransitions": [
+      {
+        "candidateChord": "D#",
+        "currentChord": "E",
+        "end": 0.4179591836734694,
+        "harmonicChangeEvidence": -0.008498734642671035,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.4499793241428356,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 1,
+        "start": 0.09287981859410431,
+        "switchScore": 0.48466883743496014
+      },
+      {
+        "candidateChord": "Em",
+        "currentChord": "E",
+        "end": 0.7662585034013606,
+        "harmonicChangeEvidence": 0.30089910702622474,
+        "isRootPreservingQualitySwitch": true,
+        "keepScore": 0.4101048550539443,
+        "reason": "keep-quality-switch-hysteresis",
+        "regionIndex": 2,
+        "start": 0.4179591836734694,
+        "switchScore": 0.6088677116199136
+      },
+      {
+        "candidateChord": "Bm",
+        "currentChord": "E",
+        "end": 1.0913378684807256,
+        "harmonicChangeEvidence": 0.43096652571305044,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5247747264067444,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 3,
+        "start": 0.7662585034013606,
+        "switchScore": 0.6439032954511226
+      },
+      {
+        "candidateChord": "Bm",
+        "currentChord": "E",
+        "end": 1.4164172335600906,
+        "harmonicChangeEvidence": 0.3821029367554921,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.49664535816542543,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 4,
+        "start": 1.0913378684807256,
+        "switchScore": 0.694785549899822
+      },
+      {
+        "candidateChord": "Am",
+        "currentChord": "E",
+        "end": 1.7414965986394557,
+        "harmonicChangeEvidence": -0.097132298830235,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5748475691855396,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 5,
+        "start": 1.4164172335600906,
+        "switchScore": 0.5326663034851915
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "E",
+        "end": 2.48453514739229,
+        "harmonicChangeEvidence": -0.08842649304076794,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.7120003689290789,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 7,
+        "start": 2.1130158730158732,
+        "switchScore": 0.5274827427880592
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "E",
+        "end": 2.8328344671201813,
+        "harmonicChangeEvidence": 0.11902208415517479,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5194158016439085,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 8,
+        "start": 2.48453514739229,
+        "switchScore": 0.6917164356013338
+      },
+      {
+        "candidateChord": "E",
+        "currentChord": "A",
+        "end": 4.272471655328798,
+        "harmonicChangeEvidence": -0.17624549090022773,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5999473874437871,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 12,
+        "start": 3.924172335600907,
+        "switchScore": 0.5111403650205981
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "A",
+        "end": 4.620770975056689,
+        "harmonicChangeEvidence": -0.2686902644353555,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.609185639218109,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 13,
+        "start": 4.272471655328798,
+        "switchScore": 0.5346396369493112
+      },
+      {
+        "candidateChord": "E",
+        "currentChord": "A",
+        "end": 5.317369614512471,
+        "harmonicChangeEvidence": 0.01200163042678204,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.8063181413134686,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 15,
+        "start": 4.96907029478458,
+        "switchScore": 0.4965684269442631
+      },
+      {
+        "candidateChord": "A",
+        "currentChord": "C#m",
+        "end": 8.846802721088435,
+        "harmonicChangeEvidence": -0.08522393870562922,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.7025271769621337,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 25,
+        "start": 8.498503401360544,
+        "switchScore": 0.5262164469367012
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "D",
+        "end": 9.914920634920636,
+        "harmonicChangeEvidence": -0.4003579342937082,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.7575766778419227,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 28,
+        "start": 9.566621315192744,
+        "switchScore": 0.4892966029000026
+      },
+      {
+        "candidateChord": "A",
+        "currentChord": "D",
+        "end": 11.331337868480725,
+        "harmonicChangeEvidence": -0.2862438740651758,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.7667861507475777,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 32,
+        "start": 10.983038548752834,
+        "switchScore": 0.5137753775826936
+      },
+      {
+        "candidateChord": "A",
+        "currentChord": "E",
+        "end": 12.399455782312925,
+        "harmonicChangeEvidence": -0.1480547214838534,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.6589684384723622,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 35,
+        "start": 12.051156462585034,
+        "switchScore": 0.5114044245736319
+      },
+      {
+        "candidateChord": "A",
+        "currentChord": "E",
+        "end": 12.770975056689343,
+        "harmonicChangeEvidence": -0.21251453531108894,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.6288266286099145,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 36,
+        "start": 12.399455782312925,
+        "switchScore": 0.6189889369202635
+      },
+      {
+        "candidateChord": "E",
+        "currentChord": "A",
+        "end": 16.648707482993196,
+        "harmonicChangeEvidence": 0.2482519276999667,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5202781075955124,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 47,
+        "start": 16.300408163265306,
+        "switchScore": 0.6016969802208585
+      },
+      {
+        "candidateChord": "Bm",
+        "currentChord": "A",
+        "end": 16.99700680272109,
+        "harmonicChangeEvidence": 0.29437595986306825,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.5197258144921959,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 48,
+        "start": 16.648707482993196,
+        "switchScore": 0.6069192413808223
+      },
+      {
+        "candidateChord": "E",
+        "currentChord": "A",
+        "end": 17.345306122448978,
+        "harmonicChangeEvidence": 0.10067992028885038,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.73456317171921,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 49,
+        "start": 16.99700680272109,
+        "switchScore": 0.49295073575211684
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "C#m",
+        "end": 20.17814058956916,
+        "harmonicChangeEvidence": -0.24416903670984894,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.6596942688404824,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 57,
+        "start": 19.82984126984127,
+        "switchScore": 0.5281799501078938
+      },
+      {
+        "candidateChord": "F#m",
+        "currentChord": "D",
+        "end": 21.59455782312925,
+        "harmonicChangeEvidence": -0.44006896674165624,
+        "isRootPreservingQualitySwitch": false,
+        "keepScore": 0.8220968163065849,
+        "reason": "keep-insufficient-switch-evidence",
+        "regionIndex": 61,
+        "start": 21.24625850340136,
+        "switchScore": 0.47171267336837186
+      }
+    ],
+    "rootPreservingQualitySwitchCount": 1,
+    "weakAcceptedOverrideCount": 0
+  },
+  "transitionComparison": {
+    "baselineTransitionCount": 296,
+    "baselineTransitionsPerMinute": 62.87148566652527,
+    "improvedTransitionCount": 157,
+    "improvedTransitionsPerMinute": 33.34737584339347
+  }
+}

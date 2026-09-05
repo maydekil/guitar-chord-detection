@@ -1,0 +1,3038 @@
+"""Analysis orchestration: audio -> features -> detector -> smoothing -> segments."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from statistics import mean, median
+
+import numpy as np
+
+from chord_engine.audio import AudioBuffer, AudioDecodeError, load_audio
+from chord_engine.detector import (
+	FrameChordPrediction,
+	FrameDetectionError,
+	KeyEstimate,
+	estimate_global_key,
+	predict_frame_chord,
+)
+from chord_engine.features import (
+	BeatTiming,
+	FeatureExtractionError,
+	estimate_beat_timing,
+	extract_chroma,
+	extract_harmonic_signal,
+	extract_low_frequency_chroma,
+)
+from chord_engine.segmentation import MIN_SEGMENT_DURATION_MS, ChordSegment, segment_frame_predictions
+from chord_engine.smoothing import smooth_frame_predictions
+from chord_engine.templates import generate_chord_templates
+
+CONTRACT_VERSION = "1"
+ALGORITHM_ID = "chroma-template-v1"
+END_TOLERANCE_SECONDS = 1e-6
+SHORT_SEGMENT_SECONDS = 0.25
+SUSPICIOUS_SHORT_NON_DIATONIC_SECONDS = 1.0
+IMPROVED_MIN_SEGMENT_DURATION_MS = 350
+
+NOVELTY_MIN_PEAK = 0.06
+NOVELTY_MAD_SCALE = 1.6
+NOVELTY_MIN_PROMINENCE = 0.02
+NOVELTY_PERSISTENCE_DISTANCE = 0.03
+
+MULTIRES_SHORT_CONTEXT_TARGET_SECONDS = 0.85
+MULTIRES_SHORT_CONTEXT_MIN_BEATS = 1
+MULTIRES_SHORT_CONTEXT_MAX_BEATS = 3
+MULTIRES_MEDIUM_CONTEXT_TARGET_SECONDS = 2.40
+MULTIRES_MEDIUM_CONTEXT_MIN_BEATS = 2
+MULTIRES_MEDIUM_CONTEXT_MAX_BEATS = 7
+MULTIRES_SHORT_DISTANCE_MIN = 0.12
+MULTIRES_MEDIUM_DISTANCE_MIN = 0.10
+MULTIRES_MEDIUM_DISTANCE_FLOOR = 0.065
+MULTIRES_CONTEXT_AGREEMENT_MIN = 0.86
+MULTIRES_PERSISTENCE_MIN = 0.52
+MULTIRES_FINAL_CONFIDENCE_MIN = 0.55
+MULTIRES_PROGRESSIVE_SHORT_MIN = 0.30
+MULTIRES_PROGRESSIVE_MEDIUM_MIN = 0.24
+MULTIRES_PROGRESSIVE_PERSISTENCE_MIN = 0.54
+MULTIRES_SAME_CONTEXT_MEDIUM_MIN = 0.24
+MULTIRES_SAME_CONTEXT_CONFIDENCE_MIN = 0.82
+MULTIRES_SAME_LOCAL_SHORT_MIN = 0.34
+MULTIRES_SAME_LOCAL_MEDIUM_MIN = 0.30
+MULTIRES_SAME_LOCAL_CONFIDENCE_MIN = 0.92
+MULTIRES_DISAGREE_MEDIUM_MIN = 0.20
+MULTIRES_DISAGREE_PERSISTENCE_MIN = 0.58
+MULTIRES_WEAK_MEDIUM_CONFIDENCE_MIN = 0.78
+MULTIRES_LOW_PERSISTENCE_CONFIDENCE_MIN = 0.82
+MULTIRES_MEDIUM_DOMINANT_DISTANCE_MIN = 0.40
+MULTIRES_MEDIUM_DOMINANT_SHORT_MIN = 0.22
+MULTIRES_MEDIUM_DOMINANT_NOVELTY_SCALE = 0.92
+MULTIRES_CONSENSUS_SHIFT_RATIO_MIN = 0.67
+MULTIRES_CONSENSUS_SHIFT_MEDIUM_MIN = 0.22
+MULTIRES_CONSENSUS_SHIFT_NOVELTY_SCALE = 0.84
+MULTIRES_SALIENT_NOVELTY_SCALE = 1.24
+MULTIRES_SALIENT_PROMINENCE_MIN = 0.10
+MULTIRES_SALIENT_SHORT_DISTANCE_MIN = 0.28
+MULTIRES_SALIENT_MEDIUM_DISTANCE_MIN = 0.12
+MULTIRES_SALIENT_PERSISTENCE_SUPPORT_MIN = 0.37
+MULTIRES_SALIENT_CONTEXT_AGREEMENT_MIN = 0.62
+MULTIRES_SALIENT_CONSENSUS_STRENGTH_MIN = 1.00
+MULTIRES_SALIENT_CONFIDENCE_MIN = 0.78
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_ABS_MIN = 0.035
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_DELTA_MIN = 0.070
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_NOVELTY_SCALE = 0.86
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_MEDIUM_MIN = 0.10
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_PERSISTENCE_MIN = 0.42
+MULTIRES_SAME_ROOT_QUALITY_SHIFT_AGREEMENT_MIN = 0.82
+
+BOUNDARY_CLUSTER_MAX_BEAT_DISTANCE = 2.0
+BOUNDARY_CLUSTER_MAX_SECONDS_DISTANCE = 0.90
+BOUNDARY_CONSOLIDATION_MAX_INTERMEDIATE_BEATS = 2.0
+BOUNDARY_CONSOLIDATION_SHORT_REGION_SECONDS = 1.25
+BOUNDARY_CONSOLIDATION_SHORT_REGION_BEATS = 1.5
+BOUNDARY_CONSOLIDATION_WEAK_SCORE_MAX = 0.16
+BOUNDARY_CONSOLIDATION_WEAK_MARGIN_MAX = 0.035
+BOUNDARY_CONSOLIDATION_SIDE_SIMILARITY_MIN = 0.86
+BOUNDARY_CONSOLIDATION_MID_SIMILARITY_MAX = 0.92
+BOUNDARY_CONSOLIDATION_CONTRAST_MIN = 0.08
+
+GLOBAL_DECODE_TOP_K = 6
+GLOBAL_DECODE_EVIDENCE_MARGIN_WEIGHT = 0.24
+GLOBAL_DECODE_SELF_STABILITY_BONUS = 0.03
+GLOBAL_DECODE_CHANGE_BASE_COST = 0.06
+GLOBAL_DECODE_RELATIONSHIP_WEIGHT = 0.22
+GLOBAL_DECODE_LOCAL_CONFIDENCE_WEIGHT = 0.10
+GLOBAL_DECODE_STRONG_SWITCH_ADVANTAGE = 0.16
+GLOBAL_DECODE_STRONG_SWITCH_BONUS = 0.07
+GLOBAL_DECODE_QUALITY_SWITCH_BONUS = 0.04
+GLOBAL_DECODE_QUALITY_SWITCH_STRONG_MARGIN_MIN = 0.006
+GLOBAL_DECODE_QUALITY_SWITCH_STRONG_QMARGIN_MIN = 0.14
+GLOBAL_DECODE_QUALITY_SWITCH_POSITIVE_TRANSITION = 0.055
+
+CONTEXT_SHORT_SEGMENT_MAX_SECONDS = 1.00
+CONTEXT_SHORT_STRONG_CONFIDENCE_MIN = 0.78
+CONTEXT_SHORT_LOW_CONFIDENCE_MAX = 0.76
+CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS = 0.40
+CONTEXT_NEIGHBOR_MIN_CONFIDENCE = 0.60
+CONTEXT_CANDIDATE_SUPPORT_MIN = 0.58
+CONTEXT_SUPPORT_GAP_MIN = 0.00
+CONTEXT_CORRECTION_SCORE_MIN = 0.24
+CONTEXT_SAME_CHORD_STABILITY_BONUS = 0.12
+
+HARMONIC_PLAUSIBILITY_DIATONIC = 1.0
+HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED = 0.60
+HARMONIC_PLAUSIBILITY_NON_DIATONIC = 0.35
+HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR = 0.92
+
+MUSICAL_KEEP_STREAK_REFERENCE_BEATS = 3
+MUSICAL_SWITCH_REFERENCE_SECONDS = 0.75
+MUSICAL_SWITCH_SUPPORT_SECONDS = 0.85
+MUSICAL_SWITCH_MARGIN = 0.07
+MUSICAL_STRONG_IMMEDIATE_CONFIDENCE = 0.78
+MUSICAL_STRONG_IMMEDIATE_ADVANTAGE = 0.16
+MUSICAL_DOMINANT_OVERRIDE_CANDIDATE_SCORE = 0.72
+MUSICAL_DOMINANT_OVERRIDE_ADVANTAGE = 0.28
+MUSICAL_QUALITY_SWITCH_EXTRA_MARGIN = 0.05
+MUSICAL_QUALITY_SWITCH_MIN_ADVANTAGE = 0.18
+MUSICAL_QUALITY_SWITCH_MIN_HARMONIC_CHANGE = 0.10
+MUSICAL_EXCEPTIONAL_SUPPORT_BEATS = 3
+MUSICAL_EXCEPTIONAL_SUPPORT_SECONDS = 1.30
+MUSICAL_EXCEPTIONAL_SUPPORT_PERSISTENCE = 0.88
+MUSICAL_EXCEPTIONAL_SUPPORT_HARMONIC_CHANGE = 0.18
+MUSICAL_EXCEPTIONAL_SUPPORT_CONFIDENCE = 0.70
+
+ROOT_AWARE_TEMPLATE_WEIGHT = 0.74
+ROOT_AWARE_ROOT_WEIGHT = 0.15
+ROOT_AWARE_QUALITY_WEIGHT = 0.11
+ROOT_AWARE_KEY_CONTEXT_WEIGHT = 0.10
+
+ROOT_AWARE_ROOT_ENERGY_WEIGHT = 0.64
+ROOT_AWARE_FIFTH_ENERGY_WEIGHT = 0.22
+ROOT_AWARE_BASS_ROOT_WEIGHT = 0.10
+ROOT_AWARE_BASS_FIFTH_WEIGHT = 0.04
+
+ROOT_AWARE_QUALITY_THIRD_WEIGHT = 0.62
+ROOT_AWARE_QUALITY_SUPPORT_WEIGHT = 0.38
+ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN = 0.06
+
+
+@dataclass(frozen=True)
+class SourceMetadata:
+	path: str
+	duration: float
+	sampleRate: int
+
+
+@dataclass(frozen=True)
+class AnalysisMetadata:
+	algorithm: str
+	chords: list[ChordSegment]
+
+
+@dataclass(frozen=True)
+class AnalysisResult:
+	version: str
+	source: SourceMetadata
+	analysis: AnalysisMetadata
+
+	def to_dict(self) -> dict[str, object]:
+		return {
+			"version": self.version,
+			"source": {
+				"path": self.source.path,
+				"duration": self.source.duration,
+				"sampleRate": self.source.sampleRate,
+			},
+			"analysis": {
+				"algorithm": self.analysis.algorithm,
+				"chords": [
+					{
+						"start": seg.start,
+						"end": seg.end,
+						"chord": seg.chord,
+						"confidence": seg.confidence,
+					}
+					for seg in self.analysis.chords
+				],
+			},
+		}
+
+
+@dataclass(frozen=True)
+class PipelineRun:
+	"""Internal run result used for benchmark diagnostics."""
+
+	result: AnalysisResult
+	detected_key: KeyEstimate | None
+	beat_timing: BeatTiming | None = None
+	region_observations: list["MusicalRegionObservation"] | None = None
+	persistence_events: list["PersistenceDecisionEvent"] | None = None
+	correction_events: list["CorrectionEvent"] | None = None
+	accepted_boundaries: list[float] | None = None
+	rejected_novelty_peaks: list[dict[str, object]] | None = None
+	global_decoder_path_score: float | None = None
+	local_vs_decoded_region_changes: int = 0
+	candidate_boundary_count: int = 0
+	accepted_boundary_count_before_consolidation: int = 0
+	accepted_boundary_count_after_consolidation: int = 0
+	consolidated_boundary_count: int = 0
+	boundary_cluster_count: int = 0
+	mean_beats_between_accepted_boundaries: float = 0.0
+	median_beats_between_accepted_boundaries: float = 0.0
+	short_harmonic_region_count: int = 0
+	harmonic_region_duration_distribution: dict[str, int] | None = None
+	consolidated_cluster_examples: list[dict[str, object]] | None = None
+	local_novelty_candidate_count: int = 0
+	contextual_boundary_candidate_count: int = 0
+	multi_resolution_accepted_boundary_count: int = 0
+	rejected_local_only_boundary_count: int = 0
+	short_medium_agreement_rate: float = 0.0
+	mean_short_context_distance: float = 0.0
+	mean_medium_context_distance: float = 0.0
+	accepted_boundary_examples: list[dict[str, object]] | None = None
+	rejected_local_only_examples: list[dict[str, object]] | None = None
+
+
+@dataclass(frozen=True)
+class MusicalRegionObservation:
+	"""Beat-aware regional chord evidence used for persistence decisions."""
+
+	start_frame: int
+	end_frame: int
+	start_seconds: float
+	end_seconds: float
+	duration_seconds: float
+	winner_chord: str
+	winner_confidence: float
+	scores: dict[str, float]
+	advantage_over_runner_up: float
+	root_candidate_scores: dict[str, float] | None = None
+	selected_root: str | None = None
+	selected_root_confidence: float = 0.0
+	major_quality_evidence: float = 0.0
+	minor_quality_evidence: float = 0.0
+	quality_margin: float = 0.0
+	template_score: float = 0.0
+	template_top_chord: str | None = None
+	template_top_score: float = 0.0
+	combined_score: float = 0.0
+	is_quality_ambiguous: bool = False
+	top_candidates: list[tuple[str, float]] | None = None
+	local_best_chord: str | None = None
+	local_best_score: float = 0.0
+	decoded_chord: str | None = None
+	beat_length: float = 0.0
+
+
+@dataclass(frozen=True)
+class PersistenceDecisionEvent:
+	"""Decision trace for keep vs switch behavior in musical time."""
+
+	region_index: int
+	region_start_seconds: float
+	region_end_seconds: float
+	action: str
+	current_chord: str
+	candidate_chord: str
+	keep_score: float
+	switch_score: float
+	advantage: float
+	candidate_confidence: float
+	consecutive_support: int
+	neighbor_persistence: float
+	harmonic_change_evidence: float
+	is_root_preserving_quality_switch: bool
+	accepted_with_lower_switch_score: bool
+	reason: str
+
+
+@dataclass(frozen=True)
+class CorrectionEvent:
+	"""Records a deterministic context-based correction decision for diagnostics."""
+
+	index: int
+	replaced_chord: str
+	new_chord: str
+	start: float
+	end: float
+	duration: float
+	original_confidence: float
+	new_confidence: float
+	score: float
+	harmonic_plausibility_before: float
+	harmonic_plausibility_after: float
+
+
+class AnalysisError(Exception):
+	"""Controlled orchestration error suitable for API/CLI conversion."""
+
+	def __init__(self, code: str, message: str) -> None:
+		super().__init__(message)
+		self.code = code
+		self.message = message
+
+	def to_dict(self) -> dict[str, object]:
+		return {
+			"version": CONTRACT_VERSION,
+			"error": {
+				"code": self.code,
+				"message": self.message,
+			},
+		}
+
+
+def analyze_audio(path: str | Path) -> AnalysisResult:
+	"""Run full chord-analysis pipeline and return contract-shaped result."""
+	run = _run_pipeline(
+		path,
+		use_harmonic_preprocessing=True,
+		use_beat_sync=True,
+		use_key_prior=True,
+		use_context_correction=False,
+	)
+	return run.result
+
+
+def compare_baseline_vs_improved(path: str | Path) -> dict[str, object]:
+	"""Return summary metrics comparing baseline and improved analysis modes."""
+	baseline = _run_pipeline(
+		path,
+		use_harmonic_preprocessing=False,
+		use_beat_sync=False,
+		use_key_prior=False,
+		use_context_correction=False,
+	)
+	improved = _run_pipeline(
+		path,
+		use_harmonic_preprocessing=True,
+		use_beat_sync=True,
+		use_key_prior=True,
+		use_context_correction=False,
+	)
+
+	baseline_summary = _summarize_analysis(baseline.result, baseline.detected_key, baseline.beat_timing)
+	improved_summary = _summarize_analysis(improved.result, improved.detected_key, improved.beat_timing)
+
+	harmonic_regions = improved.region_observations or []
+	harmonic_region_durations = [obs.duration_seconds for obs in harmonic_regions]
+	region_mean = float(mean(harmonic_region_durations)) if harmonic_region_durations else 0.0
+	region_median = float(median(harmonic_region_durations)) if harmonic_region_durations else 0.0
+	regions_per_minute = float(
+		0.0
+		if improved.result.source.duration <= 0.0
+		else len(harmonic_regions) / (improved.result.source.duration / 60.0)
+	)
+
+	local_switch_no_boundary_examples = [
+		{
+			"timestamp": peak.get("timestamp"),
+			"novelty": peak.get("novelty"),
+			"leftLocalChord": peak.get("leftLocalChord"),
+			"rightLocalChord": peak.get("rightLocalChord"),
+			"reason": peak.get("reason"),
+		}
+		for peak in (improved.rejected_novelty_peaks or [])
+		if peak.get("leftLocalChord") != peak.get("rightLocalChord")
+	][:12]
+
+	preserved_real_change_examples = []
+	for idx in range(1, len(harmonic_regions)):
+		left = harmonic_regions[idx - 1]
+		right = harmonic_regions[idx]
+		if left.decoded_chord != right.decoded_chord:
+			preserved_real_change_examples.append(
+				{
+					"timestamp": right.start_seconds,
+					"fromChord": left.decoded_chord,
+					"toChord": right.decoded_chord,
+					"leftLocalBest": left.local_best_chord,
+					"rightLocalBest": right.local_best_chord,
+				}
+			)
+	if len(preserved_real_change_examples) > 12:
+		preserved_real_change_examples = preserved_real_change_examples[:12]
+
+	return {
+		"baseline": baseline_summary,
+		"improvedBeforeContextCorrection": improved_summary,
+		"improved": improved_summary,
+		"transitionComparison": {
+			"baselineTransitionCount": _count_chord_transitions(baseline.result.analysis.chords),
+			"improvedTransitionCount": _count_chord_transitions(improved.result.analysis.chords),
+			"baselineTransitionsPerMinute": float(
+				0.0
+				if baseline.result.source.duration <= 0.0
+				else _count_chord_transitions(baseline.result.analysis.chords) / (baseline.result.source.duration / 60.0)
+			),
+			"improvedTransitionsPerMinute": float(
+				0.0
+				if improved.result.source.duration <= 0.0
+				else _count_chord_transitions(improved.result.analysis.chords) / (improved.result.source.duration / 60.0)
+			),
+		},
+		"musicalPersistence": {
+			"decisionCount": len(harmonic_regions),
+			"acceptedTransitionCount": _count_chord_transitions(improved.result.analysis.chords),
+			"rejectedTransitionCount": len(improved.rejected_novelty_peaks or []),
+			"acceptedTransitionReasonCounts": {
+				"change-point-decoder": _count_chord_transitions(improved.result.analysis.chords)
+			},
+			"rootPreservingQualitySwitchCount": improved_summary.get("qualityChangeCount", 0),
+			"weakAcceptedOverrideCount": 0,
+			"ambiguousQualityDecisionCount": improved_summary.get("ambiguousQualityDecisionCount", 0),
+			"rejectedTransitions": [
+				{
+					"regionIndex": idx,
+					"start": peak.get("timestamp"),
+					"end": peak.get("timestamp"),
+					"currentChord": peak.get("leftLocalChord"),
+					"candidateChord": peak.get("rightLocalChord"),
+					"keepScore": 0.0,
+					"switchScore": float(peak.get("novelty", 0.0)),
+					"harmonicChangeEvidence": float(peak.get("novelty", 0.0)),
+					"isRootPreservingQualitySwitch": bool(_is_root_preserving_quality_switch(str(peak.get("leftLocalChord")), str(peak.get("rightLocalChord")))),
+					"reason": peak.get("reason", "novelty-rejected"),
+				}
+				for idx, peak in enumerate((improved.rejected_novelty_peaks or [])[:20])
+			],
+			"acceptedTransitions": [
+				{
+					"regionIndex": idx,
+					"start": change["timestamp"],
+					"end": change["timestamp"],
+					"fromChord": change["fromChord"],
+					"toChord": change["toChord"],
+					"keepScore": 0.0,
+					"switchScore": 0.0,
+					"harmonicChangeEvidence": 0.0,
+					"isRootPreservingQualitySwitch": bool(_is_root_preserving_quality_switch(str(change["fromChord"]), str(change["toChord"]))),
+					"acceptedWithLowerSwitchScore": False,
+					"reason": "change-point-decoder",
+				}
+				for idx, change in enumerate(preserved_real_change_examples[:20])
+			],
+			"rootAwareRegionExamples": [
+				{
+					"regionIndex": idx,
+					"start": obs.start_seconds,
+					"end": obs.end_seconds,
+					"selectedRoot": obs.selected_root,
+					"selectedRootConfidence": obs.selected_root_confidence,
+					"majorQualityEvidence": obs.major_quality_evidence,
+					"minorQualityEvidence": obs.minor_quality_evidence,
+					"qualityMargin": obs.quality_margin,
+					"templateScore": obs.template_score,
+					"templateTopChord": obs.template_top_chord,
+					"templateTopScore": obs.template_top_score,
+					"rootAwareCombinedScore": obs.combined_score,
+					"rootCandidateScores": obs.root_candidate_scores,
+					"isQualityAmbiguous": obs.is_quality_ambiguous,
+					"winnerChord": obs.winner_chord,
+					"decodedChord": obs.decoded_chord,
+					"topCandidates": [
+						{"chord": chord, "score": score}
+						for chord, score in (obs.top_candidates or [])[:3]
+					],
+				}
+				for idx, obs in enumerate(harmonic_regions[:20])
+			],
+		},
+		"contextCorrection": {
+			"appliedCount": 0,
+			"appliedExamples": [],
+		},
+		"harmonicSegmentation": {
+			"localNoveltyCandidateCount": improved.local_novelty_candidate_count,
+			"contextualBoundaryCandidateCount": improved.contextual_boundary_candidate_count,
+			"multiResolutionAcceptedBoundaryCount": improved.multi_resolution_accepted_boundary_count,
+			"rejectedLocalOnlyBoundaryCount": improved.rejected_local_only_boundary_count,
+			"shortMediumAgreementRate": improved.short_medium_agreement_rate,
+			"meanShortContextDistance": improved.mean_short_context_distance,
+			"meanMediumContextDistance": improved.mean_medium_context_distance,
+			"acceptedBoundaryExamples": (improved.accepted_boundary_examples or [])[:20],
+			"rejectedLocalOnlyExamples": (improved.rejected_local_only_examples or [])[:20],
+			"candidateBoundaryCount": improved.candidate_boundary_count,
+			"acceptedBoundaryCountBeforeConsolidation": improved.accepted_boundary_count_before_consolidation,
+			"acceptedBoundaryCountAfterConsolidation": improved.accepted_boundary_count_after_consolidation,
+			"consolidatedBoundaryCount": improved.consolidated_boundary_count,
+			"boundaryClusterCount": improved.boundary_cluster_count,
+			"meanBeatsBetweenAcceptedBoundaries": improved.mean_beats_between_accepted_boundaries,
+			"medianBeatsBetweenAcceptedBoundaries": improved.median_beats_between_accepted_boundaries,
+			"shortHarmonicRegionCount": improved.short_harmonic_region_count,
+			"harmonicRegionDurationDistribution": improved.harmonic_region_duration_distribution or {
+				"lt1Beat": 0,
+				"1to2Beats": 0,
+				"2to4Beats": 0,
+				"gte4Beats": 0,
+			},
+			"harmonicBoundaryCount": max(0, len(harmonic_regions) - 1),
+			"harmonicRegionsPerMinute": regions_per_minute,
+			"meanHarmonicRegionDuration": region_mean,
+			"medianHarmonicRegionDuration": region_median,
+			"rejectedNoveltyPeaks": (improved.rejected_novelty_peaks or [])[:30],
+			"acceptedBoundaryTimestamps": improved.accepted_boundaries or [],
+			"consolidatedClusterExamples": (improved.consolidated_cluster_examples or [])[:20],
+			"perRegionSelectedChord": [obs.decoded_chord for obs in harmonic_regions],
+			"localSwitchNoBoundaryExamples": local_switch_no_boundary_examples,
+			"preservedRealChangeExamples": preserved_real_change_examples,
+		},
+		"globalDecoding": {
+			"globalDecoderPathScore": improved.global_decoder_path_score,
+			"regionDecisionsChangedByGlobalDecoding": improved.local_vs_decoded_region_changes,
+			"localVsGlobal": [
+				{
+					"regionIndex": idx,
+					"start": obs.start_seconds,
+					"end": obs.end_seconds,
+					"localBest": obs.local_best_chord,
+					"decoded": obs.decoded_chord,
+					"localBestScore": obs.local_best_score,
+					"top3": [
+						{"chord": chord, "score": score}
+						for chord, score in (obs.top_candidates or [])[:3]
+					],
+				}
+				for idx, obs in enumerate(harmonic_regions[:30])
+			],
+		},
+	}
+
+
+def _run_pipeline(
+	path: str | Path,
+	*,
+	use_harmonic_preprocessing: bool,
+	use_beat_sync: bool,
+	use_key_prior: bool,
+	use_context_correction: bool,
+) -> PipelineRun:
+	"""Internal pipeline executor with explicit feature toggles for benchmarking/tests."""
+	try:
+		audio = load_audio(path)
+		harmonic_samples = extract_harmonic_signal(audio.samples) if use_harmonic_preprocessing else audio.samples
+		feature_audio = AudioBuffer(samples=harmonic_samples, sample_rate=audio.sample_rate, duration=audio.duration)
+		features = extract_chroma(feature_audio, use_harmonic_preprocessing=False)
+		detected_key = estimate_global_key(features.chroma)
+
+		if not use_beat_sync:
+			key_prior_context = detected_key if use_key_prior else None
+			frame_predictions = _predict_frames(features.chroma, key_estimate=key_prior_context)
+			smoothed = smooth_frame_predictions(frame_predictions)
+			segments = segment_frame_predictions(
+				smoothed,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+				min_segment_duration_ms=MIN_SEGMENT_DURATION_MS,
+			)
+			segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
+			result = AnalysisResult(
+				version=CONTRACT_VERSION,
+				source=SourceMetadata(
+					path=str(path),
+					duration=audio.duration,
+					sampleRate=audio.sample_rate,
+				),
+				analysis=AnalysisMetadata(
+					algorithm=ALGORITHM_ID,
+					chords=segments,
+				),
+			)
+			return PipelineRun(result=result, detected_key=detected_key)
+
+		low_chroma = extract_low_frequency_chroma(
+			harmonic_samples,
+			sample_rate=features.sample_rate,
+			hop_length=features.hop_length,
+			n_frames=features.n_frames,
+		)
+		beat_timing = estimate_beat_timing(
+			harmonic_samples,
+			sample_rate=features.sample_rate,
+			hop_length=features.hop_length,
+			n_frames=features.n_frames,
+			max_region_seconds=0.45,
+		)
+		harmonic_regions, accepted_boundaries, rejected_peaks, segmentation_diag = _build_harmonic_regions_from_change_points(
+			boundaries=beat_timing.boundaries,
+			sample_rate=features.sample_rate,
+			hop_length=features.hop_length,
+			chroma=features.chroma,
+			low_chroma=low_chroma,
+			key_estimate=detected_key if use_key_prior else None,
+			beat_reliable=beat_timing.is_reliable,
+		)
+
+		decoded_regions, decoder_path_score, changed_count = _decode_global_chord_sequence(
+			harmonic_regions,
+			detected_key=detected_key if use_key_prior else None,
+		)
+		decoded_regions = _collapse_regions_by_decoded_chord(decoded_regions)
+		decoded_boundaries = [region.start_seconds for region in decoded_regions[1:]] if len(decoded_regions) > 1 else []
+		segments = _regions_to_segments(
+			decoded_regions,
+			hop_length=features.hop_length,
+			sample_rate=features.sample_rate,
+			source_duration=audio.duration,
+		)
+		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
+
+		result = AnalysisResult(
+			version=CONTRACT_VERSION,
+			source=SourceMetadata(
+				path=str(path),
+				duration=audio.duration,
+				sampleRate=audio.sample_rate,
+			),
+			analysis=AnalysisMetadata(
+				algorithm=ALGORITHM_ID,
+				chords=segments,
+			),
+		)
+		return PipelineRun(
+			result=result,
+			detected_key=detected_key,
+			beat_timing=beat_timing,
+			region_observations=decoded_regions,
+			persistence_events=[],
+			correction_events=[],
+			accepted_boundaries=decoded_boundaries,
+			rejected_novelty_peaks=rejected_peaks,
+			global_decoder_path_score=decoder_path_score,
+			local_vs_decoded_region_changes=changed_count,
+			candidate_boundary_count=int(segmentation_diag.get("candidateBoundaryCount", 0)),
+			accepted_boundary_count_before_consolidation=int(segmentation_diag.get("acceptedBoundaryCountBeforeConsolidation", 0)),
+			accepted_boundary_count_after_consolidation=int(segmentation_diag.get("acceptedBoundaryCountAfterConsolidation", 0)),
+			consolidated_boundary_count=int(segmentation_diag.get("consolidatedBoundaryCount", 0)),
+			boundary_cluster_count=int(segmentation_diag.get("boundaryClusterCount", 0)),
+			mean_beats_between_accepted_boundaries=float(segmentation_diag.get("meanBeatsBetweenAcceptedBoundaries", 0.0)),
+			median_beats_between_accepted_boundaries=float(segmentation_diag.get("medianBeatsBetweenAcceptedBoundaries", 0.0)),
+			short_harmonic_region_count=int(segmentation_diag.get("shortHarmonicRegionCount", 0)),
+			harmonic_region_duration_distribution=segmentation_diag.get("harmonicRegionDurationDistribution", None),
+			consolidated_cluster_examples=segmentation_diag.get("consolidatedClusterExamples", None),
+			local_novelty_candidate_count=int(segmentation_diag.get("localNoveltyCandidateCount", 0)),
+			contextual_boundary_candidate_count=int(segmentation_diag.get("contextualBoundaryCandidateCount", 0)),
+			multi_resolution_accepted_boundary_count=int(segmentation_diag.get("multiResolutionAcceptedBoundaryCount", 0)),
+			rejected_local_only_boundary_count=int(segmentation_diag.get("rejectedLocalOnlyBoundaryCount", 0)),
+			short_medium_agreement_rate=float(segmentation_diag.get("shortMediumAgreementRate", 0.0)),
+			mean_short_context_distance=float(segmentation_diag.get("meanShortContextDistance", 0.0)),
+			mean_medium_context_distance=float(segmentation_diag.get("meanMediumContextDistance", 0.0)),
+			accepted_boundary_examples=segmentation_diag.get("acceptedBoundaryExamples", None),
+			rejected_local_only_examples=segmentation_diag.get("rejectedLocalOnlyExamples", None),
+		)
+	except (AudioDecodeError, FeatureExtractionError, FrameDetectionError) as exc:
+		raise AnalysisError(code=exc.code, message=exc.message) from exc
+	except Exception as exc:  # pragma: no cover - public boundary guard
+		raise AnalysisError("ANALYSIS_FAILED", "Failed to analyze audio") from exc
+
+
+def _predict_frames(chroma: object, *, key_estimate: KeyEstimate | None) -> list[FrameChordPrediction]:
+	arr = np.asarray(chroma, dtype=np.float32)
+	if arr.ndim != 2 or arr.shape[0] != 12:
+		raise AnalysisError("FEATURE_INVALID_SHAPE", "Expected chroma shape 12 x frames")
+	if arr.shape[1] == 0:
+		raise AnalysisError("FEATURE_EMPTY", "No chroma frames available")
+
+	return [predict_frame_chord(arr[:, idx], key_estimate=key_estimate) for idx in range(arr.shape[1])]
+
+
+def _build_harmonic_regions_from_change_points(
+	*,
+	boundaries: np.ndarray,
+	sample_rate: int,
+	hop_length: int,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	key_estimate: KeyEstimate | None,
+	beat_reliable: bool,
+) -> tuple[list[MusicalRegionObservation], list[float], list[dict[str, object]], dict[str, object]]:
+	if boundaries.size < 2:
+		return [], [], [], {
+			"localNoveltyCandidateCount": 0,
+			"contextualBoundaryCandidateCount": 0,
+			"multiResolutionAcceptedBoundaryCount": 0,
+			"rejectedLocalOnlyBoundaryCount": 0,
+			"shortMediumAgreementRate": 0.0,
+			"meanShortContextDistance": 0.0,
+			"meanMediumContextDistance": 0.0,
+			"acceptedBoundaryExamples": [],
+			"rejectedLocalOnlyExamples": [],
+			"candidateBoundaryCount": 0,
+			"acceptedBoundaryCountBeforeConsolidation": 0,
+			"acceptedBoundaryCountAfterConsolidation": 0,
+			"consolidatedBoundaryCount": 0,
+			"boundaryClusterCount": 0,
+			"meanBeatsBetweenAcceptedBoundaries": 0.0,
+			"medianBeatsBetweenAcceptedBoundaries": 0.0,
+			"shortHarmonicRegionCount": 0,
+			"harmonicRegionDurationDistribution": {
+				"lt1Beat": 0,
+				"1to2Beats": 0,
+				"2to4Beats": 0,
+				"gte4Beats": 0,
+			},
+			"consolidatedClusterExamples": [],
+		}
+
+	beat_ranges: list[tuple[int, int]] = []
+	for left, right in zip(boundaries[:-1], boundaries[1:], strict=False):
+		start = int(max(0, left))
+		end = int(min(chroma.shape[1], right))
+		if end > start:
+			beat_ranges.append((start, end))
+	if len(beat_ranges) == 0:
+		return [], [], [], {
+			"localNoveltyCandidateCount": 0,
+			"contextualBoundaryCandidateCount": 0,
+			"multiResolutionAcceptedBoundaryCount": 0,
+			"rejectedLocalOnlyBoundaryCount": 0,
+			"shortMediumAgreementRate": 0.0,
+			"meanShortContextDistance": 0.0,
+			"meanMediumContextDistance": 0.0,
+			"acceptedBoundaryExamples": [],
+			"rejectedLocalOnlyExamples": [],
+			"candidateBoundaryCount": 0,
+			"acceptedBoundaryCountBeforeConsolidation": 0,
+			"acceptedBoundaryCountAfterConsolidation": 0,
+			"consolidatedBoundaryCount": 0,
+			"boundaryClusterCount": 0,
+			"meanBeatsBetweenAcceptedBoundaries": 0.0,
+			"medianBeatsBetweenAcceptedBoundaries": 0.0,
+			"shortHarmonicRegionCount": 0,
+			"harmonicRegionDurationDistribution": {
+				"lt1Beat": 0,
+				"1to2Beats": 0,
+				"2to4Beats": 0,
+				"gte4Beats": 0,
+			},
+			"consolidatedClusterExamples": [],
+		}
+
+	beat_profiles: list[np.ndarray] = []
+	beat_local_chords: list[str] = []
+	for start, end in beat_ranges:
+		region_chroma = np.asarray(chroma[:, start:end], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, start:end], dtype=np.float32)
+		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=key_estimate)
+		profile = _normalize_nonnegative(0.82 * np.mean(np.clip(region_chroma, 0.0, None), axis=1) + 0.18 * np.mean(np.clip(region_low, 0.0, None), axis=1))
+		beat_profiles.append(profile)
+		beat_local_chords.append(str(root_aware["winner_label"]))
+
+	novelty = _compute_harmonic_novelty(beat_profiles)
+	selected_internal_idx, rejected, candidate_peaks, multires_diag = _select_harmonic_boundaries(
+		novelty,
+		beat_profiles,
+		beat_ranges,
+		beat_local_chords,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+	)
+	consolidated_idx, consolidation_diag = _consolidate_boundary_clusters(
+		selected_internal_idx,
+		novelty=novelty,
+		candidate_peaks=candidate_peaks,
+		beat_profiles=beat_profiles,
+		beat_ranges=beat_ranges,
+		beat_local_chords=beat_local_chords,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+		chroma=chroma,
+		low_chroma=low_chroma,
+		key_estimate=key_estimate,
+		beat_reliable=beat_reliable,
+	)
+
+	boundary_frames = [beat_ranges[idx][1] for idx in consolidated_idx]
+	region_edges = [beat_ranges[0][0], *boundary_frames, beat_ranges[-1][1]]
+	region_beat_lengths = _region_beat_lengths_from_edges(region_edges, beat_ranges)
+
+	observations: list[MusicalRegionObservation] = []
+	for region_idx, (left, right) in enumerate(zip(region_edges[:-1], region_edges[1:], strict=False)):
+		if right <= left:
+			continue
+		region_chroma = np.asarray(chroma[:, left:right], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, left:right], dtype=np.float32)
+		obs = _build_region_observation(
+			start=left,
+			end=right,
+			sample_rate=sample_rate,
+			hop_length=hop_length,
+			region_chroma=region_chroma,
+			region_low_chroma=region_low,
+			key_estimate=key_estimate,
+		)
+		obs = MusicalRegionObservation(
+			start_frame=obs.start_frame,
+			end_frame=obs.end_frame,
+			start_seconds=obs.start_seconds,
+			end_seconds=obs.end_seconds,
+			duration_seconds=obs.duration_seconds,
+			winner_chord=obs.winner_chord,
+			winner_confidence=obs.winner_confidence,
+			scores=obs.scores,
+			advantage_over_runner_up=obs.advantage_over_runner_up,
+			root_candidate_scores=obs.root_candidate_scores,
+			selected_root=obs.selected_root,
+			selected_root_confidence=obs.selected_root_confidence,
+			major_quality_evidence=obs.major_quality_evidence,
+			minor_quality_evidence=obs.minor_quality_evidence,
+			quality_margin=obs.quality_margin,
+			template_score=obs.template_score,
+			template_top_chord=obs.template_top_chord,
+			template_top_score=obs.template_top_score,
+			combined_score=obs.combined_score,
+			is_quality_ambiguous=obs.is_quality_ambiguous,
+			top_candidates=obs.top_candidates,
+			local_best_chord=obs.local_best_chord,
+			local_best_score=obs.local_best_score,
+			decoded_chord=obs.decoded_chord,
+			beat_length=float(region_beat_lengths[region_idx]) if region_idx < len(region_beat_lengths) else 0.0,
+		)
+		observations.append(obs)
+
+	accepted_times = [float(frame * hop_length / sample_rate) for frame in boundary_frames]
+	beats_between = [float(consolidated_idx[i + 1] - consolidated_idx[i]) for i in range(len(consolidated_idx) - 1)]
+	mean_beats_between = float(mean(beats_between)) if beats_between else 0.0
+	median_beats_between = float(median(beats_between)) if beats_between else 0.0
+
+	short_region_count = sum(1 for obs in observations if (obs.beat_length > 0.0 and obs.beat_length < 1.0))
+	distribution = _harmonic_region_beat_distribution(observations)
+	diagnostics = {
+		"localNoveltyCandidateCount": int(multires_diag.get("localNoveltyCandidateCount", 0)),
+		"contextualBoundaryCandidateCount": int(multires_diag.get("contextualBoundaryCandidateCount", 0)),
+		"multiResolutionAcceptedBoundaryCount": int(multires_diag.get("multiResolutionAcceptedBoundaryCount", 0)),
+		"rejectedLocalOnlyBoundaryCount": int(multires_diag.get("rejectedLocalOnlyBoundaryCount", 0)),
+		"shortMediumAgreementRate": float(multires_diag.get("shortMediumAgreementRate", 0.0)),
+		"meanShortContextDistance": float(multires_diag.get("meanShortContextDistance", 0.0)),
+		"meanMediumContextDistance": float(multires_diag.get("meanMediumContextDistance", 0.0)),
+		"acceptedBoundaryExamples": multires_diag.get("acceptedBoundaryExamples", []),
+		"rejectedLocalOnlyExamples": multires_diag.get("rejectedLocalOnlyExamples", []),
+		"candidateBoundaryCount": len(candidate_peaks),
+		"acceptedBoundaryCountBeforeConsolidation": len(selected_internal_idx),
+		"acceptedBoundaryCountAfterConsolidation": len(consolidated_idx),
+		"consolidatedBoundaryCount": max(0, len(selected_internal_idx) - len(consolidated_idx)),
+		"boundaryClusterCount": int(consolidation_diag.get("boundaryClusterCount", 0)),
+		"meanBeatsBetweenAcceptedBoundaries": mean_beats_between,
+		"medianBeatsBetweenAcceptedBoundaries": median_beats_between,
+		"shortHarmonicRegionCount": short_region_count,
+		"harmonicRegionDurationDistribution": distribution,
+		"consolidatedClusterExamples": consolidation_diag.get("consolidatedClusterExamples", []),
+	}
+	return observations, accepted_times, rejected, diagnostics
+
+
+def _compute_harmonic_novelty(beat_profiles: list[np.ndarray]) -> list[float]:
+	if len(beat_profiles) <= 1:
+		return []
+	values: list[float] = []
+	for idx in range(len(beat_profiles) - 1):
+		cross = 1.0 - _cosine_similarity(beat_profiles[idx], beat_profiles[idx + 1])
+		values.append(float(np.clip(cross, 0.0, 1.0)))
+	return values
+
+
+def _select_harmonic_boundaries(
+	novelty: list[float],
+	beat_profiles: list[np.ndarray],
+	beat_ranges: list[tuple[int, int]],
+	beat_local_chords: list[str],
+	*,
+	hop_length: int,
+	sample_rate: int,
+) -> tuple[list[int], list[dict[str, object]], list[dict[str, object]], dict[str, object]]:
+	if len(novelty) == 0:
+		return [], [], [], {
+			"localNoveltyCandidateCount": 0,
+			"contextualBoundaryCandidateCount": 0,
+			"multiResolutionAcceptedBoundaryCount": 0,
+			"rejectedLocalOnlyBoundaryCount": 0,
+			"shortMediumAgreementRate": 0.0,
+			"meanShortContextDistance": 0.0,
+			"meanMediumContextDistance": 0.0,
+			"acceptedBoundaryExamples": [],
+			"rejectedLocalOnlyExamples": [],
+		}
+
+	arr = np.asarray(novelty, dtype=np.float32)
+	med = float(np.median(arr))
+	mad = float(np.median(np.abs(arr - med)))
+	threshold = float(max(NOVELTY_MIN_PEAK, med + NOVELTY_MAD_SCALE * mad))
+
+	selected: list[int] = []
+	rejected: list[dict[str, object]] = []
+	candidates: list[dict[str, object]] = []
+	accepted_examples: list[dict[str, object]] = []
+	rejected_local_only_examples: list[dict[str, object]] = []
+	short_distances: list[float] = []
+	medium_distances: list[float] = []
+	agreement_flags: list[bool] = []
+	contextual_candidate_count = 0
+	rejected_local_only_count = 0
+	for idx, value in enumerate(novelty):
+		left = novelty[idx - 1] if idx - 1 >= 0 else -1.0
+		right = novelty[idx + 1] if idx + 1 < len(novelty) else -1.0
+		is_local_peak = value >= left and value >= right
+
+		prominence = float(value - max(left, right, 0.0))
+		forward_persistence = 0.0
+		if idx + 2 < len(beat_profiles):
+			forward_persistence = float(np.clip(1.0 - _cosine_similarity(beat_profiles[idx], beat_profiles[idx + 2]), 0.0, 1.0))
+		backward_persistence = 0.0
+		if idx - 1 >= 0:
+			backward_persistence = float(np.clip(1.0 - _cosine_similarity(beat_profiles[idx - 1], beat_profiles[idx + 1]), 0.0, 1.0))
+		persistence = max(forward_persistence, backward_persistence)
+
+		timestamp = float(beat_ranges[idx][1] * hop_length / sample_rate)
+		left_chord = beat_local_chords[idx]
+		right_chord = beat_local_chords[idx + 1]
+		chord_change_support = left_chord != right_chord
+		near_peak_rapid_change = bool(
+			chord_change_support
+			and value >= (threshold * 0.72)
+			and value >= (max(left, right, 0.0) * 0.64)
+			and persistence >= 0.20
+		)
+		if not (is_local_peak or near_peak_rapid_change):
+			continue
+		evidence = _multi_resolution_boundary_evidence(
+			beat_profiles,
+			beat_ranges,
+			idx,
+			hop_length=hop_length,
+			sample_rate=sample_rate,
+		)
+		short_distance = float(evidence["shortDistance"])
+		medium_distance = float(evidence["mediumDistance"])
+		context_agreement = float(evidence["contextAgreement"])
+		persistence_support = float(evidence["persistenceSupport"])
+		short_medium_agree = bool(evidence["shortMediumAgree"])
+		short_window_beats = int(evidence["shortWindowBeats"])
+		medium_window_beats = int(evidence["mediumWindowBeats"])
+		left_consensus, left_consensus_ratio = _consensus_chord_with_ratio(
+			beat_local_chords,
+			start=max(0, idx - short_window_beats + 1),
+			end=idx + 1,
+		)
+		right_consensus, right_consensus_ratio = _consensus_chord_with_ratio(
+			beat_local_chords,
+			start=idx + 1,
+			end=min(len(beat_local_chords), idx + 1 + short_window_beats),
+		)
+		left_short_profile = _robust_context_profile(
+			beat_profiles,
+			start=max(0, idx - short_window_beats + 1),
+			end=idx + 1,
+		)
+		right_short_profile = _robust_context_profile(
+			beat_profiles,
+			start=idx + 1,
+			end=min(len(beat_profiles), idx + 1 + short_window_beats),
+		)
+		short_distances.append(short_distance)
+		medium_distances.append(medium_distance)
+		agreement_flags.append(short_medium_agree)
+
+		candidates.append(
+			{
+				"index": idx,
+				"timestamp": timestamp,
+				"novelty": float(value),
+				"prominence": float(prominence),
+				"persistence": float(persistence),
+				"shortContextDistance": short_distance,
+				"mediumContextDistance": medium_distance,
+				"contextAgreementScore": context_agreement,
+				"persistenceSupport": persistence_support,
+				"shortMediumAgree": short_medium_agree,
+				"contextShortWindowBeats": short_window_beats,
+				"contextMediumWindowBeats": medium_window_beats,
+				"leftConsensusChord": left_consensus,
+				"leftConsensusRatio": left_consensus_ratio,
+				"rightConsensusChord": right_consensus,
+				"rightConsensusRatio": right_consensus_ratio,
+				"leftLocalChord": left_chord,
+				"rightLocalChord": right_chord,
+			}
+		)
+
+		left_root, _ = _parse_chord_quality(left_chord)
+		right_root, _ = _parse_chord_quality(right_chord)
+		same_root_candidate = bool(
+			left_root is not None
+			and right_root is not None
+			and left_root == right_root
+		)
+		same_root_quality_shift = False
+		if same_root_candidate:
+			root_pc = _chord_root_pc(left_root or "")
+			if root_pc is not None:
+				left_quality_balance = _quality_balance_for_root(left_short_profile, root_pc)
+				right_quality_balance = _quality_balance_for_root(right_short_profile, root_pc)
+				same_root_quality_shift = bool(
+					left_quality_balance * right_quality_balance < 0.0
+					and max(abs(left_quality_balance), abs(right_quality_balance)) >= MULTIRES_SAME_ROOT_QUALITY_SHIFT_ABS_MIN
+					and abs(left_quality_balance - right_quality_balance) >= MULTIRES_SAME_ROOT_QUALITY_SHIFT_DELTA_MIN
+				)
+		quality_change_support = _is_root_preserving_quality_switch(left_chord, right_chord) or same_root_quality_shift
+		persistence_floor = NOVELTY_PERSISTENCE_DISTANCE * (0.5 if quality_change_support else 1.0)
+		threshold_floor = max(NOVELTY_MIN_PEAK * (0.9 if quality_change_support else 1.0), threshold * 0.82)
+		passes_local_gate = (
+			value >= threshold
+			and prominence >= NOVELTY_MIN_PROMINENCE
+			and persistence >= persistence_floor
+		) or (
+			chord_change_support
+			and value >= threshold_floor
+			and prominence >= (NOVELTY_MIN_PROMINENCE * 0.75)
+			and persistence >= (persistence_floor * 0.7)
+		) or (
+			chord_change_support
+			and value >= threshold
+			and persistence >= max(0.25, persistence_floor)
+			and value >= 0.22
+		)
+
+		is_contextual_candidate = bool(
+			short_distance >= (MULTIRES_SHORT_DISTANCE_MIN * 0.78)
+			and medium_distance >= (MULTIRES_MEDIUM_DISTANCE_FLOOR * 0.90)
+		)
+		if is_contextual_candidate:
+			contextual_candidate_count += 1
+
+		strong_rapid_context = bool(
+			short_distance >= (MULTIRES_SHORT_DISTANCE_MIN * 1.25)
+			and medium_distance >= MULTIRES_MEDIUM_DISTANCE_FLOOR
+			and context_agreement >= (MULTIRES_CONTEXT_AGREEMENT_MIN * 0.92)
+			and persistence_support >= 0.42
+		)
+		progressive_context_change = bool(
+			chord_change_support
+			and short_distance >= MULTIRES_PROGRESSIVE_SHORT_MIN
+			and medium_distance >= MULTIRES_PROGRESSIVE_MEDIUM_MIN
+			and persistence_support >= MULTIRES_PROGRESSIVE_PERSISTENCE_MIN
+		)
+		required_medium_distance = MULTIRES_MEDIUM_DISTANCE_MIN
+		required_persistence_support = MULTIRES_PERSISTENCE_MIN
+		if left_consensus == right_consensus and left_consensus is not None and left_consensus != "N":
+			required_medium_distance = max(required_medium_distance, MULTIRES_SAME_CONTEXT_MEDIUM_MIN)
+		if left_chord == right_chord and left_chord != "N":
+			required_medium_distance = max(required_medium_distance, MULTIRES_SAME_LOCAL_MEDIUM_MIN)
+		if not short_medium_agree:
+			required_medium_distance = max(required_medium_distance, MULTIRES_DISAGREE_MEDIUM_MIN)
+			required_persistence_support = max(required_persistence_support, MULTIRES_DISAGREE_PERSISTENCE_MIN)
+		medium_dominant_true_change = bool(
+			chord_change_support
+			and medium_distance >= MULTIRES_MEDIUM_DOMINANT_DISTANCE_MIN
+			and short_distance >= MULTIRES_MEDIUM_DOMINANT_SHORT_MIN
+			and persistence_support >= MULTIRES_DISAGREE_PERSISTENCE_MIN
+			and value >= (threshold_floor * MULTIRES_MEDIUM_DOMINANT_NOVELTY_SCALE)
+			and left_consensus is not None
+			and right_consensus is not None
+			and left_consensus != right_consensus
+		)
+		consensus_shift_true_change = bool(
+			chord_change_support
+			and left_consensus is not None
+			and right_consensus is not None
+			and left_consensus != right_consensus
+			and left_consensus_ratio >= MULTIRES_CONSENSUS_SHIFT_RATIO_MIN
+			and right_consensus_ratio >= MULTIRES_CONSENSUS_SHIFT_RATIO_MIN
+			and medium_distance >= MULTIRES_CONSENSUS_SHIFT_MEDIUM_MIN
+			and value >= (threshold_floor * MULTIRES_CONSENSUS_SHIFT_NOVELTY_SCALE)
+		)
+		same_root_quality_true_change = bool(
+			same_root_quality_shift
+			and value >= (threshold_floor * MULTIRES_SAME_ROOT_QUALITY_SHIFT_NOVELTY_SCALE)
+			and medium_distance >= MULTIRES_SAME_ROOT_QUALITY_SHIFT_MEDIUM_MIN
+			and persistence_support >= MULTIRES_SAME_ROOT_QUALITY_SHIFT_PERSISTENCE_MIN
+			and context_agreement >= MULTIRES_SAME_ROOT_QUALITY_SHIFT_AGREEMENT_MIN
+		)
+		salient_novelty_true_change = bool(
+			chord_change_support
+			and value >= (threshold_floor * MULTIRES_SALIENT_NOVELTY_SCALE)
+			and prominence >= MULTIRES_SALIENT_PROMINENCE_MIN
+			and short_distance >= MULTIRES_SALIENT_SHORT_DISTANCE_MIN
+			and medium_distance >= MULTIRES_SALIENT_MEDIUM_DISTANCE_MIN
+			and persistence_support >= MULTIRES_SALIENT_PERSISTENCE_SUPPORT_MIN
+			and context_agreement >= MULTIRES_SALIENT_CONTEXT_AGREEMENT_MIN
+			and left_consensus is not None
+			and right_consensus is not None
+			and left_consensus != right_consensus
+			and (left_consensus_ratio + right_consensus_ratio) >= MULTIRES_SALIENT_CONSENSUS_STRENGTH_MIN
+		)
+		passes_context_gate = bool(
+			(
+				short_distance >= MULTIRES_SHORT_DISTANCE_MIN
+				and medium_distance >= required_medium_distance
+				and context_agreement >= MULTIRES_CONTEXT_AGREEMENT_MIN
+				and persistence_support >= required_persistence_support
+			)
+			or (chord_change_support and strong_rapid_context)
+			or progressive_context_change
+			or medium_dominant_true_change
+			or consensus_shift_true_change
+			or same_root_quality_true_change
+			or salient_novelty_true_change
+		)
+
+		local_strength = float(np.clip(value / max(threshold * 1.35, 1e-6), 0.0, 1.0))
+		short_support = float(np.clip(short_distance / max(MULTIRES_SHORT_DISTANCE_MIN * 2.20, 1e-6), 0.0, 1.0))
+		medium_support = float(np.clip(medium_distance / max(MULTIRES_MEDIUM_DISTANCE_MIN * 2.60, 1e-6), 0.0, 1.0))
+		final_confidence = float(np.clip((0.40 * local_strength) + (0.30 * short_support) + (0.30 * medium_support), 0.0, 1.0))
+		same_context_consensus = bool(
+			left_consensus == right_consensus
+			and left_consensus is not None
+			and left_consensus != "N"
+		)
+		same_context_requires_stronger_support = bool(
+			same_context_consensus
+			and not _is_root_preserving_quality_switch(left_chord, right_chord)
+		)
+		same_context_override_ok = bool(
+			medium_distance >= MULTIRES_SAME_CONTEXT_MEDIUM_MIN
+			and final_confidence >= MULTIRES_SAME_CONTEXT_CONFIDENCE_MIN
+		)
+		same_local_chord = bool(left_chord == right_chord and left_chord != "N")
+		same_local_override_ok = bool(
+			short_distance >= MULTIRES_SAME_LOCAL_SHORT_MIN
+			and medium_distance >= MULTIRES_SAME_LOCAL_MEDIUM_MIN
+			and final_confidence >= MULTIRES_SAME_LOCAL_CONFIDENCE_MIN
+		) or same_root_quality_true_change
+		required_final_confidence = MULTIRES_FINAL_CONFIDENCE_MIN
+		if medium_distance < MULTIRES_DISAGREE_MEDIUM_MIN:
+			required_final_confidence = max(required_final_confidence, MULTIRES_WEAK_MEDIUM_CONFIDENCE_MIN)
+		if persistence_support < MULTIRES_DISAGREE_PERSISTENCE_MIN:
+			required_final_confidence = max(required_final_confidence, MULTIRES_LOW_PERSISTENCE_CONFIDENCE_MIN)
+		if not short_medium_agree:
+			required_final_confidence = max(required_final_confidence, MULTIRES_WEAK_MEDIUM_CONFIDENCE_MIN)
+
+		rapid_local_peak = bool(
+			near_peak_rapid_change
+			or (
+				value >= threshold_floor
+				and prominence >= (NOVELTY_MIN_PROMINENCE * 0.70)
+				and persistence >= (persistence_floor * 0.65)
+			)
+		)
+		salient_acceptance = bool(
+			salient_novelty_true_change
+			and final_confidence >= max(required_final_confidence, MULTIRES_SALIENT_CONFIDENCE_MIN)
+		)
+		if ((passes_local_gate and passes_context_gate and final_confidence >= required_final_confidence) or (
+			rapid_local_peak and chord_change_support and strong_rapid_context and final_confidence >= max(required_final_confidence * 0.92, MULTIRES_FINAL_CONFIDENCE_MIN * 0.92)
+		) or salient_acceptance) and (not same_context_requires_stronger_support or same_context_override_ok) and (not same_local_chord or same_local_override_ok):
+			selected.append(idx)
+			accepted_examples.append(
+				{
+					"timestamp": timestamp,
+					"novelty": float(value),
+					"shortContextDistance": short_distance,
+					"mediumContextDistance": medium_distance,
+					"contextAgreementScore": context_agreement,
+					"persistenceSupport": persistence_support,
+					"shortMediumAgree": short_medium_agree,
+					"finalBoundaryConfidence": final_confidence,
+					"leftConsensusChord": left_consensus,
+					"leftConsensusRatio": left_consensus_ratio,
+					"rightConsensusChord": right_consensus,
+					"rightConsensusRatio": right_consensus_ratio,
+					"leftLocalChord": left_chord,
+					"rightLocalChord": right_chord,
+				}
+			)
+		else:
+			reasons: list[str] = []
+			local_only_event = bool(value >= (threshold * 0.88) and not passes_context_gate)
+			if value < threshold:
+				reasons.append("below-threshold")
+			if prominence < NOVELTY_MIN_PROMINENCE:
+				reasons.append("low-prominence")
+			if persistence < NOVELTY_PERSISTENCE_DISTANCE:
+				reasons.append("no-persistence")
+			if not passes_context_gate:
+				reasons.append("context-insufficient")
+			if same_context_requires_stronger_support and not same_context_override_ok:
+				reasons.append("same-context-consensus")
+			if same_local_chord and not same_local_override_ok:
+				reasons.append("same-local-chord")
+			if local_only_event:
+				reasons.append("local-only-medium-insufficient")
+			if final_confidence < MULTIRES_FINAL_CONFIDENCE_MIN:
+				reasons.append("low-boundary-confidence")
+			if local_only_event:
+				rejected_local_only_count += 1
+				rejected_local_only_examples.append(
+					{
+						"timestamp": timestamp,
+						"novelty": float(value),
+						"shortContextDistance": short_distance,
+						"mediumContextDistance": medium_distance,
+						"contextAgreementScore": context_agreement,
+						"persistenceSupport": persistence_support,
+						"shortMediumAgree": short_medium_agree,
+						"finalBoundaryConfidence": final_confidence,
+						"leftConsensusChord": left_consensus,
+						"leftConsensusRatio": left_consensus_ratio,
+						"rightConsensusChord": right_consensus,
+						"rightConsensusRatio": right_consensus_ratio,
+						"leftLocalChord": left_chord,
+						"rightLocalChord": right_chord,
+						"reason": "local-only-medium-insufficient",
+					}
+				)
+			rejected.append(
+				{
+					"timestamp": timestamp,
+					"novelty": float(value),
+					"prominence": float(prominence),
+					"persistence": float(persistence),
+					"shortContextDistance": short_distance,
+					"mediumContextDistance": medium_distance,
+					"contextAgreementScore": context_agreement,
+					"persistenceSupport": persistence_support,
+					"shortMediumAgree": short_medium_agree,
+					"finalBoundaryConfidence": final_confidence,
+					"leftConsensusChord": left_consensus,
+					"leftConsensusRatio": left_consensus_ratio,
+					"rightConsensusChord": right_consensus,
+					"rightConsensusRatio": right_consensus_ratio,
+					"leftLocalChord": left_chord,
+					"rightLocalChord": right_chord,
+					"reason": "+".join(reasons) if reasons else "rejected",
+				}
+			)
+
+	agreement_rate = float(sum(1 for flag in agreement_flags if flag) / len(agreement_flags)) if agreement_flags else 0.0
+	diag = {
+		"localNoveltyCandidateCount": len(candidates),
+		"contextualBoundaryCandidateCount": contextual_candidate_count,
+		"multiResolutionAcceptedBoundaryCount": len(selected),
+		"rejectedLocalOnlyBoundaryCount": rejected_local_only_count,
+		"shortMediumAgreementRate": agreement_rate,
+		"meanShortContextDistance": float(mean(short_distances)) if short_distances else 0.0,
+		"meanMediumContextDistance": float(mean(medium_distances)) if medium_distances else 0.0,
+		"acceptedBoundaryExamples": accepted_examples[:40],
+		"rejectedLocalOnlyExamples": rejected_local_only_examples[:40],
+	}
+
+	return selected, rejected, candidates, diag
+
+
+def _consensus_chord(chords: list[str], *, start: int, end: int) -> str | None:
+	label, _ = _consensus_chord_with_ratio(chords, start=start, end=end)
+	return label
+
+
+def _consensus_chord_with_ratio(chords: list[str], *, start: int, end: int) -> tuple[str | None, float]:
+	left = max(0, int(start))
+	right = min(len(chords), int(end))
+	if right <= left:
+		return None, 0.0
+
+	counts: dict[str, int] = {}
+	for chord in chords[left:right]:
+		counts[chord] = counts.get(chord, 0) + 1
+	if not counts:
+		return None, 0.0
+
+	# Deterministic tie-break: frequency, then lexical order.
+	label, count = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0]
+	window_len = max(1, right - left)
+	ratio = float(count / window_len)
+	return label, ratio
+
+
+def _multi_resolution_boundary_evidence(
+	beat_profiles: list[np.ndarray],
+	beat_ranges: list[tuple[int, int]],
+	idx: int,
+	*,
+	hop_length: int,
+	sample_rate: int,
+) -> dict[str, object]:
+	if len(beat_profiles) == 0:
+		return {
+			"shortDistance": 0.0,
+			"mediumDistance": 0.0,
+			"contextAgreement": 0.0,
+			"persistenceSupport": 0.0,
+			"shortMediumAgree": False,
+			"shortWindowBeats": MULTIRES_SHORT_CONTEXT_MIN_BEATS,
+			"mediumWindowBeats": MULTIRES_MEDIUM_CONTEXT_MIN_BEATS,
+		}
+
+	beat_seconds = _local_beat_seconds(beat_ranges, idx, hop_length=hop_length, sample_rate=sample_rate)
+	short_window = _adaptive_context_window_beats(
+		target_seconds=MULTIRES_SHORT_CONTEXT_TARGET_SECONDS,
+		min_beats=MULTIRES_SHORT_CONTEXT_MIN_BEATS,
+		max_beats=MULTIRES_SHORT_CONTEXT_MAX_BEATS,
+		beat_seconds=beat_seconds,
+	)
+	medium_window = _adaptive_context_window_beats(
+		target_seconds=MULTIRES_MEDIUM_CONTEXT_TARGET_SECONDS,
+		min_beats=MULTIRES_MEDIUM_CONTEXT_MIN_BEATS,
+		max_beats=MULTIRES_MEDIUM_CONTEXT_MAX_BEATS,
+		beat_seconds=beat_seconds,
+	)
+
+	short_before = _robust_context_profile(beat_profiles, start=max(0, idx - short_window + 1), end=idx + 1)
+	short_after = _robust_context_profile(beat_profiles, start=idx + 1, end=min(len(beat_profiles), idx + 1 + short_window))
+	medium_before = _robust_context_profile(beat_profiles, start=max(0, idx - medium_window + 1), end=idx + 1)
+	medium_after = _robust_context_profile(beat_profiles, start=idx + 1, end=min(len(beat_profiles), idx + 1 + medium_window))
+
+	short_distance = float(np.clip(1.0 - _cosine_similarity(short_before, short_after), 0.0, 1.0))
+	medium_distance = float(np.clip(1.0 - _cosine_similarity(medium_before, medium_after), 0.0, 1.0))
+	context_agreement = float(np.clip(1.0 - abs(short_distance - medium_distance), 0.0, 1.0))
+	persistence_support = float(np.clip(medium_distance / max(short_distance, 1e-6), 0.0, 1.0))
+	short_medium_agree = bool(
+		short_distance >= (MULTIRES_SHORT_DISTANCE_MIN * 0.85)
+		and medium_distance >= (MULTIRES_MEDIUM_DISTANCE_FLOOR * 0.90)
+		and context_agreement >= (MULTIRES_CONTEXT_AGREEMENT_MIN * 0.92)
+	)
+
+	return {
+		"shortDistance": short_distance,
+		"mediumDistance": medium_distance,
+		"contextAgreement": context_agreement,
+		"persistenceSupport": persistence_support,
+		"shortMediumAgree": short_medium_agree,
+		"shortWindowBeats": short_window,
+		"mediumWindowBeats": medium_window,
+	}
+
+
+def _local_beat_seconds(
+	beat_ranges: list[tuple[int, int]],
+	idx: int,
+	*,
+	hop_length: int,
+	sample_rate: int,
+) -> float:
+	if len(beat_ranges) == 0:
+		return 0.5
+
+	left = max(0, idx - 2)
+	right = min(len(beat_ranges), idx + 3)
+	window = beat_ranges[left:right]
+	if not window:
+		window = beat_ranges
+
+	durations = [float(max(1, end - start) * hop_length / sample_rate) for start, end in window]
+	if not durations:
+		return 0.5
+	return float(max(0.12, median(durations)))
+
+
+def _adaptive_context_window_beats(*, target_seconds: float, min_beats: int, max_beats: int, beat_seconds: float) -> int:
+	if beat_seconds <= 1e-6:
+		return int(min_beats)
+	estimated = int(round(target_seconds / beat_seconds))
+	return int(np.clip(estimated, min_beats, max_beats))
+
+
+def _quality_balance_for_root(profile: np.ndarray, root_pc: int) -> float:
+	arr = np.asarray(profile, dtype=np.float32)
+	if arr.shape != (12,):
+		return 0.0
+	major_evidence = float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * arr[(root_pc + 4) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((arr[root_pc] + arr[(root_pc + 7) % 12]) / 2.0)
+	)
+	minor_evidence = float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * arr[(root_pc + 3) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((arr[root_pc] + arr[(root_pc + 7) % 12]) / 2.0)
+	)
+	return float(major_evidence - minor_evidence)
+
+
+def _robust_context_profile(beat_profiles: list[np.ndarray], *, start: int, end: int) -> np.ndarray:
+	left = max(0, int(start))
+	right = min(len(beat_profiles), int(end))
+	if right <= left:
+		return np.zeros((12,), dtype=np.float32)
+
+	stack = np.asarray(beat_profiles[left:right], dtype=np.float32)
+	if stack.ndim != 2 or stack.shape[0] == 0:
+		return np.zeros((12,), dtype=np.float32)
+
+	median_profile = np.median(stack, axis=0)
+	mean_profile = np.mean(stack, axis=0)
+	profile = _normalize_nonnegative((0.68 * median_profile) + (0.32 * mean_profile))
+	return np.asarray(profile, dtype=np.float32)
+
+
+def _consolidate_boundary_clusters(
+	selected_idx: list[int],
+	*,
+	novelty: list[float],
+	candidate_peaks: list[dict[str, object]],
+	beat_profiles: list[np.ndarray],
+	beat_ranges: list[tuple[int, int]],
+	beat_local_chords: list[str],
+	hop_length: int,
+	sample_rate: int,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	key_estimate: KeyEstimate | None,
+	beat_reliable: bool,
+) -> tuple[list[int], dict[str, object]]:
+	if len(selected_idx) <= 1:
+		return selected_idx, {"boundaryClusterCount": 0, "consolidatedClusterExamples": []}
+
+	peak_by_idx = {int(item.get("index", -1)): item for item in candidate_peaks}
+	merged = sorted(selected_idx)
+	cluster_count = 0
+	examples: list[dict[str, object]] = []
+	changed = True
+	while changed and len(merged) > 1:
+		changed = False
+		for pos in range(len(merged) - 1):
+			left_idx = merged[pos]
+			right_idx = merged[pos + 1]
+			left_frame = beat_ranges[left_idx][1]
+			right_frame = beat_ranges[right_idx][1]
+			seconds_between = float(max(0.0, (right_frame - left_frame) * hop_length / sample_rate))
+			beats_between = float(max(0.0, right_idx - left_idx))
+			cluster_close = (
+				beats_between <= BOUNDARY_CLUSTER_MAX_BEAT_DISTANCE
+				if beat_reliable
+				else seconds_between <= BOUNDARY_CLUSTER_MAX_SECONDS_DISTANCE
+			)
+			if not cluster_close:
+				continue
+
+			cluster_count += 1
+			mid_start = left_frame
+			mid_end = right_frame
+			if mid_end <= mid_start:
+				continue
+
+			left_ctx_start = beat_ranges[max(0, left_idx - 1)][0]
+			left_ctx_end = left_frame
+			right_ctx_start = right_frame
+			right_ctx_end = beat_ranges[min(len(beat_ranges) - 1, right_idx + 1)][1]
+
+			mid_obs = _build_region_observation(
+				start=mid_start,
+				end=mid_end,
+				sample_rate=sample_rate,
+				hop_length=hop_length,
+				region_chroma=np.asarray(chroma[:, mid_start:mid_end], dtype=np.float32),
+				region_low_chroma=np.asarray(low_chroma[:, mid_start:mid_end], dtype=np.float32),
+				key_estimate=key_estimate,
+			)
+
+			left_profile = _profile_from_frame_range(chroma, low_chroma, left_ctx_start, left_ctx_end)
+			mid_profile = _profile_from_frame_range(chroma, low_chroma, mid_start, mid_end)
+			right_profile = _profile_from_frame_range(chroma, low_chroma, right_ctx_start, right_ctx_end)
+			sim_left_right = _cosine_similarity(left_profile, right_profile)
+			sim_left_mid = _cosine_similarity(left_profile, mid_profile)
+			sim_mid_right = _cosine_similarity(mid_profile, right_profile)
+
+			mid_beats = beats_between
+			left_outer_chord = beat_local_chords[left_idx]
+			right_outer_chord = beat_local_chords[min(len(beat_local_chords) - 1, right_idx + 1)]
+			mid_duration_short = bool(
+				mid_obs.duration_seconds <= BOUNDARY_CONSOLIDATION_SHORT_REGION_SECONDS
+				or (beat_reliable and mid_beats <= BOUNDARY_CONSOLIDATION_SHORT_REGION_BEATS)
+			)
+			mid_weak = bool(
+				mid_obs.local_best_score <= BOUNDARY_CONSOLIDATION_WEAK_SCORE_MAX
+				and mid_obs.advantage_over_runner_up <= BOUNDARY_CONSOLIDATION_WEAK_MARGIN_MAX
+			)
+			sides_similar = bool(
+				sim_left_right >= BOUNDARY_CONSOLIDATION_SIDE_SIMILARITY_MIN
+				and sim_left_mid <= BOUNDARY_CONSOLIDATION_MID_SIMILARITY_MAX
+				and sim_mid_right <= BOUNDARY_CONSOLIDATION_MID_SIMILARITY_MAX
+			)
+			contrast = float(sim_left_right - ((sim_left_mid + sim_mid_right) * 0.5))
+			bridge_same_harmony = bool(left_outer_chord == right_outer_chord and left_outer_chord != mid_obs.local_best_chord)
+
+			mid_has_strong_independent_evidence = bool(
+				not mid_duration_short
+				or mid_obs.local_best_score > 0.20
+				or mid_obs.advantage_over_runner_up > 0.055
+			)
+
+			if mid_has_strong_independent_evidence and not bridge_same_harmony:
+				examples.append(
+					{
+						"timestamps": [
+							float(left_frame * hop_length / sample_rate),
+							float(right_frame * hop_length / sample_rate),
+						],
+						"beatDistance": beats_between,
+						"noveltyStrengths": [float(novelty[left_idx]), float(novelty[right_idx])],
+						"prominences": [
+							float(peak_by_idx.get(left_idx, {}).get("prominence", 0.0)),
+							float(peak_by_idx.get(right_idx, {}).get("prominence", 0.0)),
+						],
+						"harmonicSimilarities": {
+							"leftMid": float(sim_left_mid),
+							"midRight": float(sim_mid_right),
+							"leftRight": float(sim_left_right),
+						},
+						"selectedSurvivingBoundary": None,
+						"rejectionReason": "preserve-strong-intermediate-region",
+					}
+				)
+				continue
+
+			if not (
+				mid_duration_short
+				and (mid_weak or bridge_same_harmony)
+				and sides_similar
+				and contrast >= BOUNDARY_CONSOLIDATION_CONTRAST_MIN
+				and mid_beats <= BOUNDARY_CONSOLIDATION_MAX_INTERMEDIATE_BEATS
+			):
+				examples.append(
+					{
+						"timestamps": [
+							float(left_frame * hop_length / sample_rate),
+							float(right_frame * hop_length / sample_rate),
+						],
+						"beatDistance": beats_between,
+						"noveltyStrengths": [float(novelty[left_idx]), float(novelty[right_idx])],
+						"prominences": [
+							float(peak_by_idx.get(left_idx, {}).get("prominence", 0.0)),
+							float(peak_by_idx.get(right_idx, {}).get("prominence", 0.0)),
+						],
+						"harmonicSimilarities": {
+							"leftMid": float(sim_left_mid),
+							"midRight": float(sim_mid_right),
+							"leftRight": float(sim_left_right),
+						},
+						"selectedSurvivingBoundary": None,
+						"rejectionReason": "preserve-cluster-insufficient-collapse-evidence",
+					}
+				)
+				continue
+
+			left_strength = float(novelty[left_idx] + 0.70 * float(peak_by_idx.get(left_idx, {}).get("prominence", 0.0)))
+			right_strength = float(novelty[right_idx] + 0.70 * float(peak_by_idx.get(right_idx, {}).get("prominence", 0.0)))
+			survivor = left_idx if left_strength >= right_strength else right_idx
+			dropped = right_idx if survivor == left_idx else left_idx
+			merged = [idx for idx in merged if idx != dropped]
+			examples.append(
+				{
+					"timestamps": [
+						float(left_frame * hop_length / sample_rate),
+						float(right_frame * hop_length / sample_rate),
+					],
+					"beatDistance": beats_between,
+					"noveltyStrengths": [float(novelty[left_idx]), float(novelty[right_idx])],
+					"prominences": [
+						float(peak_by_idx.get(left_idx, {}).get("prominence", 0.0)),
+						float(peak_by_idx.get(right_idx, {}).get("prominence", 0.0)),
+					],
+					"harmonicSimilarities": {
+						"leftMid": float(sim_left_mid),
+						"midRight": float(sim_mid_right),
+						"leftRight": float(sim_left_right),
+					},
+					"selectedSurvivingBoundary": float(beat_ranges[survivor][1] * hop_length / sample_rate),
+					"rejectionReason": "collapsed-weak-intermediate-region",
+				}
+			)
+			changed = True
+			break
+
+	return sorted(merged), {
+		"boundaryClusterCount": cluster_count,
+		"consolidatedClusterExamples": examples,
+	}
+
+
+def _profile_from_frame_range(chroma: np.ndarray, low_chroma: np.ndarray, start: int, end: int) -> np.ndarray:
+	left = max(0, int(start))
+	right = max(left + 1, int(end))
+	right = min(chroma.shape[1], right)
+	if right <= left:
+		return np.zeros((12,), dtype=np.float32)
+	high = np.mean(np.clip(np.asarray(chroma[:, left:right], dtype=np.float32), 0.0, None), axis=1)
+	low = np.mean(np.clip(np.asarray(low_chroma[:, left:right], dtype=np.float32), 0.0, None), axis=1)
+	return _normalize_nonnegative(0.82 * high + 0.18 * low)
+
+
+def _region_beat_lengths_from_edges(region_edges: list[int], beat_ranges: list[tuple[int, int]]) -> list[float]:
+	lengths: list[float] = []
+	for left, right in zip(region_edges[:-1], region_edges[1:], strict=False):
+		beats = 0
+		for beat_left, beat_right in beat_ranges:
+			if beat_right <= left:
+				continue
+			if beat_left >= right:
+				break
+			beats += 1
+		lengths.append(float(beats))
+	return lengths
+
+
+def _harmonic_region_beat_distribution(observations: list[MusicalRegionObservation]) -> dict[str, int]:
+	bins = {"lt1Beat": 0, "1to2Beats": 0, "2to4Beats": 0, "gte4Beats": 0}
+	for obs in observations:
+		beats = obs.beat_length
+		if beats < 1.0:
+			bins["lt1Beat"] += 1
+		elif beats < 2.0:
+			bins["1to2Beats"] += 1
+		elif beats < 4.0:
+			bins["2to4Beats"] += 1
+		else:
+			bins["gte4Beats"] += 1
+	return bins
+
+
+def _build_region_observation(
+	*,
+	start: int,
+	end: int,
+	sample_rate: int,
+	hop_length: int,
+	region_chroma: np.ndarray,
+	region_low_chroma: np.ndarray,
+	key_estimate: KeyEstimate | None,
+) -> MusicalRegionObservation:
+	duration_seconds = float(max(0.0, (end - start) * hop_length / sample_rate))
+	root_aware = _estimate_region_root_aware_identity(region_chroma, region_low_chroma, key_estimate=key_estimate)
+	combined_scores = dict(root_aware["combined_scores"])
+
+	mean_vec = np.mean(np.asarray(region_chroma, dtype=np.float32), axis=1)
+	energy = float(np.linalg.norm(mean_vec, ord=2))
+	n_score = float(np.clip(1.0 - (energy * 1.7), 0.0, 1.0))
+	if n_score > 0.0:
+		combined_scores["N"] = n_score
+
+	normalizer = float(sum(max(0.0, v) for v in combined_scores.values()))
+	if normalizer <= 0.0:
+		normalized_scores = {"N": 1.0}
+	else:
+		normalized_scores = {label: float(max(0.0, score) / normalizer) for label, score in combined_scores.items()}
+
+	sorted_labels = sorted(normalized_scores.items(), key=lambda item: (-item[1], item[0]))
+	local_best = sorted_labels[0][0]
+	local_best_score = float(sorted_labels[0][1])
+	template_top = str(root_aware.get("template_top_chord", ""))
+	if template_top in normalized_scores and template_top != local_best:
+		template_score = float(normalized_scores[template_top])
+		if (local_best_score - template_score) <= 0.02:
+			local_best = template_top
+			local_best_score = template_score
+			sorted_labels = sorted(normalized_scores.items(), key=lambda item: (-item[1], item[0]))
+	runner_up = float(sorted_labels[1][1]) if len(sorted_labels) > 1 else 0.0
+	advantage = float(max(0.0, local_best_score - runner_up))
+	confidence = float(np.clip(local_best_score + (GLOBAL_DECODE_EVIDENCE_MARGIN_WEIGHT * advantage), 0.0, 1.0))
+
+	return MusicalRegionObservation(
+		start_frame=start,
+		end_frame=end,
+		start_seconds=float(start * hop_length / sample_rate),
+		end_seconds=float(end * hop_length / sample_rate),
+		duration_seconds=duration_seconds,
+		winner_chord=local_best,
+		winner_confidence=confidence,
+		scores=normalized_scores,
+		advantage_over_runner_up=advantage,
+		root_candidate_scores=root_aware.get("root_scores"),
+		selected_root=root_aware.get("selected_root"),
+		selected_root_confidence=float(root_aware.get("selected_root_confidence", 0.0)),
+		major_quality_evidence=float(root_aware.get("major_quality_evidence", 0.0)),
+		minor_quality_evidence=float(root_aware.get("minor_quality_evidence", 0.0)),
+		quality_margin=float(root_aware.get("quality_margin", 0.0)),
+		template_score=float(root_aware.get("winner_template_score", 0.0)),
+		template_top_chord=root_aware.get("template_top_chord"),
+		template_top_score=float(root_aware.get("template_top_score", 0.0)),
+		combined_score=float(root_aware.get("winner_combined_score", 0.0)),
+		is_quality_ambiguous=bool(root_aware.get("is_quality_ambiguous", False)),
+		top_candidates=[(label, score) for label, score in sorted_labels[:3]],
+		local_best_chord=local_best,
+		local_best_score=local_best_score,
+		decoded_chord=local_best,
+	)
+
+
+def _decode_global_chord_sequence(
+	regions: list[MusicalRegionObservation],
+	*,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[MusicalRegionObservation], float, int]:
+	if len(regions) == 0:
+		return [], 0.0, 0
+
+	region_candidates: list[list[tuple[str, float]]] = []
+	for obs in regions:
+		ranked = sorted(obs.scores.items(), key=lambda item: (-item[1], item[0]))
+		candidates = ranked[:GLOBAL_DECODE_TOP_K]
+		if obs.local_best_chord is not None and obs.local_best_chord not in {name for name, _ in candidates}:
+			candidates.append((obs.local_best_chord, obs.local_best_score))
+		region_candidates.append(candidates)
+
+	dp: list[dict[str, tuple[float, str | None]]] = []
+	first_state: dict[str, tuple[float, str | None]] = {}
+	for chord, score in region_candidates[0]:
+		first_state[chord] = (_local_evidence_score(regions[0], chord, score, detected_key), None)
+	dp.append(first_state)
+
+	for idx in range(1, len(regions)):
+		state: dict[str, tuple[float, str | None]] = {}
+		for chord, score in region_candidates[idx]:
+			local_score = _local_evidence_score(regions[idx], chord, score, detected_key)
+			best_prev_score = None
+			best_prev_chord: str | None = None
+			for prev_chord, (prev_score, _) in dp[idx - 1].items():
+				candidate_score = prev_score + local_score + _transition_score(prev_chord, chord, regions[idx], detected_key)
+				if best_prev_score is None or candidate_score > best_prev_score:
+					best_prev_score = candidate_score
+					best_prev_chord = prev_chord
+			if best_prev_score is not None:
+				state[chord] = (float(best_prev_score), best_prev_chord)
+		dp.append(state)
+
+	last_state = dp[-1]
+	best_last_chord = sorted(last_state.items(), key=lambda item: (-item[1][0], item[0]))[0][0]
+	best_path_score = float(last_state[best_last_chord][0])
+
+	decoded = [best_last_chord]
+	for idx in range(len(regions) - 1, 0, -1):
+		_, prev_chord = dp[idx][decoded[-1]]
+		if prev_chord is None:
+			break
+		decoded.append(prev_chord)
+	decoded.reverse()
+
+	if len(decoded) != len(regions):
+		decoded = [obs.local_best_chord or obs.winner_chord for obs in regions]
+
+	out: list[MusicalRegionObservation] = []
+	changed = 0
+	for obs, label in zip(regions, decoded, strict=True):
+		if label != obs.local_best_chord:
+			changed += 1
+		out.append(
+			MusicalRegionObservation(
+				start_frame=obs.start_frame,
+				end_frame=obs.end_frame,
+				start_seconds=obs.start_seconds,
+				end_seconds=obs.end_seconds,
+				duration_seconds=obs.duration_seconds,
+				winner_chord=obs.winner_chord,
+				winner_confidence=obs.winner_confidence,
+				scores=obs.scores,
+				advantage_over_runner_up=obs.advantage_over_runner_up,
+				root_candidate_scores=obs.root_candidate_scores,
+				selected_root=obs.selected_root,
+				selected_root_confidence=obs.selected_root_confidence,
+				major_quality_evidence=obs.major_quality_evidence,
+				minor_quality_evidence=obs.minor_quality_evidence,
+				quality_margin=obs.quality_margin,
+				template_score=obs.template_score,
+				template_top_chord=obs.template_top_chord,
+				template_top_score=obs.template_top_score,
+				combined_score=obs.combined_score,
+				is_quality_ambiguous=obs.is_quality_ambiguous,
+				top_candidates=obs.top_candidates,
+				local_best_chord=obs.local_best_chord,
+				local_best_score=obs.local_best_score,
+				decoded_chord=label,
+				beat_length=obs.beat_length,
+			)
+		)
+
+	return out, best_path_score, changed
+
+
+def _local_evidence_score(
+	obs: MusicalRegionObservation,
+	chord: str,
+	base_score: float,
+	detected_key: KeyEstimate | None,
+) -> float:
+	ranked = sorted(obs.scores.items(), key=lambda item: (-item[1], item[0]))
+	best = float(ranked[0][1]) if ranked else 0.0
+	second = float(ranked[1][1]) if len(ranked) > 1 else 0.0
+	margin = max(0.0, best - second)
+	deviation_penalty = max(0.0, (obs.local_best_score - base_score) * 1.15)
+	score = float(base_score + (GLOBAL_DECODE_EVIDENCE_MARGIN_WEIGHT * margin) - deviation_penalty)
+	if (
+		detected_key is not None
+		and chord != "N"
+		and obs.duration_seconds < 1.0
+		and not _is_diatonic_chord(chord, detected_key)
+	):
+		# Short non-diatonic regions are often ornamental tones; dampen switch pressure.
+		short_factor = float(np.clip((1.0 - obs.duration_seconds) / 1.0, 0.0, 1.0))
+		score -= 0.10 * short_factor
+	if chord == "N" and obs.duration_seconds < 0.30:
+		score -= 0.06
+	return score
+
+
+def _transition_score(
+	prev_chord: str,
+	curr_chord: str,
+	obs: MusicalRegionObservation,
+	detected_key: KeyEstimate | None,
+) -> float:
+	if prev_chord == curr_chord:
+		return GLOBAL_DECODE_SELF_STABILITY_BONUS
+
+	if (
+		_is_root_preserving_quality_switch(prev_chord, curr_chord)
+		and obs.local_best_chord == curr_chord
+		and obs.winner_chord == curr_chord
+		and obs.quality_margin >= GLOBAL_DECODE_QUALITY_SWITCH_STRONG_QMARGIN_MIN
+		and obs.advantage_over_runner_up >= GLOBAL_DECODE_QUALITY_SWITCH_STRONG_MARGIN_MIN
+	):
+		return GLOBAL_DECODE_QUALITY_SWITCH_POSITIVE_TRANSITION
+
+	relationship = _harmonic_relationship_strength(prev_chord, curr_chord, detected_key)
+	confidence_bonus = GLOBAL_DECODE_LOCAL_CONFIDENCE_WEIGHT * obs.winner_confidence
+	switch_bonus = 0.0
+	if obs.local_best_chord == curr_chord and obs.advantage_over_runner_up >= GLOBAL_DECODE_STRONG_SWITCH_ADVANTAGE:
+		switch_bonus += GLOBAL_DECODE_STRONG_SWITCH_BONUS
+	if _is_root_preserving_quality_switch(prev_chord, curr_chord) and obs.quality_margin >= 0.12:
+		switch_bonus += GLOBAL_DECODE_QUALITY_SWITCH_BONUS
+	penalty = GLOBAL_DECODE_CHANGE_BASE_COST - (GLOBAL_DECODE_RELATIONSHIP_WEIGHT * relationship) - confidence_bonus - switch_bonus
+	penalty = float(max(0.02, penalty))
+	return -penalty
+
+
+def _harmonic_relationship_strength(prev_chord: str, curr_chord: str, detected_key: KeyEstimate | None) -> float:
+	if prev_chord == "N" or curr_chord == "N":
+		return 0.20
+
+	prev_root, prev_quality = _parse_chord_quality(prev_chord)
+	curr_root, curr_quality = _parse_chord_quality(curr_chord)
+	if prev_root is None or curr_root is None:
+		return 0.0
+	if prev_root == curr_root and prev_quality != curr_quality:
+		return 0.75
+
+	prev_pc = _chord_root_pc(prev_chord)
+	curr_pc = _chord_root_pc(curr_chord)
+	if prev_pc is None or curr_pc is None:
+		return 0.0
+
+	interval = (curr_pc - prev_pc) % 12
+	if interval in (5, 7):
+		return 0.70
+
+	if abs((curr_pc - prev_pc) % 12) in (3, 9) and prev_quality != curr_quality:
+		return 0.30
+
+	if detected_key is not None and _is_diatonic_chord(prev_chord, detected_key) and _is_diatonic_chord(curr_chord, detected_key):
+		return 0.44
+
+	return 0.22
+
+
+def _regions_to_segments(
+	regions: list[MusicalRegionObservation],
+	*,
+	hop_length: int,
+	sample_rate: int,
+	source_duration: float,
+) -> list[ChordSegment]:
+	if not regions:
+		return [ChordSegment(start=0.0, end=max(1e-9, source_duration), chord="N", confidence=1.0)]
+
+	segments: list[ChordSegment] = []
+	for obs in regions:
+		chord = obs.decoded_chord or obs.local_best_chord or obs.winner_chord
+		confidence = float(np.clip(obs.scores.get(chord, obs.winner_confidence), 0.0, 1.0))
+		segments.append(
+			ChordSegment(
+				start=float(obs.start_frame * hop_length / sample_rate),
+				end=float(obs.end_frame * hop_length / sample_rate),
+				chord=chord,
+				confidence=confidence,
+			)
+		)
+
+	merged = _merge_adjacent_same_chord_segments(segments)
+	if merged:
+		first = merged[0]
+		if first.start > 0.0:
+			merged[0] = ChordSegment(start=0.0, end=first.end, chord=first.chord, confidence=first.confidence)
+		last = merged[-1]
+		merged[-1] = ChordSegment(start=last.start, end=max(last.start + 1e-9, source_duration), chord=last.chord, confidence=last.confidence)
+	return merged
+
+
+def _collapse_regions_by_decoded_chord(regions: list[MusicalRegionObservation]) -> list[MusicalRegionObservation]:
+	if len(regions) <= 1:
+		return regions
+
+	collapsed: list[MusicalRegionObservation] = [regions[0]]
+	for obs in regions[1:]:
+		prev = collapsed[-1]
+		prev_label = prev.decoded_chord or prev.local_best_chord or prev.winner_chord
+		curr_label = obs.decoded_chord or obs.local_best_chord or obs.winner_chord
+		if prev_label != curr_label:
+			collapsed.append(obs)
+			continue
+
+		merged_duration = prev.duration_seconds + obs.duration_seconds
+		merged_confidence = prev.winner_confidence if merged_duration <= 0 else (
+			(prev.winner_confidence * prev.duration_seconds + obs.winner_confidence * obs.duration_seconds) / merged_duration
+		)
+		collapsed[-1] = MusicalRegionObservation(
+			start_frame=prev.start_frame,
+			end_frame=obs.end_frame,
+			start_seconds=prev.start_seconds,
+			end_seconds=obs.end_seconds,
+			duration_seconds=merged_duration,
+			winner_chord=prev.winner_chord,
+			winner_confidence=float(np.clip(merged_confidence, 0.0, 1.0)),
+			scores=prev.scores,
+			advantage_over_runner_up=prev.advantage_over_runner_up,
+			root_candidate_scores=prev.root_candidate_scores,
+			selected_root=prev.selected_root,
+			selected_root_confidence=prev.selected_root_confidence,
+			major_quality_evidence=prev.major_quality_evidence,
+			minor_quality_evidence=prev.minor_quality_evidence,
+			quality_margin=prev.quality_margin,
+			template_score=prev.template_score,
+			template_top_chord=prev.template_top_chord,
+			template_top_score=prev.template_top_score,
+			combined_score=prev.combined_score,
+			is_quality_ambiguous=prev.is_quality_ambiguous,
+			top_candidates=prev.top_candidates,
+			local_best_chord=prev.local_best_chord,
+			local_best_score=prev.local_best_score,
+			decoded_chord=prev_label,
+			beat_length=prev.beat_length + obs.beat_length,
+		)
+
+	return collapsed
+
+
+def _aggregate_predictions_by_boundaries(
+	predictions: list[FrameChordPrediction],
+	boundaries: np.ndarray,
+) -> list[FrameChordPrediction]:
+	if len(predictions) == 0:
+		return predictions
+
+	if boundaries.size < 2:
+		return predictions
+
+	result = list(predictions)
+
+	for left, right in zip(boundaries[:-1], boundaries[1:], strict=False):
+		start = int(max(0, left))
+		end = int(min(len(result), right))
+		if end <= start:
+			continue
+
+		region = result[start:end]
+		winner, confidence = _pick_region_winner(region)
+		for idx in range(start, end):
+			result[idx] = FrameChordPrediction(chord=winner, confidence=confidence)
+
+	return result
+
+
+def _build_musical_region_observations(
+	predictions: list[FrameChordPrediction],
+	*,
+	boundaries: np.ndarray,
+	sample_rate: int,
+	hop_length: int,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	key_estimate: KeyEstimate | None,
+) -> list[MusicalRegionObservation]:
+	if len(predictions) == 0 or boundaries.size < 2:
+		return []
+
+	observations: list[MusicalRegionObservation] = []
+	for left, right in zip(boundaries[:-1], boundaries[1:], strict=False):
+		start = int(max(0, left))
+		end = int(min(len(predictions), right))
+		if end <= start:
+			continue
+
+		region = predictions[start:end]
+		region_chroma = np.asarray(chroma[:, start:end], dtype=np.float32)
+		region_low_chroma = np.asarray(low_chroma[:, start:end], dtype=np.float32)
+		scores: dict[str, float] = {}
+		for pred in region:
+			scores[pred.chord] = scores.get(pred.chord, 0.0) + float(np.clip(pred.confidence, 0.0, 1.0))
+
+		if region_chroma.size > 0:
+			root_aware = _estimate_region_root_aware_identity(
+				region_chroma,
+				region_low_chroma,
+				key_estimate=key_estimate,
+			)
+			for label, value in root_aware["combined_scores"].items():
+				scores[label] = scores.get(label, 0.0) + value
+
+		total_score = float(sum(scores.values()))
+		if total_score <= 0.0:
+			normalized_scores = {"N": 1.0}
+			winner = "N"
+			winner_confidence = 0.0
+			advantage = 1.0
+			root_candidate_scores = {"N": 1.0}
+			selected_root = None
+			selected_root_confidence = 0.0
+			major_quality_evidence = 0.0
+			minor_quality_evidence = 0.0
+			quality_margin = 0.0
+			template_score = 0.0
+			template_top_chord = None
+			template_top_score = 0.0
+			combined_score = 0.0
+			is_quality_ambiguous = False
+		else:
+			normalized_scores = {label: float(score / total_score) for label, score in scores.items()}
+			sorted_labels = sorted(normalized_scores.items(), key=lambda item: (-item[1], item[0]))
+			winner = sorted_labels[0][0]
+			runner_up = sorted_labels[1][1] if len(sorted_labels) > 1 else 0.0
+			advantage = float(max(0.0, sorted_labels[0][1] - runner_up))
+			winner_confidence = float(
+				np.clip(
+					mean([pred.confidence for pred in region if pred.chord == winner]) if any(pred.chord == winner for pred in region) else 0.0,
+					0.0,
+					1.0,
+				)
+			)
+			if region_chroma.size > 0:
+				root_candidate_scores = root_aware["root_scores"]
+				selected_root = root_aware["selected_root"]
+				selected_root_confidence = float(root_aware["selected_root_confidence"])
+				major_quality_evidence = float(root_aware["major_quality_evidence"])
+				minor_quality_evidence = float(root_aware["minor_quality_evidence"])
+				quality_margin = float(root_aware["quality_margin"])
+				template_score = float(root_aware["winner_template_score"])
+				template_top_chord = str(root_aware["template_top_chord"])
+				template_top_score = float(root_aware["template_top_score"])
+				combined_score = float(root_aware["winner_combined_score"])
+				is_quality_ambiguous = bool(root_aware["is_quality_ambiguous"])
+			else:
+				root_candidate_scores = {}
+				selected_root = None
+				selected_root_confidence = 0.0
+				major_quality_evidence = 0.0
+				minor_quality_evidence = 0.0
+				quality_margin = 0.0
+				template_score = 0.0
+				template_top_chord = None
+				template_top_score = 0.0
+				combined_score = 0.0
+				is_quality_ambiguous = False
+
+		duration_seconds = float(max(0.0, (end - start) * hop_length / sample_rate))
+		observations.append(
+			MusicalRegionObservation(
+				start_frame=start,
+				end_frame=end,
+				start_seconds=float(start * hop_length / sample_rate),
+				end_seconds=float(end * hop_length / sample_rate),
+				duration_seconds=duration_seconds,
+				winner_chord=winner,
+				winner_confidence=winner_confidence,
+				scores=normalized_scores,
+				advantage_over_runner_up=advantage,
+				root_candidate_scores=root_candidate_scores,
+				selected_root=selected_root,
+				selected_root_confidence=selected_root_confidence,
+				major_quality_evidence=major_quality_evidence,
+				minor_quality_evidence=minor_quality_evidence,
+				quality_margin=quality_margin,
+				template_score=template_score,
+				template_top_chord=template_top_chord,
+				template_top_score=template_top_score,
+				combined_score=combined_score,
+				is_quality_ambiguous=is_quality_ambiguous,
+			)
+		)
+
+	return observations
+
+
+def _apply_musical_time_harmonic_persistence(
+	observations: list[MusicalRegionObservation],
+	*,
+	n_frames: int,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[FrameChordPrediction], list[PersistenceDecisionEvent]]:
+	if len(observations) == 0:
+		return [], []
+
+	decisions: list[tuple[str, float]] = []
+	events: list[PersistenceDecisionEvent] = []
+
+	current_chord = observations[0].winner_chord
+	current_confidence = observations[0].winner_confidence
+	current_streak_beats = 1
+	pending_chord: str | None = None
+	pending_count = 0
+	pending_duration = 0.0
+
+	for idx, obs in enumerate(observations):
+		if idx == 0:
+			decisions.append((current_chord, current_confidence))
+			continue
+
+		candidate = obs.winner_chord
+		if candidate == current_chord:
+			current_streak_beats += 1
+			current_confidence = float(np.clip((current_confidence * 0.5) + (obs.winner_confidence * 0.5), 0.0, 1.0))
+			pending_chord = None
+			pending_count = 0
+			pending_duration = 0.0
+			decisions.append((current_chord, current_confidence))
+			continue
+
+		if pending_chord == candidate:
+			pending_count += 1
+			pending_duration += obs.duration_seconds
+		else:
+			pending_chord = candidate
+			pending_count = 1
+			pending_duration = obs.duration_seconds
+
+		current_score = float(obs.scores.get(current_chord, 0.0))
+		candidate_score = float(obs.scores.get(candidate, 0.0))
+		advantage = float(max(0.0, candidate_score - current_score))
+		duration_factor = float(np.clip(obs.duration_seconds / MUSICAL_SWITCH_REFERENCE_SECONDS, 0.0, 1.0))
+		consecutive_support = float(np.clip(pending_count / 2.0, 0.0, 1.0))
+		persistence_factor = float(np.clip(pending_duration / MUSICAL_SWITCH_SUPPORT_SECONDS, 0.0, 1.0))
+		neighbor_persistence = (consecutive_support + persistence_factor) / 2.0
+		lookahead_same = 1.0 if idx + 1 < len(observations) and observations[idx + 1].winner_chord == candidate else 0.0
+
+		candidate_plausibility = _harmonic_plausibility(candidate, detected_key)
+		current_plausibility = _harmonic_plausibility(current_chord, detected_key)
+		harmonic_change_evidence = _compute_harmonic_change_evidence(
+			observations,
+			idx=idx,
+			current_chord=current_chord,
+			candidate_chord=candidate,
+		)
+		is_quality_switch = _is_root_preserving_quality_switch(current_chord, candidate)
+		quality_ambiguous = bool(obs.is_quality_ambiguous and is_quality_switch)
+
+		switch_score = (
+			0.34 * obs.winner_confidence
+			+ 0.22 * advantage
+			+ 0.16 * duration_factor
+			+ 0.18 * neighbor_persistence
+			+ 0.06 * candidate_plausibility
+			+ 0.04 * lookahead_same
+			+ 0.10 * max(0.0, harmonic_change_evidence)
+		)
+		keep_score = (
+			0.36 * current_score
+			+ 0.24 * float(np.clip(current_streak_beats / MUSICAL_KEEP_STREAK_REFERENCE_BEATS, 0.0, 1.0))
+			+ 0.20 * current_plausibility
+			+ 0.20 * float(np.clip(1.0 - advantage, 0.0, 1.0))
+			+ 0.10 * max(0.0, -harmonic_change_evidence)
+		)
+
+		strong_immediate = bool(
+			obs.winner_confidence >= MUSICAL_STRONG_IMMEDIATE_CONFIDENCE
+			and advantage >= MUSICAL_STRONG_IMMEDIATE_ADVANTAGE
+			and (duration_factor >= 0.45 or lookahead_same >= 1.0)
+		)
+		dominant_override = bool(
+			candidate_score >= MUSICAL_DOMINANT_OVERRIDE_CANDIDATE_SCORE
+			and advantage >= MUSICAL_DOMINANT_OVERRIDE_ADVANTAGE
+			and duration_factor >= 0.35
+		)
+		persistent_ready = pending_count >= 2 and pending_duration >= MUSICAL_SWITCH_SUPPORT_SECONDS
+		quality_switch_ready = bool(
+			not is_quality_switch
+			or (
+				advantage >= MUSICAL_QUALITY_SWITCH_MIN_ADVANTAGE
+				and harmonic_change_evidence >= MUSICAL_QUALITY_SWITCH_MIN_HARMONIC_CHANGE
+				and not quality_ambiguous
+				and (pending_count >= 2 or lookahead_same >= 1.0)
+			)
+		)
+		ordinary_switch_margin = MUSICAL_SWITCH_MARGIN + (MUSICAL_QUALITY_SWITCH_EXTRA_MARGIN if is_quality_switch else 0.0)
+		ordinary_evidence_ready = switch_score > keep_score + ordinary_switch_margin
+		ordinary_override = quality_switch_ready and ordinary_evidence_ready and (
+			strong_immediate or dominant_override or persistent_ready
+		)
+
+		exceptional_override = bool(
+			quality_switch_ready
+			and switch_score <= keep_score
+			and pending_count >= MUSICAL_EXCEPTIONAL_SUPPORT_BEATS
+			and pending_duration >= MUSICAL_EXCEPTIONAL_SUPPORT_SECONDS
+			and neighbor_persistence >= MUSICAL_EXCEPTIONAL_SUPPORT_PERSISTENCE
+			and harmonic_change_evidence >= MUSICAL_EXCEPTIONAL_SUPPORT_HARMONIC_CHANGE
+			and obs.winner_confidence >= MUSICAL_EXCEPTIONAL_SUPPORT_CONFIDENCE
+			and lookahead_same >= 1.0
+		)
+
+		should_switch = ordinary_override or exceptional_override
+		accepted_with_lower_switch_score = bool(should_switch and switch_score <= keep_score)
+
+		reason = (
+			"exceptional-multibeat-context-override"
+			if exceptional_override
+			else (
+				"keep-quality-ambiguous"
+				if (not should_switch and quality_ambiguous)
+				else (
+				"strong-immediate"
+				if should_switch and strong_immediate
+				else (
+					"dominant-override"
+					if should_switch and dominant_override
+					else (
+						"persistent-support" if should_switch and persistent_ready else (
+							"keep-quality-switch-hysteresis" if (not should_switch and is_quality_switch and not quality_switch_ready) else "keep-insufficient-switch-evidence"
+						)
+					)
+				)
+				)
+			)
+		)
+		events.append(
+			PersistenceDecisionEvent(
+				region_index=idx,
+				region_start_seconds=obs.start_seconds,
+				region_end_seconds=obs.end_seconds,
+				action="switch" if should_switch else "keep",
+				current_chord=current_chord,
+				candidate_chord=candidate,
+				keep_score=float(keep_score),
+				switch_score=float(switch_score),
+				advantage=float(advantage),
+				candidate_confidence=float(obs.winner_confidence),
+				consecutive_support=pending_count,
+				neighbor_persistence=float(neighbor_persistence),
+				harmonic_change_evidence=float(harmonic_change_evidence),
+				is_root_preserving_quality_switch=is_quality_switch,
+				accepted_with_lower_switch_score=accepted_with_lower_switch_score,
+				reason=reason,
+			)
+		)
+
+		if should_switch:
+			current_chord = candidate
+			current_confidence = float(np.clip(obs.winner_confidence, 0.0, 1.0))
+			current_streak_beats = 1
+			pending_chord = None
+			pending_count = 0
+			pending_duration = 0.0
+		else:
+			current_streak_beats += 1
+			current_confidence = float(np.clip((current_confidence * 0.8) + (current_score * 0.2), 0.0, 1.0))
+
+		decisions.append((current_chord, current_confidence))
+
+	frame_predictions: list[FrameChordPrediction] = [FrameChordPrediction(chord="N", confidence=0.0) for _ in range(n_frames)]
+	for obs, decision in zip(observations, decisions, strict=True):
+		chord, confidence = decision
+		for frame_idx in range(obs.start_frame, min(obs.end_frame, n_frames)):
+			frame_predictions[frame_idx] = FrameChordPrediction(chord=chord, confidence=float(np.clip(confidence, 0.0, 1.0)))
+
+	return frame_predictions, events
+
+
+def _estimate_region_root_aware_identity(
+	region_chroma: np.ndarray,
+	region_low_chroma: np.ndarray,
+	*,
+	key_estimate: KeyEstimate | None,
+) -> dict[str, object]:
+	"""Score chord identity by separating root and quality evidence in a region."""
+	templates = generate_chord_templates()
+	labels = sorted(templates.keys())
+
+	energy = np.mean(np.clip(region_chroma, 0.0, None), axis=1)
+	low_energy = np.mean(np.clip(region_low_chroma, 0.0, None), axis=1)
+	energy_sum = float(np.sum(energy))
+	low_sum = float(np.sum(low_energy))
+	if energy_sum > 0.0:
+		energy = energy / energy_sum
+	if low_sum > 0.0:
+		low_energy = low_energy / low_sum
+
+	root_scores_pc: dict[int, float] = {}
+	for root_pc in range(12):
+		root_val = float(energy[root_pc])
+		fifth_val = float(energy[(root_pc + 7) % 12])
+		bass_root = float(low_energy[root_pc])
+		bass_fifth = float(low_energy[(root_pc + 7) % 12])
+		root_scores_pc[root_pc] = (
+			ROOT_AWARE_ROOT_ENERGY_WEIGHT * root_val
+			+ ROOT_AWARE_FIFTH_ENERGY_WEIGHT * fifth_val
+			+ ROOT_AWARE_BASS_ROOT_WEIGHT * bass_root
+			+ ROOT_AWARE_BASS_FIFTH_WEIGHT * bass_fifth
+		)
+
+	root_score_values = np.asarray([root_scores_pc[idx] for idx in range(12)], dtype=np.float32)
+	root_score_values = _normalize_nonnegative(root_score_values)
+	root_scores_pc = {idx: float(root_score_values[idx]) for idx in range(12)}
+
+	selected_root_pc = int(np.argmax(root_score_values))
+	sorted_root_scores = sorted(root_score_values.tolist(), reverse=True)
+	root_margin = float(sorted_root_scores[0] - sorted_root_scores[1]) if len(sorted_root_scores) > 1 else float(sorted_root_scores[0])
+	selected_root_confidence = float(np.clip(0.6 * root_score_values[selected_root_pc] + 0.4 * max(0.0, root_margin), 0.0, 1.0))
+
+	major_quality_evidence = float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * energy[(selected_root_pc + 4) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((energy[selected_root_pc] + energy[(selected_root_pc + 7) % 12]) / 2.0)
+	)
+	minor_quality_evidence = float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * energy[(selected_root_pc + 3) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((energy[selected_root_pc] + energy[(selected_root_pc + 7) % 12]) / 2.0)
+	)
+	quality_margin = float(abs(major_quality_evidence - minor_quality_evidence))
+	is_quality_ambiguous = bool(quality_margin < ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN)
+
+	region_vec = np.mean(region_chroma, axis=1)
+	template_scores: dict[str, float] = {}
+	for label in labels:
+		template_scores[label] = _template_score_with_soft_key(region_vec, templates[label], label, key_estimate)
+
+	template_values = np.asarray([template_scores[label] for label in labels], dtype=np.float32)
+	template_values = _normalize_nonnegative(template_values - np.min(template_values))
+	template_scores_norm = {label: float(template_values[idx]) for idx, label in enumerate(labels)}
+	template_top_label = sorted(template_scores_norm.items(), key=lambda item: (-item[1], item[0]))[0][0]
+	template_top_root = _chord_root_pc(template_top_label)
+
+	combined_scores: dict[str, float] = {}
+	for label in labels:
+		root_pc = _chord_root_pc(label)
+		if root_pc is None:
+			continue
+		is_minor_label = label.endswith("m")
+		quality_component = major_quality_evidence if not label.endswith("m") else minor_quality_evidence
+		if is_quality_ambiguous:
+			quality_component *= 0.55
+		key_context_adjust = 0.0
+		if key_estimate is not None:
+			key_context_adjust = ROOT_AWARE_KEY_CONTEXT_WEIGHT * (_harmonic_plausibility(label, key_estimate) - 0.5)
+			strong_local_quality = bool(
+				root_pc == selected_root_pc
+				and quality_margin >= ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN
+				and (
+					(is_minor_label and (minor_quality_evidence > major_quality_evidence))
+					or ((not is_minor_label) and (major_quality_evidence > minor_quality_evidence))
+				)
+			)
+			template_root_support = bool(template_top_root is not None and root_pc == template_top_root)
+			if strong_local_quality and not _is_diatonic_chord(label, key_estimate):
+				key_context_adjust = max(key_context_adjust, -0.005)
+			if template_root_support and label == template_top_label and not _is_diatonic_chord(label, key_estimate):
+				key_context_adjust = max(key_context_adjust, -0.003)
+		template_root_bonus = 0.0
+		if template_top_root is not None and root_pc == template_top_root:
+			template_root_bonus = 0.04
+		exact_template_bonus = 0.02 if label == template_top_label else 0.0
+		combined_scores[label] = (
+			ROOT_AWARE_TEMPLATE_WEIGHT * template_scores_norm[label]
+			+ ROOT_AWARE_ROOT_WEIGHT * root_scores_pc[root_pc]
+			+ ROOT_AWARE_QUALITY_WEIGHT * quality_component
+			+ key_context_adjust
+			+ template_root_bonus
+			+ exact_template_bonus
+		)
+
+	combined_values = np.asarray([combined_scores[label] for label in labels], dtype=np.float32)
+	combined_values = _normalize_nonnegative(combined_values)
+	combined_scores = {label: float(combined_values[idx]) for idx, label in enumerate(labels)}
+
+	winner_label = sorted(combined_scores.items(), key=lambda item: (-item[1], item[0]))[0][0]
+	selected_root_label = _root_name_from_pc(selected_root_pc)
+	root_candidate_scores = {
+		_root_name_from_pc(pc): float(score)
+		for pc, score in sorted(root_scores_pc.items(), key=lambda item: item[0])
+	}
+
+	return {
+		"winner_label": winner_label,
+		"combined_scores": combined_scores,
+		"root_scores": root_candidate_scores,
+		"selected_root": selected_root_label,
+		"selected_root_confidence": selected_root_confidence,
+		"major_quality_evidence": major_quality_evidence,
+		"minor_quality_evidence": minor_quality_evidence,
+		"quality_margin": quality_margin,
+		"winner_template_score": template_scores_norm.get(winner_label, 0.0),
+		"template_top_chord": template_top_label,
+		"template_top_score": template_scores_norm.get(template_top_label, 0.0),
+		"winner_combined_score": combined_scores.get(winner_label, 0.0),
+		"is_quality_ambiguous": is_quality_ambiguous,
+	}
+
+
+def _normalize_nonnegative(values: np.ndarray) -> np.ndarray:
+	arr = np.asarray(values, dtype=np.float32)
+	arr = np.clip(arr, 0.0, None)
+	total = float(np.sum(arr))
+	if total <= 0.0:
+		if arr.size == 0:
+			return arr
+		return np.full(arr.shape, 1.0 / arr.size, dtype=np.float32)
+	return arr / total
+
+
+def _template_score_with_soft_key(
+	frame_vec: np.ndarray,
+	template: np.ndarray,
+	chord_name: str,
+	key_estimate: KeyEstimate | None,
+) -> float:
+	raw = _cosine_similarity(frame_vec, template)
+	bonus = _key_prior_bonus(chord_name, key_estimate) if key_estimate is not None else 0.0
+	return float(raw + bonus)
+
+
+def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+	a_norm = float(np.linalg.norm(a, ord=2))
+	b_norm = float(np.linalg.norm(b, ord=2))
+	if a_norm <= 1e-12 or b_norm <= 1e-12:
+		return 0.0
+	value = float(np.dot(a, b) / (a_norm * b_norm))
+	if not np.isfinite(value):
+		return 0.0
+	return float(np.clip(value, -1.0, 1.0))
+
+
+def _key_prior_bonus(chord_name: str, key_estimate: KeyEstimate) -> float:
+	root_pc = _chord_root_pc(chord_name)
+	if root_pc is None:
+		return 0.0
+
+	is_minor = chord_name.endswith("m")
+	match = _diatonic_match_score(root_pc, is_minor, key_estimate)
+	return 0.08 * key_estimate.confidence * match
+
+
+def _diatonic_match_score(root_pc: int, is_minor: bool, key_estimate: KeyEstimate) -> float:
+	if key_estimate.mode == "major":
+		diatonic_chords = {
+			0: False,
+			2: True,
+			4: True,
+			5: False,
+			7: False,
+			9: True,
+			11: True,
+		}
+		scale_intervals = (0, 2, 4, 5, 7, 9, 11)
+	else:
+		diatonic_chords = {
+			0: True,
+			2: True,
+			3: False,
+			5: True,
+			7: True,
+			8: False,
+			10: False,
+		}
+		scale_intervals = (0, 2, 3, 5, 7, 8, 10)
+
+	interval = (root_pc - key_estimate.tonic_pc) % 12
+	if interval not in scale_intervals:
+		return 0.0
+
+	expected_minor = diatonic_chords.get(interval)
+	if expected_minor is None:
+		return 0.25
+	if expected_minor == is_minor:
+		return 1.0
+	return 0.45
+
+
+def _chord_root_pc(chord_name: str) -> int | None:
+	name = chord_name[:-1] if chord_name.endswith("m") else chord_name
+	lookup = {
+		"C": 0,
+		"C#": 1,
+		"D": 2,
+		"D#": 3,
+		"E": 4,
+		"F": 5,
+		"F#": 6,
+		"G": 7,
+		"G#": 8,
+		"A": 9,
+		"A#": 10,
+		"B": 11,
+	}
+	return lookup.get(name)
+
+
+def _root_name_from_pc(pc: int) -> str:
+	labels = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+	return labels[pc % 12]
+
+
+def _compute_harmonic_change_evidence(
+	observations: list[MusicalRegionObservation],
+	*,
+	idx: int,
+	current_chord: str,
+	candidate_chord: str,
+) -> float:
+	"""Compare current vs candidate support across neighboring musical-time observations."""
+	left = max(0, idx - 1)
+	right = min(len(observations), idx + 2)
+	window = observations[left:right]
+	if not window:
+		return 0.0
+
+	current_support = float(mean([obs.scores.get(current_chord, 0.0) for obs in window]))
+	candidate_support = float(mean([obs.scores.get(candidate_chord, 0.0) for obs in window]))
+	return float(np.clip(candidate_support - current_support, -1.0, 1.0))
+
+
+def _parse_chord_quality(label: str) -> tuple[str | None, str | None]:
+	if label == "N":
+		return None, None
+	if label.endswith("m"):
+		root = label[:-1]
+		return root, "minor"
+	return label, "major"
+
+
+def _is_root_preserving_quality_switch(current: str, candidate: str) -> bool:
+	current_root, current_quality = _parse_chord_quality(current)
+	candidate_root, candidate_quality = _parse_chord_quality(candidate)
+	if current_root is None or candidate_root is None:
+		return False
+	if current_root != candidate_root:
+		return False
+	if current_quality == candidate_quality:
+		return False
+	return True
+
+
+def _pick_region_winner(region: list[FrameChordPrediction]) -> tuple[str, float]:
+	scores: dict[str, float] = {}
+	for pred in region:
+		scores[pred.chord] = scores.get(pred.chord, 0.0) + float(np.clip(pred.confidence, 0.0, 1.0))
+
+	if not scores:
+		return "N", 0.0
+
+	best_score = max(scores.values())
+	best_labels = [label for label, score in scores.items() if np.isclose(score, best_score)]
+	winner = sorted(best_labels)[0]
+	confidence = float(np.clip(mean([pred.confidence for pred in region if pred.chord == winner]), 0.0, 1.0))
+	return winner, confidence
+
+
+def _clamp_final_segment_end(segments: list[ChordSegment], *, source_duration: float) -> list[ChordSegment]:
+	if not segments:
+		return segments
+
+	last = segments[-1]
+	if last.end <= source_duration + END_TOLERANCE_SECONDS:
+		return segments
+
+	new_end = max(last.start + 1e-9, source_duration)
+	segments[-1] = ChordSegment(
+		start=last.start,
+		end=new_end,
+		chord=last.chord,
+		confidence=last.confidence,
+	)
+	return segments
+
+
+def _summarize_analysis(
+	result: AnalysisResult,
+	detected_key: KeyEstimate | None,
+	beat_timing: BeatTiming | None,
+) -> dict[str, object]:
+	segments = result.analysis.chords
+	song_duration = float(max(0.0, result.source.duration))
+	durations = [max(0.0, seg.end - seg.start) for seg in segments]
+	if durations:
+		mean_duration = float(mean(durations))
+		median_duration = float(median(durations))
+		min_duration = float(min(durations))
+		max_duration = float(max(durations))
+		short_rate = float(sum(1 for value in durations if value < SHORT_SEGMENT_SECONDS) / len(durations))
+	else:
+		mean_duration = 0.0
+		median_duration = 0.0
+		min_duration = 0.0
+		max_duration = 0.0
+		short_rate = 0.0
+
+	short_buckets = {
+		"lt250ms": _short_bucket(durations, threshold_seconds=0.25),
+		"lt500ms": _short_bucket(durations, threshold_seconds=0.50),
+		"lt1s": _short_bucket(durations, threshold_seconds=1.0),
+	}
+
+	family_counts = {"major": 0, "minor": 0, "N": 0}
+	chord_occurrence_count: dict[str, int] = {}
+	chord_duration_seconds: dict[str, float] = {}
+	for segment in segments:
+		label = segment.chord
+		duration = max(0.0, segment.end - segment.start)
+		chord_occurrence_count[label] = chord_occurrence_count.get(label, 0) + 1
+		chord_duration_seconds[label] = chord_duration_seconds.get(label, 0.0) + duration
+
+		if segment.chord == "N":
+			family_counts["N"] += 1
+		elif segment.chord.endswith("m"):
+			family_counts["minor"] += 1
+		else:
+			family_counts["major"] += 1
+
+	denominator = song_duration if song_duration > 0.0 else 1.0
+	chord_duration_percentage = {
+		label: float((duration / denominator) * 100.0)
+		for label, duration in chord_duration_seconds.items()
+	}
+
+	chord_breakdown = [
+		{
+			"chord": label,
+			"count": chord_occurrence_count[label],
+			"durationSeconds": float(chord_duration_seconds[label]),
+			"durationPercentageOfSong": float(chord_duration_percentage[label]),
+		}
+		for label in sorted(chord_occurrence_count)
+	]
+
+	diatonic_stats = _diatonicity_stats(segments, detected_key)
+	suspicious_short_non_diatonic = _suspicious_short_non_diatonic_segments(segments, detected_key)
+
+	global_key = {
+		"label": detected_key.label if detected_key is not None else None,
+		"confidence": float(detected_key.confidence) if detected_key is not None else None,
+	}
+	transition_count = _count_chord_transitions(segments)
+	root_change_count = _count_root_changes(segments)
+	quality_change_count = _count_quality_changes(segments)
+	ambiguous_quality_decision_count = 0
+	transitions_per_minute = float(0.0 if song_duration <= 0.0 else transition_count / (song_duration / 60.0))
+	transitions_per_beat = None
+	estimated_tempo = None
+	beat_reliable = False
+	beat_count = None
+	if beat_timing is not None:
+		estimated_tempo = beat_timing.tempo_bpm
+		beat_reliable = beat_timing.is_reliable
+		beat_count = beat_timing.beat_count
+		if beat_timing.is_reliable and beat_timing.beat_count > 0:
+			transitions_per_beat = float(transition_count / beat_timing.beat_count)
+
+	return {
+		"algorithm": result.analysis.algorithm,
+		"contractVersion": result.version,
+		"segmentCount": len(segments),
+		"songDuration": song_duration,
+		"meanSegmentDuration": mean_duration,
+		"medianSegmentDuration": median_duration,
+		"minSegmentDuration": min_duration,
+		"maxSegmentDuration": max_duration,
+		"excessiveShortSegmentRate": short_rate,
+		"shortSegments": short_buckets,
+		"transitionCount": transition_count,
+		"rootChangeCount": root_change_count,
+		"qualityChangeCount": quality_change_count,
+		"ambiguousQualityDecisionCount": ambiguous_quality_decision_count,
+		"transitionsPerMinute": transitions_per_minute,
+		"estimatedTempoBpm": estimated_tempo,
+		"beatCount": beat_count,
+		"beatReliable": beat_reliable,
+		"transitionsPerBeat": transitions_per_beat,
+		"globalKey": global_key["label"],
+		"globalKeyConfidence": global_key["confidence"],
+		"chordFamilyDistribution": family_counts,
+		"chordOccurrenceCount": chord_occurrence_count,
+		"chordDurationSeconds": chord_duration_seconds,
+		"chordDurationPercentageOfSong": chord_duration_percentage,
+		"chordBreakdown": chord_breakdown,
+		"diatonicity": diatonic_stats,
+		"suspiciousShortNonDiatonicSegments": suspicious_short_non_diatonic,
+	}
+
+
+def _count_root_changes(segments: list[ChordSegment]) -> int:
+	if len(segments) <= 1:
+		return 0
+	count = 0
+	for prev, current in zip(segments, segments[1:], strict=False):
+		prev_root, _ = _parse_chord_quality(prev.chord)
+		curr_root, _ = _parse_chord_quality(current.chord)
+		if prev_root is None or curr_root is None:
+			continue
+		if prev_root != curr_root:
+			count += 1
+	return count
+
+
+def _count_quality_changes(segments: list[ChordSegment]) -> int:
+	if len(segments) <= 1:
+		return 0
+	count = 0
+	for prev, current in zip(segments, segments[1:], strict=False):
+		prev_root, prev_quality = _parse_chord_quality(prev.chord)
+		curr_root, curr_quality = _parse_chord_quality(current.chord)
+		if prev_root is None or curr_root is None:
+			continue
+		if prev_root == curr_root and prev_quality != curr_quality:
+			count += 1
+	return count
+
+
+def _count_chord_transitions(segments: list[ChordSegment]) -> int:
+	if len(segments) <= 1:
+		return 0
+
+	count = 0
+	for prev, current in zip(segments, segments[1:], strict=False):
+		if prev.chord != current.chord:
+			count += 1
+	return count
+
+
+def _apply_context_aware_short_segment_correction(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Correct weak short isolated anomalies using temporal+harmony context."""
+	if len(segments) < 3:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+
+	for idx in range(1, len(working) - 1):
+		left = working[idx - 1]
+		current = working[idx]
+		right = working[idx + 1]
+
+		if current.chord == left.chord and current.chord == right.chord:
+			continue
+		if current.chord == "N":
+			continue
+
+		current_duration = _segment_duration(current)
+		if current_duration > CONTEXT_SHORT_SEGMENT_MAX_SECONDS:
+			continue
+		if current.confidence >= CONTEXT_SHORT_STRONG_CONFIDENCE_MIN:
+			continue
+		if current.confidence > CONTEXT_SHORT_LOW_CONFIDENCE_MAX:
+			continue
+		if _segment_duration(left) < CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS:
+			continue
+		if _segment_duration(right) < CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS:
+			continue
+		if left.confidence < CONTEXT_NEIGHBOR_MIN_CONFIDENCE:
+			continue
+		if right.confidence < CONTEXT_NEIGHBOR_MIN_CONFIDENCE:
+			continue
+
+		left_support = _neighbor_support(left, detected_key)
+		right_support = _neighbor_support(right, detected_key)
+		candidate = left if left_support >= right_support else right
+		candidate_support = max(left_support, right_support)
+		other_support = min(left_support, right_support)
+
+		if candidate.chord == current.chord:
+			continue
+		if candidate_support < CONTEXT_CANDIDATE_SUPPORT_MIN:
+			continue
+
+		neighbors_same = left.chord == right.chord
+		if not neighbors_same and (candidate_support - other_support) < CONTEXT_SUPPORT_GAP_MIN:
+			continue
+
+		current_plausibility = _harmonic_plausibility(current.chord, detected_key)
+		replacement_plausibility = _harmonic_plausibility(candidate.chord, detected_key)
+
+		if current_plausibility >= HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR and current.confidence >= 0.68:
+			continue
+
+		neighbor_confidence = max(left.confidence, right.confidence)
+		confidence_gap = max(0.0, neighbor_confidence - current.confidence)
+		shortness = max(0.0, (CONTEXT_SHORT_SEGMENT_MAX_SECONDS - current_duration) / CONTEXT_SHORT_SEGMENT_MAX_SECONDS)
+		plausibility_gap = max(0.0, replacement_plausibility - current_plausibility)
+		support_gap = max(0.0, candidate_support - other_support)
+
+		score = (
+			0.44 * confidence_gap
+			+ 0.22 * shortness
+			+ 0.18 * plausibility_gap
+			+ 0.16 * support_gap
+			+ (CONTEXT_SAME_CHORD_STABILITY_BONUS if neighbors_same else 0.0)
+		)
+
+		if score < CONTEXT_CORRECTION_SCORE_MIN:
+			continue
+
+		new_confidence = float(np.clip(candidate.confidence * 0.95, 0.0, 1.0))
+		working[idx] = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=candidate.chord,
+			confidence=new_confidence,
+		)
+		events.append(
+			CorrectionEvent(
+				index=idx,
+				replaced_chord=current.chord,
+				new_chord=candidate.chord,
+				start=float(current.start),
+				end=float(current.end),
+				duration=float(current_duration),
+				original_confidence=float(current.confidence),
+				new_confidence=float(new_confidence),
+				score=float(score),
+				harmonic_plausibility_before=float(current_plausibility),
+				harmonic_plausibility_after=float(replacement_plausibility),
+			)
+		)
+
+	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _merge_adjacent_same_chord_segments(segments: list[ChordSegment]) -> list[ChordSegment]:
+	if not segments:
+		return []
+
+	merged = [segments[0]]
+	for segment in segments[1:]:
+		last = merged[-1]
+		if segment.chord != last.chord:
+			merged.append(segment)
+			continue
+
+		left_duration = _segment_duration(last)
+		right_duration = _segment_duration(segment)
+		total = left_duration + right_duration
+		if total <= 0.0:
+			confidence = max(last.confidence, segment.confidence)
+		else:
+			confidence = ((last.confidence * left_duration) + (segment.confidence * right_duration)) / total
+
+		merged[-1] = ChordSegment(
+			start=last.start,
+			end=segment.end,
+			chord=last.chord,
+			confidence=float(np.clip(confidence, 0.0, 1.0)),
+		)
+
+	return merged
+
+
+def _segment_duration(segment: ChordSegment) -> float:
+	return float(max(0.0, segment.end - segment.start))
+
+
+def _neighbor_support(segment: ChordSegment, detected_key: KeyEstimate | None) -> float:
+	duration_norm = min(1.0, _segment_duration(segment) / CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS)
+	plausibility = _harmonic_plausibility(segment.chord, detected_key)
+	support = 0.52 * segment.confidence + 0.28 * duration_norm + 0.20 * plausibility
+	return float(np.clip(support, 0.0, 1.0))
+
+
+def _short_bucket(durations: list[float], *, threshold_seconds: float) -> dict[str, float]:
+	if not durations:
+		return {"count": 0, "percentage": 0.0}
+
+	count = int(sum(1 for duration in durations if duration < threshold_seconds))
+	percentage = float((count / len(durations)) * 100.0)
+	return {"count": count, "percentage": percentage}
+
+
+def _diatonicity_stats(segments: list[ChordSegment], detected_key: KeyEstimate | None) -> dict[str, object]:
+	diatonic_count = 0
+	non_diatonic_count = 0
+	diatonic_duration = 0.0
+	non_diatonic_duration = 0.0
+	no_chord_count = 0
+	no_chord_duration = 0.0
+
+	for seg in segments:
+		duration = max(0.0, seg.end - seg.start)
+		if seg.chord == "N":
+			no_chord_count += 1
+			no_chord_duration += duration
+			continue
+
+		is_diatonic = _is_diatonic_chord(seg.chord, detected_key)
+		if is_diatonic:
+			diatonic_count += 1
+			diatonic_duration += duration
+		else:
+			non_diatonic_count += 1
+			non_diatonic_duration += duration
+
+	return {
+		"referenceKey": detected_key.label if detected_key is not None else None,
+		"diatonicSegmentCount": diatonic_count,
+		"nonDiatonicSegmentCount": non_diatonic_count,
+		"diatonicDuration": float(diatonic_duration),
+		"nonDiatonicDuration": float(non_diatonic_duration),
+		"noChordSegmentCount": no_chord_count,
+		"noChordDuration": float(no_chord_duration),
+	}
+
+
+def _suspicious_short_non_diatonic_segments(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate | None,
+) -> list[dict[str, float | str]]:
+	suspicious: list[dict[str, float | str]] = []
+	for seg in segments:
+		if seg.chord == "N":
+			continue
+
+		duration = max(0.0, seg.end - seg.start)
+		if duration >= SUSPICIOUS_SHORT_NON_DIATONIC_SECONDS:
+			continue
+
+		if _is_diatonic_chord(seg.chord, detected_key):
+			continue
+
+		suspicious.append(
+			{
+				"chord": seg.chord,
+				"start": float(seg.start),
+				"end": float(seg.end),
+				"duration": float(duration),
+				"confidence": float(seg.confidence),
+			}
+		)
+
+	return suspicious
+
+
+def _is_diatonic_chord(chord_name: str, detected_key: KeyEstimate | None) -> bool:
+	if detected_key is None or chord_name == "N":
+		return False
+
+	root_to_pc = {
+		"C": 0,
+		"C#": 1,
+		"D": 2,
+		"D#": 3,
+		"E": 4,
+		"F": 5,
+		"F#": 6,
+		"G": 7,
+		"G#": 8,
+		"A": 9,
+		"A#": 10,
+		"B": 11,
+	}
+
+	is_minor = chord_name.endswith("m")
+	root_name = chord_name[:-1] if is_minor else chord_name
+	root_pc = root_to_pc.get(root_name)
+	if root_pc is None:
+		return False
+
+	interval = (root_pc - detected_key.tonic_pc) % 12
+	if detected_key.mode == "major":
+		diatonic_chords = {
+			0: False,
+			2: True,
+			4: True,
+			5: False,
+			7: False,
+			9: True,
+			11: True,
+		}
+	else:
+		diatonic_chords = {
+			0: True,
+			2: True,
+			3: False,
+			5: True,
+			7: True,
+			8: False,
+			10: False,
+		}
+
+	expected_minor = diatonic_chords.get(interval)
+	if expected_minor is None:
+		return False
+	return expected_minor == is_minor
+
+
+def _harmonic_plausibility(chord_name: str, detected_key: KeyEstimate | None) -> float:
+	"""Return bounded plausibility used as a soft context signal for correction."""
+	if chord_name == "N":
+		return HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED
+	if detected_key is None:
+		return HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED
+
+	if _is_diatonic_chord(chord_name, detected_key):
+		return HARMONIC_PLAUSIBILITY_DIATONIC
+
+	root_to_pc = {
+		"C": 0,
+		"C#": 1,
+		"D": 2,
+		"D#": 3,
+		"E": 4,
+		"F": 5,
+		"F#": 6,
+		"G": 7,
+		"G#": 8,
+		"A": 9,
+		"A#": 10,
+		"B": 11,
+	}
+
+	is_minor = chord_name.endswith("m")
+	root_name = chord_name[:-1] if is_minor else chord_name
+	root_pc = root_to_pc.get(root_name)
+	if root_pc is None:
+		return HARMONIC_PLAUSIBILITY_NON_DIATONIC
+
+	interval = (root_pc - detected_key.tonic_pc) % 12
+	if detected_key.mode == "minor" and interval == 7 and not is_minor:
+		# Harmonic-minor dominant major quality (e.g. C# in F#m) is musically plausible.
+		return HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR
+
+	return HARMONIC_PLAUSIBILITY_NON_DIATONIC
