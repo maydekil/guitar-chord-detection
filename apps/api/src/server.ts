@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
@@ -55,6 +55,25 @@ interface EngineCommandOptions {
     env?: NodeJS.ProcessEnv;
 }
 
+type EngineJobKind = "analysis" | "lyrics" | "vocals" | "pitch-shift";
+type EngineJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+interface EngineJobRequest {
+    kind: EngineJobKind;
+    payload: unknown;
+}
+
+interface EngineJob {
+    id: string;
+    kind: EngineJobKind;
+    status: EngineJobStatus;
+    progress: number;
+    result: unknown;
+    error: { code: string; message: string } | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
@@ -71,6 +90,7 @@ await mkdir(audioDir, { recursive: true });
 await mkdir(engineOutputDir, { recursive: true });
 const database = new DatabaseSync(path.join(dataDir, "guitar-chord-detection.sqlite"));
 initializeDatabase(database);
+const engineJobs = new Map<string, EngineJob>();
 
 const server = http.createServer((request, response) => {
     void handleRequest(request, response).catch((error) => {
@@ -100,6 +120,23 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     if (method === "POST" && url.pathname === "/audio/upload") {
         const upload = await saveUploadedAudio(request, url);
         sendJson(response, 201, upload);
+        return;
+    }
+
+    if (method === "POST" && url.pathname === "/jobs") {
+        const body = await readJsonBody<EngineJobRequest>(request);
+        sendJson(response, 202, createEngineJob(body));
+        return;
+    }
+
+    const jobMatch = /^\/jobs\/([^/]+)$/.exec(url.pathname);
+    if (jobMatch && method === "GET") {
+        const job = engineJobs.get(decodeURIComponent(jobMatch[1]));
+        if (!job) {
+            sendJson(response, 404, { message: "Job not found" });
+            return;
+        }
+        sendJson(response, 200, toEngineJobSnapshot(job));
         return;
     }
 
@@ -331,6 +368,86 @@ async function saveUploadedAudio(request: http.IncomingMessage, url: URL): Promi
         audioStreamUrl: `${publicBaseUrl}/audio/${encodeURIComponent(fileHash)}${extension}/stream`,
         fileHash
     };
+}
+
+function createEngineJob(request: EngineJobRequest): EngineJob {
+    const now = new Date().toISOString();
+    const job: EngineJob = {
+        id: randomUUID(),
+        kind: request.kind,
+        status: "queued",
+        progress: 0,
+        result: null,
+        error: null,
+        createdAt: now,
+        updatedAt: now
+    };
+
+    engineJobs.set(job.id, job);
+    void runEngineJob(job, request.payload);
+    return toEngineJobSnapshot(job);
+}
+
+async function runEngineJob(job: EngineJob, payload: unknown): Promise<void> {
+    updateEngineJob(job, { status: "running", progress: 10 });
+
+    try {
+        const result = await executeEngineJob(job.kind, payload);
+        if (result && typeof result === "object" && "error" in result) {
+            const error = (result as { error: { code?: unknown; message?: unknown } }).error;
+            updateEngineJob(job, {
+                status: "failed",
+                progress: 100,
+                result,
+                error: {
+                    code: String(error.code ?? "ENGINE_JOB_FAILED"),
+                    message: String(error.message ?? "Engine job failed")
+                }
+            });
+            return;
+        }
+
+        updateEngineJob(job, {
+            status: "succeeded",
+            progress: 100,
+            result,
+            error: null
+        });
+    } catch (error) {
+        updateEngineJob(job, {
+            status: "failed",
+            progress: 100,
+            result: null,
+            error: {
+                code: "ENGINE_JOB_EXCEPTION",
+                message: error instanceof Error ? error.message : "Engine job failed"
+            }
+        });
+    }
+}
+
+async function executeEngineJob(kind: EngineJobKind, payload: unknown): Promise<unknown> {
+    if (kind === "analysis") {
+        return await analyzeAudio(payload as AnalyzeAudioRequest);
+    }
+    if (kind === "lyrics") {
+        return await transcribeLyrics(payload as GenerateLyricsRequest);
+    }
+    if (kind === "vocals") {
+        return await removeVocals(payload as RemoveVocalsRequest);
+    }
+    if (kind === "pitch-shift") {
+        return await pitchShiftAudio(payload as PitchShiftAudioRequest);
+    }
+    return enginePlaceholder("ENGINE_JOB_UNKNOWN_KIND", "Unknown engine job kind");
+}
+
+function updateEngineJob(job: EngineJob, patch: Partial<EngineJob>): void {
+    Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+}
+
+function toEngineJobSnapshot(job: EngineJob): EngineJob {
+    return { ...job };
 }
 
 async function analyzeAudio(request: AnalyzeAudioRequest): Promise<ChordAnalysisResult> {

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import electronMain from "electron/main";
 import type { BrowserWindow as ElectronBrowserWindow } from "electron/main";
-import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
+import type { ChordAnalysisResult, ChordAnalysisSuccess } from "@gcd/shared/analysis";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { SaveSongAnalysisRequest, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
@@ -55,6 +55,24 @@ interface AudioUploadResult {
     fileHash: string;
 }
 
+interface ApiStatus {
+    mode: "api" | "local";
+    baseUrl: string | null;
+    healthy: boolean;
+}
+
+type ApiJobKind = "analysis" | "lyrics" | "vocals" | "pitch-shift";
+type ApiJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+interface ApiJob<T> {
+    id: string;
+    kind: ApiJobKind;
+    status: ApiJobStatus;
+    progress: number;
+    result: T | null;
+    error: { code: string; message: string } | null;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ANALYSIS_CONTRACT_VERSION = "1";
@@ -94,11 +112,23 @@ function createMainWindow(): ElectronBrowserWindow {
 function registerIpcHandlers(): void {
     ipcMain.handle("app:getVersion", () => app.getVersion());
     ipcMain.handle("app:isApiMode", () => Boolean(API_BASE_URL));
+    ipcMain.handle("app:getApiStatus", async (): Promise<ApiStatus> => {
+        if (!API_BASE_URL) {
+            return { mode: "local", baseUrl: null, healthy: false };
+        }
+
+        try {
+            await getApiJson("health");
+            return { mode: "api", baseUrl: API_BASE_URL, healthy: true };
+        } catch {
+            return { mode: "api", baseUrl: API_BASE_URL, healthy: false };
+        }
+    });
     ipcMain.handle("engine:analyzeAudio", async (_event, request: string | AnalyzeAudioRequest) => {
         const normalized = typeof request === "string" ? { audioPath: request, forceRefresh: false } : request;
         if (API_BASE_URL) {
             const uploadedAudio = await uploadAudioForApi(normalized.audioPath);
-            return await postApiJson("analysis", {
+            return await runApiEngineJob<ChordAnalysisResult>("analysis", {
                 ...normalized,
                 audioPath: uploadedAudio?.audioPath ?? normalized.audioPath
             });
@@ -117,10 +147,10 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:generateLyrics", async (_event, request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> => {
         if (API_BASE_URL) {
             const uploadedAudio = await uploadAudioForApi(request.audioPath);
-            return await postApiJson("lyrics/transcribe", {
+            return await runApiEngineJob<LyricsTranscriptionResult>("lyrics", {
                 audioPath: uploadedAudio?.audioPath ?? request.audioPath,
                 model: normalizeLyricsModel(request.model)
-            }) as LyricsTranscriptionResult;
+            });
         }
 
         return await transcribeLyricsInEngine(request.audioPath, { appPath: app.getAppPath() }, normalizeLyricsModel(request.model));
@@ -128,9 +158,9 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:removeVocals", async (_event, request: RemoveVocalsRequest): Promise<VocalRemovalResult> => {
         if (API_BASE_URL) {
             const uploadedAudio = await uploadAudioForApi(request.audioPath);
-            return await postApiJson("vocals/remove", {
+            return await runApiEngineJob<VocalRemovalResult>("vocals", {
                 audioPath: uploadedAudio?.audioPath ?? request.audioPath
-            }) as VocalRemovalResult;
+            });
         }
 
         return await removeVocalsInEngine(
@@ -142,10 +172,10 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:pitchShiftAudio", async (_event, request: PitchShiftAudioRequest): Promise<PitchShiftResult> => {
         if (API_BASE_URL) {
             const uploadedAudio = await uploadAudioForApi(request.audioPath);
-            return await postApiJson("audio/pitch-shift", {
+            return await runApiEngineJob<PitchShiftResult>("pitch-shift", {
                 audioPath: uploadedAudio?.audioPath ?? request.audioPath,
                 semitones: normalizeTransposeSemitones(request.semitones)
-            }) as PitchShiftResult;
+            });
         }
 
         return await pitchShiftAudioInEngine(
@@ -318,6 +348,26 @@ async function postApiJson(pathname: string, body: unknown): Promise<unknown> {
     return await readApiJsonResponse(response);
 }
 
+async function runApiEngineJob<T>(kind: ApiJobKind, payload: unknown): Promise<T> {
+    const created = await postApiJson("jobs", { kind, payload }) as ApiJob<T>;
+    let latest = created;
+
+    while (latest.status === "queued" || latest.status === "running") {
+        await delay(900);
+        latest = await getApiJson(`jobs/${encodeURIComponent(latest.id)}`) as ApiJob<T>;
+    }
+
+    if (latest.status === "succeeded" && latest.result) {
+        return latest.result;
+    }
+
+    if (latest.result) {
+        return latest.result;
+    }
+
+    throw new Error(latest.error?.message ?? "API engine job failed");
+}
+
 async function postApiBytes(pathname: string, bytes: Buffer, contentType: string): Promise<unknown> {
     const response = await fetch(buildApiUrl(pathname), {
         method: "POST",
@@ -378,6 +428,12 @@ function rewriteAnalysisSourcePath(analysis: ChordAnalysisSuccess, audioPath: st
 
 function toArrayBuffer(bytes: Buffer): ArrayBuffer {
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
 }
 
 async function bootstrap(): Promise<void> {

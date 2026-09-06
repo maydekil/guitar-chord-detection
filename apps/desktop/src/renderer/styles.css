@@ -89,6 +89,25 @@ body {
     text-transform: uppercase;
 }
 
+.mode-badge-connected {
+    background: rgba(41, 132, 83, 0.12);
+    border-color: rgba(41, 132, 83, 0.24);
+    color: #236f49;
+}
+
+.mode-badge-offline {
+    background: rgba(163, 58, 46, 0.12);
+    border-color: rgba(163, 58, 46, 0.24);
+    color: #933326;
+}
+
+.mode-badge-local,
+.mode-badge-checking {
+    background: rgba(88, 96, 102, 0.11);
+    border-color: rgba(88, 96, 102, 0.2);
+    color: #4a555b;
+}
+
 .shell-card {
     border: 1px solid var(--line);
     border-radius: 16px;

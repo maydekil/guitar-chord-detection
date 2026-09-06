@@ -36,9 +36,16 @@ export interface PitchShiftOptions {
     semitones: number;
 }
 
+export interface ApiStatus {
+    mode: "api" | "local";
+    baseUrl: string | null;
+    healthy: boolean;
+}
+
 export interface DesktopApi {
     getAppVersion(): Promise<string>;
     isApiMode?(): Promise<boolean>;
+    getApiStatus?(): Promise<ApiStatus>;
     selectAudioFile(): Promise<FileSelectionResult>;
     analyzeAudio?(audioPath: string, options?: AnalyzeAudioOptions): Promise<ChordAnalysisResult>;
     generateLyricsFromAudio?(audioPath: string, options?: GenerateLyricsOptions): Promise<LyricsTranscriptionResult>;
@@ -54,6 +61,7 @@ export interface DesktopApi {
 const desktopApi: DesktopApi = {
     getAppVersion: () => ipcRenderer.invoke("app:getVersion") as Promise<string>,
     isApiMode: () => ipcRenderer.invoke("app:isApiMode") as Promise<boolean>,
+    getApiStatus: () => ipcRenderer.invoke("app:getApiStatus") as Promise<ApiStatus>,
     selectAudioFile: () => ipcRenderer.invoke("file:selectAudio") as Promise<FileSelectionResult>,
     analyzeAudio: (audioPath: string, options?: AnalyzeAudioOptions) =>
         ipcRenderer.invoke("engine:analyzeAudio", {

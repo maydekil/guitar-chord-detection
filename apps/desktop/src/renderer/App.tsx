@@ -10,10 +10,12 @@ type ShellState = "idle" | "loading-file" | "analyzing" | "ready" | "playing" | 
 type ViewMode = "library" | "detail";
 type DetectorTab = "timeline" | "lyrics";
 type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
+type ApiHealthState = "local" | "checking" | "connected" | "offline";
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
     const [isApiMode, setIsApiMode] = useState<boolean>(false);
+    const [apiHealthState, setApiHealthState] = useState<ApiHealthState>("checking");
     const [state, setState] = useState<ShellState>("idle");
     const [selectedFileName, setSelectedFileName] = useState<string>("No file selected");
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -138,7 +140,27 @@ export function App() {
             return;
         }
         void bridge.getAppVersion().then(setVersion).catch(() => setVersion("unknown"));
-        void bridge.isApiMode?.().then(setIsApiMode).catch(() => setIsApiMode(false));
+        void bridge.isApiMode?.()
+            .then((apiMode) => {
+                setIsApiMode(apiMode);
+                if (!bridge.getApiStatus) {
+                    setApiHealthState(apiMode ? "checking" : "local");
+                }
+            })
+            .catch(() => {
+                setIsApiMode(false);
+                setApiHealthState("local");
+            });
+        if (bridge.getApiStatus) {
+            void bridge.getApiStatus()
+                .then((status) => {
+                    setIsApiMode(status.mode === "api");
+                    setApiHealthState(status.mode === "local" ? "local" : status.healthy ? "connected" : "offline");
+                })
+                .catch(() => setApiHealthState("offline"));
+        } else if (!bridge.isApiMode) {
+            setApiHealthState("local");
+        }
     }, [bridge]);
 
     useEffect(() => {
@@ -802,7 +824,7 @@ export function App() {
             <header className="shell-header">
                 <h1>Guitar Chord Detector</h1>
                 <p className="shell-meta">Desktop Shell v{version}</p>
-                <p className="mode-badge">{isApiMode ? "API Mode" : "Local Mode"}</p>
+                <p className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</p>
             </header>
 
             <div className="workspace-panels" ref={workspaceRef}>
@@ -1842,4 +1864,17 @@ function formatTime(totalSeconds: number): string {
     const minutes = Math.floor(safe / 60);
     const seconds = safe % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatApiHealthLabel(state: ApiHealthState): string {
+    if (state === "connected") {
+        return "API Connected";
+    }
+    if (state === "offline") {
+        return "API Offline";
+    }
+    if (state === "checking") {
+        return "Checking API";
+    }
+    return "Local Mode";
 }
