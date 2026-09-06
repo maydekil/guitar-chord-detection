@@ -321,7 +321,7 @@ export function App() {
         setSelectedSongId(song.id);
         setViewMode("detail");
         setSelectedFileName(displaySongTitle(song));
-        setSelectedFilePath(song.audioStreamUrl ?? song.audioPath);
+        setSelectedFilePath(song.audioPath);
         setSongTitle(song.title);
         setSongArtist(song.artist);
         setTransposeSemitones(0);
@@ -398,6 +398,8 @@ export function App() {
         setSelectedSongId(savedSong.id);
         setSongTitle(savedSong.title);
         setSongArtist(savedSong.artist);
+        setSelectedFilePath(savedSong.audioPath);
+        setInstrumentalAudioPath(savedSong.instrumentalAudioPath ?? savedSong.instrumentalAudioStreamUrl ?? null);
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
         setAnalysisStatus("Saved to Song Library.");

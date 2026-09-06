@@ -2,6 +2,7 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { SaveSongAnalysisRequest, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
@@ -45,6 +46,12 @@ interface PitchShiftAudioRequest {
     semitones: number;
 }
 
+interface AudioUploadResult {
+    audioPath: string;
+    audioStreamUrl: string;
+    fileHash: string;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ANALYSIS_CONTRACT_VERSION = "1";
@@ -86,7 +93,11 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:analyzeAudio", async (_event, request: string | AnalyzeAudioRequest) => {
         const normalized = typeof request === "string" ? { audioPath: request, forceRefresh: false } : request;
         if (API_BASE_URL) {
-            return await postApiJson("analysis", normalized);
+            const uploadedAudio = await uploadAudioForApi(normalized.audioPath);
+            return await postApiJson("analysis", {
+                ...normalized,
+                audioPath: uploadedAudio?.audioPath ?? normalized.audioPath
+            });
         }
 
         const cache = getAnalysisCache();
@@ -101,8 +112,9 @@ function registerIpcHandlers(): void {
     });
     ipcMain.handle("engine:generateLyrics", async (_event, request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> => {
         if (API_BASE_URL) {
+            const uploadedAudio = await uploadAudioForApi(request.audioPath);
             return await postApiJson("lyrics/transcribe", {
-                audioPath: request.audioPath,
+                audioPath: uploadedAudio?.audioPath ?? request.audioPath,
                 model: normalizeLyricsModel(request.model)
             }) as LyricsTranscriptionResult;
         }
@@ -111,7 +123,10 @@ function registerIpcHandlers(): void {
     });
     ipcMain.handle("engine:removeVocals", async (_event, request: RemoveVocalsRequest): Promise<VocalRemovalResult> => {
         if (API_BASE_URL) {
-            return await postApiJson("vocals/remove", request) as VocalRemovalResult;
+            const uploadedAudio = await uploadAudioForApi(request.audioPath);
+            return await postApiJson("vocals/remove", {
+                audioPath: uploadedAudio?.audioPath ?? request.audioPath
+            }) as VocalRemovalResult;
         }
 
         return await removeVocalsInEngine(
@@ -122,8 +137,9 @@ function registerIpcHandlers(): void {
     });
     ipcMain.handle("engine:pitchShiftAudio", async (_event, request: PitchShiftAudioRequest): Promise<PitchShiftResult> => {
         if (API_BASE_URL) {
+            const uploadedAudio = await uploadAudioForApi(request.audioPath);
             return await postApiJson("audio/pitch-shift", {
-                audioPath: request.audioPath,
+                audioPath: uploadedAudio?.audioPath ?? request.audioPath,
                 semitones: normalizeTransposeSemitones(request.semitones)
             }) as PitchShiftResult;
         }
@@ -141,9 +157,19 @@ function registerIpcHandlers(): void {
             throw new Error("Song title and artist are required");
         }
         if (API_BASE_URL) {
+            const uploadedAudio = await uploadAudioForApi(request.audioPath);
+            const uploadedInstrumentalAudio = request.instrumentalAudioPath
+                ? await uploadAudioForApi(request.instrumentalAudioPath)
+                : null;
+            const analysis = uploadedAudio
+                ? rewriteAnalysisSourcePath(request.analysis, uploadedAudio.audioPath)
+                : request.analysis;
             return await postApiJson("songs", {
                 ...request,
-                metadata
+                audioPath: uploadedAudio?.audioPath ?? request.audioPath,
+                analysis,
+                metadata,
+                instrumentalAudioPath: uploadedInstrumentalAudio?.audioPath ?? request.instrumentalAudioPath
             });
         }
 
@@ -288,6 +314,18 @@ async function postApiJson(pathname: string, body: unknown): Promise<unknown> {
     return await readApiJsonResponse(response);
 }
 
+async function postApiBytes(pathname: string, bytes: Buffer, contentType: string): Promise<unknown> {
+    const response = await fetch(buildApiUrl(pathname), {
+        method: "POST",
+        headers: {
+            "content-type": contentType,
+            "content-length": String(bytes.byteLength)
+        },
+        body: toArrayBuffer(bytes)
+    });
+    return await readApiJsonResponse(response);
+}
+
 async function deleteApiJson(pathname: string): Promise<unknown> {
     const response = await fetch(buildApiUrl(pathname), {
         method: "DELETE"
@@ -304,6 +342,38 @@ async function readApiJsonResponse(response: Response): Promise<unknown> {
         throw new Error(message);
     }
     return payload;
+}
+
+async function uploadAudioForApi(audioPath: string): Promise<AudioUploadResult | null> {
+    if (isHttpUrl(audioPath)) {
+        return null;
+    }
+
+    const mimeType = resolveAudioMimeType(audioPath);
+    if (!mimeType) {
+        throw new Error("Unsupported audio file type");
+    }
+
+    const bytes = await readFile(audioPath);
+    return await postApiBytes(
+        `audio/upload?filename=${encodeURIComponent(path.basename(audioPath))}`,
+        bytes,
+        mimeType
+    ) as AudioUploadResult;
+}
+
+function rewriteAnalysisSourcePath(analysis: ChordAnalysisSuccess, audioPath: string): ChordAnalysisSuccess {
+    return {
+        ...analysis,
+        source: {
+            ...analysis.source,
+            path: audioPath
+        }
+    };
+}
+
+function toArrayBuffer(bytes: Buffer): ArrayBuffer {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 async function bootstrap(): Promise<void> {

@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,9 +34,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = process.env.GCD_API_DATA_DIR ?? path.resolve(__dirname, "..", ".data");
+const audioDir = path.join(dataDir, "audio");
 const publicBaseUrl = (process.env.GCD_API_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/+$/, "");
 
 await mkdir(dataDir, { recursive: true });
+await mkdir(audioDir, { recursive: true });
 const database = new DatabaseSync(path.join(dataDir, "guitar-chord-detection.sqlite"));
 initializeDatabase(database);
 
@@ -61,6 +64,12 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
 
     if (method === "GET" && url.pathname === "/songs") {
         sendJson(response, 200, listSongs(url));
+        return;
+    }
+
+    if (method === "POST" && url.pathname === "/audio/upload") {
+        const upload = await saveUploadedAudio(request, url);
+        sendJson(response, 201, upload);
         return;
     }
 
@@ -90,6 +99,12 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     const streamMatch = /^\/songs\/([^/]+)\/audio\/(original|instrumental)\/stream$/.exec(url.pathname);
     if (streamMatch && method === "GET") {
         await streamSongAudio(response, decodeURIComponent(streamMatch[1]), streamMatch[2] as "original" | "instrumental");
+        return;
+    }
+
+    const uploadedAudioStreamMatch = /^\/audio\/([a-f0-9]{64})(\.[a-z0-9]+)\/stream$/.exec(url.pathname);
+    if (uploadedAudioStreamMatch && method === "GET") {
+        await streamAudioFile(response, path.join(audioDir, `${uploadedAudioStreamMatch[1]}${uploadedAudioStreamMatch[2]}`));
         return;
     }
 
@@ -212,8 +227,16 @@ function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
 }
 
 function deleteSong(id: string): boolean {
+    const existing = getSong(id);
     const result = database.prepare("DELETE FROM songs WHERE id = ?").run(id);
-    return result.changes > 0;
+    const deleted = Number(result.changes) > 0;
+    if (deleted && existing) {
+        void unlinkManagedAudio(existing.audioPath);
+        if (existing.instrumentalAudioPath) {
+            void unlinkManagedAudio(existing.instrumentalAudioPath);
+        }
+    }
+    return deleted;
 }
 
 async function streamSongAudio(response: http.ServerResponse, id: string, kind: "original" | "instrumental"): Promise<void> {
@@ -235,11 +258,45 @@ async function streamSongAudio(response: http.ServerResponse, id: string, kind: 
         return;
     }
 
+    await streamAudioFile(response, audioPath);
+}
+
+async function streamAudioFile(response: http.ServerResponse, audioPath: string): Promise<void> {
+    const fileStat = await stat(audioPath).catch(() => null);
+    if (!fileStat) {
+        sendJson(response, 404, { message: "Audio file not found" });
+        return;
+    }
+
     response.writeHead(200, {
         "content-length": fileStat.size,
         "content-type": resolveAudioContentType(audioPath)
     });
     createReadStream(audioPath).pipe(response);
+}
+
+async function saveUploadedAudio(request: http.IncomingMessage, url: URL): Promise<{ audioPath: string; audioStreamUrl: string; fileHash: string }> {
+    const body = await readRawBody(request);
+    if (body.length === 0) {
+        throw new Error("Uploaded audio is empty");
+    }
+
+    const fileHash = createHash("sha256").update(body).digest("hex");
+    const originalFileName = url.searchParams.get("filename") ?? "audio";
+    const extension = resolveSafeAudioExtension(originalFileName);
+    const audioPath = path.join(audioDir, `${fileHash}${extension}`);
+
+    await writeFile(audioPath, body, { flag: "wx" }).catch(async (error: unknown) => {
+        if (!isAlreadyExistsError(error)) {
+            throw error;
+        }
+    });
+
+    return {
+        audioPath,
+        audioStreamUrl: `${publicBaseUrl}/audio/${encodeURIComponent(fileHash)}${extension}/stream`,
+        fileHash
+    };
 }
 
 function initializeDatabase(db: DatabaseSync): void {
@@ -297,11 +354,15 @@ function enginePlaceholder(code: string, message: string) {
 }
 
 async function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {
+    return JSON.parse((await readRawBody(request)).toString("utf-8")) as T;
+}
+
+async function readRawBody(request: http.IncomingMessage): Promise<Buffer> {
     const chunks: Buffer[] = [];
     for await (const chunk of request) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     }
-    return JSON.parse(Buffer.concat(chunks).toString("utf-8")) as T;
+    return Buffer.concat(chunks);
 }
 
 function sendJson(response: http.ServerResponse, statusCode: number, payload: unknown): void {
@@ -318,6 +379,30 @@ function resolveAudioContentType(audioPath: string): string {
         return "audio/wav";
     }
     return "application/octet-stream";
+}
+
+function resolveSafeAudioExtension(fileName: string): string {
+    const extension = path.extname(fileName).toLowerCase();
+    if (extension === ".mp3" || extension === ".wav") {
+        return extension;
+    }
+    return ".audio";
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+    return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST";
+}
+
+async function unlinkManagedAudio(audioPath: string): Promise<void> {
+    if (!path.resolve(audioPath).startsWith(`${path.resolve(audioDir)}${path.sep}`)) {
+        return;
+    }
+
+    await unlink(audioPath).catch((error: unknown) => {
+        if (!(error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT")) {
+            console.error("[api] failed to delete managed audio", error);
+        }
+    });
 }
 
 function normalizeSearch(value: string): string {
