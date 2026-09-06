@@ -12,6 +12,9 @@ type DetectorTab = "timeline" | "lyrics";
 type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
 type ApiHealthState = "local" | "checking" | "connected" | "offline";
 type ExportFormat = "txt" | "lrc";
+type PendingConfirmation =
+    | { kind: "save"; metadata: SongMetadataInput }
+    | { kind: "delete"; song: SongLibraryRecord };
 type ApiJobProgressEvent = {
     id: string;
     kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
@@ -63,6 +66,7 @@ export function App() {
     const [isSaveFormOpen, setIsSaveFormOpen] = useState<boolean>(false);
     const [hasUnsavedChordEdits, setHasUnsavedChordEdits] = useState<boolean>(false);
     const [exportPreviewFormat, setExportPreviewFormat] = useState<ExportFormat | null>(null);
+    const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
     const [transposeSemitones, setTransposeSemitones] = useState<number>(0);
     const [detectorTab, setDetectorTab] = useState<DetectorTab>("timeline");
     const [lyricsText, setLyricsText] = useState<string>("");
@@ -658,6 +662,15 @@ export function App() {
             return;
         }
 
+        setPendingConfirmation({ kind: "save", metadata });
+    };
+
+    const performSaveAnalysis = async (metadata: SongMetadataInput): Promise<void> => {
+        if (!selectedFilePath || !latestAnalysis || !bridge?.saveSongAnalysis) {
+            setPendingConfirmation(null);
+            return;
+        }
+
         const savedSong = await bridge.saveSongAnalysis({
             audioPath: selectedFilePath,
             analysis: latestAnalysis,
@@ -673,6 +686,7 @@ export function App() {
         setInstrumentalAudioStreamUrl(savedSong.instrumentalAudioStreamUrl ?? null);
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
+        setPendingConfirmation(null);
         setHasUnsavedChordEdits(false);
             setTimelineUndoStack([]);
             setTimelineRedoStack([]);
@@ -733,7 +747,17 @@ export function App() {
             return;
         }
 
+        setPendingConfirmation({ kind: "delete", song });
+    };
+
+    const performDeleteLibrarySong = async (song: SongLibraryRecord): Promise<void> => {
+        if (!bridge?.deleteSong) {
+            setPendingConfirmation(null);
+            return;
+        }
+
         await bridge.deleteSong(song.id);
+        setPendingConfirmation(null);
         if (selectedSongId === song.id) {
             resetPlaybackState();
             setSelectedSongId(null);
@@ -757,6 +781,17 @@ export function App() {
             setViewMode("library");
         }
         await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
+    };
+
+    const handleConfirmAction = async (): Promise<void> => {
+        if (!pendingConfirmation) {
+            return;
+        }
+        if (pendingConfirmation.kind === "save") {
+            await performSaveAnalysis(pendingConfirmation.metadata);
+            return;
+        }
+        await performDeleteLibrarySong(pendingConfirmation.song);
     };
 
     const handleOpenExportPreview = (format: ExportFormat): void => {
@@ -1515,25 +1550,6 @@ export function App() {
                                     </button>
                                 </form>
                             ) : null}
-                            {exportPreviewFormat ? (
-                                <section className="export-preview" aria-label="Export preview">
-                                    <div className="export-preview-head">
-                                        <div>
-                                            <strong>{exportPreviewFormat.toUpperCase()} Preview</strong>
-                                            <small>Transpose {formatTranspose(transposeSemitones)} mengikuti nada aktif.</small>
-                                        </div>
-                                        <div>
-                                            <button type="button" onClick={() => void handleExportSong(exportPreviewFormat)}>
-                                                Download
-                                            </button>
-                                            <button type="button" onClick={() => setExportPreviewFormat(null)}>
-                                                Close
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <pre>{exportPreviewContent}</pre>
-                                </section>
-                            ) : null}
                             <audio
                                 ref={audioRef}
                                 src={audioSourceUrl ?? undefined}
@@ -1836,6 +1852,78 @@ export function App() {
                     )}
                 </section>
             </div>
+            {exportPreviewFormat ? (
+                <div className="modal-backdrop" role="presentation" onMouseDown={() => setExportPreviewFormat(null)}>
+                    <section
+                        className="export-preview-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Export preview"
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <div className="export-preview-head">
+                            <div>
+                                <strong>{exportPreviewFormat.toUpperCase()} Preview</strong>
+                                <small>
+                                    {songArtist || "Unknown Artist"} - {songTitle || "Untitled"} · Transpose {formatTranspose(transposeSemitones)}
+                                </small>
+                            </div>
+                            <div>
+                                <button type="button" onClick={() => void handleExportSong(exportPreviewFormat)}>
+                                    Download
+                                </button>
+                                <button type="button" onClick={() => setExportPreviewFormat(null)}>
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                        <div className="export-preview-meta">
+                            <span>{exportPreviewContent.split(/\r?\n/).filter((line) => line.trim()).length} line(s)</span>
+                            <span>{timelineSegments.length} chord segment(s)</span>
+                            <span>{lyricsText.trim() ? "Lyrics included" : "Timeline only"}</span>
+                        </div>
+                        {exportPreviewContent.trim() ? (
+                            <pre>{exportPreviewContent}</pre>
+                        ) : (
+                            <p className="export-preview-empty">Tidak ada konten export. Pastikan lagu sudah punya timeline chord atau lyric.</p>
+                        )}
+                    </section>
+                </div>
+            ) : null}
+            {pendingConfirmation ? (
+                <div className="modal-backdrop" role="presentation" onMouseDown={() => setPendingConfirmation(null)}>
+                    <section
+                        className="confirm-modal"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={pendingConfirmation.kind === "save" ? "Confirm save" : "Confirm delete"}
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <strong>{pendingConfirmation.kind === "save" ? "Save chord analysis?" : "Delete song from library?"}</strong>
+                        {pendingConfirmation.kind === "save" ? (
+                            <p>
+                                Simpan chord, lyric, dan metadata untuk {pendingConfirmation.metadata.artist} - {pendingConfirmation.metadata.title}.
+                            </p>
+                        ) : (
+                            <p>
+                                Hapus {displaySongTitle(pendingConfirmation.song)} dari Song Library. File audio yang dikelola API/local juga akan ikut dibersihkan jika tersedia.
+                            </p>
+                        )}
+                        <div className="confirm-modal-actions">
+                            <button type="button" onClick={() => setPendingConfirmation(null)}>
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className={pendingConfirmation.kind === "delete" ? "danger-btn" : ""}
+                                onClick={() => void handleConfirmAction()}
+                            >
+                                {pendingConfirmation.kind === "save" ? "Confirm Save" : "Confirm Delete"}
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            ) : null}
         </main>
     );
 }

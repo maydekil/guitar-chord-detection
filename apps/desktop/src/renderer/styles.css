@@ -617,11 +617,24 @@ body {
     padding: 0.08rem 0.34rem;
 }
 
-.export-preview {
-    margin: 0.55rem 0 0.7rem;
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    background: rgba(255, 253, 248, 0.82);
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 1.2rem;
+    background: rgba(30, 42, 48, 0.34);
+    backdrop-filter: blur(5px);
+}
+
+.export-preview-modal {
+    width: min(940px, 100%);
+    max-height: min(78vh, 720px);
+    border: 1px solid rgba(92, 76, 45, 0.18);
+    border-radius: 18px;
+    background: #fffaf1;
+    box-shadow: 0 28px 80px rgba(30, 42, 48, 0.28);
     overflow: hidden;
 }
 
@@ -630,7 +643,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.7rem;
-    padding: 0.55rem 0.65rem;
+    padding: 0.7rem 0.8rem;
     border-bottom: 1px solid rgba(92, 76, 45, 0.12);
     background: rgba(246, 237, 221, 0.72);
 }
@@ -651,7 +664,7 @@ body {
     gap: 0.35rem;
 }
 
-.export-preview button {
+.export-preview-modal button {
     border: 1px solid var(--line);
     border-radius: 8px;
     background: #fffdf8;
@@ -662,22 +675,98 @@ body {
     padding: 0.26rem 0.48rem;
 }
 
-.export-preview button:first-child {
+.export-preview-modal button:first-child {
     border-color: rgba(143, 87, 42, 0.32);
     background: var(--accent);
     color: #fffdf8;
 }
 
-.export-preview pre {
-    max-height: 180px;
+.export-preview-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.55rem 0.8rem 0;
+}
+
+.export-preview-meta span {
+    border: 1px solid rgba(92, 76, 45, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 253, 248, 0.82);
+    color: #596568;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 0.12rem 0.42rem;
+}
+
+.export-preview-modal pre {
+    max-height: calc(min(78vh, 720px) - 128px);
     margin: 0;
-    padding: 0.65rem;
+    padding: 0.75rem 0.8rem 0.9rem;
     overflow: auto;
     color: #263238;
     font-family: "SFMono-Regular", "Menlo", monospace;
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     line-height: 1.45;
     white-space: pre;
+}
+
+.export-preview-empty {
+    margin: 0;
+    padding: 1rem 0.8rem 1.2rem;
+    color: #657073;
+    font-size: 0.86rem;
+}
+
+.confirm-modal {
+    display: grid;
+    gap: 0.7rem;
+    width: min(460px, 100%);
+    border: 1px solid rgba(92, 76, 45, 0.18);
+    border-radius: 18px;
+    background: #fffaf1;
+    box-shadow: 0 28px 80px rgba(30, 42, 48, 0.28);
+    padding: 1rem;
+}
+
+.confirm-modal strong {
+    color: var(--ink);
+    font-size: 1.1rem;
+}
+
+.confirm-modal p {
+    margin: 0;
+    color: #526166;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.confirm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.45rem;
+}
+
+.confirm-modal-actions button {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    padding: 0.38rem 0.64rem;
+}
+
+.confirm-modal-actions button:last-child {
+    border-color: rgba(143, 87, 42, 0.32);
+    background: var(--accent);
+    color: #fffdf8;
+}
+
+.confirm-modal-actions .danger-btn {
+    border-color: rgba(142, 46, 38, 0.35);
+    background: #a94333;
+    color: #fffdf8;
 }
 
 .state-label {
