@@ -54,10 +54,10 @@ describe("SongLibraryStore", () => {
         expect(record.analysis.analysis.chords[0]?.chord).toBe("A");
 
         const byTitle = await library.listSongs({ query: "album" });
-        expect(byTitle.map((song) => song.id)).toEqual([record.id]);
+        expect(byTitle.records.map((song) => song.id)).toEqual([record.id]);
 
         const byPath = await library.listSongs({ query: ".mp3" });
-        expect(byPath.map((song) => song.id)).toEqual([record.id]);
+        expect(byPath.records.map((song) => song.id)).toEqual([record.id]);
     });
 
     it("updates existing record for the same file and version scope", async () => {
@@ -131,6 +131,6 @@ describe("SongLibraryStore", () => {
         await expect(access(record.audioPath)).resolves.toBeUndefined();
         await expect(library.deleteSong(record.id)).resolves.toEqual({ deleted: true });
         await expect(access(record.audioPath)).rejects.toMatchObject({ code: "ENOENT" });
-        expect(await library.listSongs()).toEqual([]);
+        expect((await library.listSongs()).records).toEqual([]);
     });
 });

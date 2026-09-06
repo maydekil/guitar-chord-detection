@@ -1334,7 +1334,7 @@ function renderLyricsPreview(
                 const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
                 const isActive = line.time !== null
                     && line.time <= currentTimeSeconds
-                    && (nextTimedLine?.time === undefined || currentTimeSeconds < nextTimedLine.time);
+                    && (nextTimedLine?.time == null || currentTimeSeconds < nextTimedLine.time);
                 const chordMarkers = line.time === null
                     ? []
                     : buildLyricChordMarkers(

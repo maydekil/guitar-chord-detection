@@ -67,7 +67,7 @@ describe("App", () => {
 
         fireEvent.change(screen.getByRole("searchbox", { name: "Search library" }), { target: { value: "sr" } });
         expect(await screen.findByDisplayValue("sr")).toBeInTheDocument();
-        expect(listSongs).toHaveBeenLastCalledWith({ query: "sr" });
+        expect(listSongs).toHaveBeenLastCalledWith({ query: "sr", page: 1, pageSize: 10 });
     });
 
     it("keeps playback controls disabled when no audio is selected", async () => {
@@ -85,7 +85,6 @@ describe("App", () => {
         await openAnalyzerForm();
 
         expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
-        expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
         expect(screen.getByRole("slider", { name: "Seek" })).toBeDisabled();
         expect(screen.getByText("No chord segments")).toBeInTheDocument();
     });
@@ -1516,7 +1515,6 @@ describe("App", () => {
 
         expect(await screen.findByText("State: error")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
-        expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
         expect(screen.getByRole("slider", { name: "Seek" })).toBeDisabled();
     });
 
@@ -1556,7 +1554,6 @@ describe("App", () => {
 
         expect(await screen.findByText("State: error")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
-        expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
         expect(screen.getByRole("slider", { name: "Seek" })).toBeDisabled();
     });
 

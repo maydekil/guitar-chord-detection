@@ -4,7 +4,7 @@ import { buildMainWindowOptions } from "./window";
 
 describe("buildMainWindowOptions", () => {
     it("enforces secure webPreferences defaults", () => {
-        const options = buildMainWindowOptions("/tmp/preload.js");
+        const options = buildMainWindowOptions("/tmp/preload.js", "/tmp/icon.ico");
 
         expect(options.webPreferences?.preload).toBe("/tmp/preload.js");
         expect(options.webPreferences?.contextIsolation).toBe(true);

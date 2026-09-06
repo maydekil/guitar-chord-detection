@@ -11,7 +11,7 @@ if (!rootElement) {
 }
 
 class RendererErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-    public state = { error: null };
+    public state: { error: Error | null } = { error: null };
 
     public static getDerivedStateFromError(error: Error) {
         return { error };
