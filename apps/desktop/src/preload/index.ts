@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
 import type { DeleteSongResult, SaveSongAnalysisRequest, SongLibraryRecord, SongLibrarySearchOptions } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
+import type { PitchShiftResult } from "@gcd/shared/pitch";
+import type { VocalRemovalResult } from "@gcd/shared/vocals";
 
 export interface FileSelectionResult {
     canceled: boolean;
@@ -22,11 +24,17 @@ export interface GenerateLyricsOptions {
     model?: string;
 }
 
+export interface PitchShiftOptions {
+    semitones: number;
+}
+
 export interface DesktopApi {
     getAppVersion(): Promise<string>;
     selectAudioFile(): Promise<FileSelectionResult>;
     analyzeAudio?(audioPath: string, options?: AnalyzeAudioOptions): Promise<ChordAnalysisResult>;
     generateLyricsFromAudio?(audioPath: string, options?: GenerateLyricsOptions): Promise<LyricsTranscriptionResult>;
+    pitchShiftAudio?(audioPath: string, options: PitchShiftOptions): Promise<PitchShiftResult>;
+    removeVocals?(audioPath: string): Promise<VocalRemovalResult>;
     getAudioPlaybackSource?(audioPath: string): Promise<AudioPlaybackSource>;
     listSongs?(options?: SongLibrarySearchOptions): Promise<SongLibraryRecord[]>;
     getSong?(id: string): Promise<SongLibraryRecord | null>;
@@ -44,6 +52,10 @@ const desktopApi: DesktopApi = {
         }) as Promise<ChordAnalysisResult>,
     generateLyricsFromAudio: (audioPath: string, options?: GenerateLyricsOptions) =>
         ipcRenderer.invoke("engine:generateLyrics", { audioPath, model: options?.model }) as Promise<LyricsTranscriptionResult>,
+    pitchShiftAudio: (audioPath: string, options: PitchShiftOptions) =>
+        ipcRenderer.invoke("engine:pitchShiftAudio", { audioPath, semitones: options.semitones }) as Promise<PitchShiftResult>,
+    removeVocals: (audioPath: string) =>
+        ipcRenderer.invoke("engine:removeVocals", { audioPath }) as Promise<VocalRemovalResult>,
     getAudioPlaybackSource: (audioPath: string) =>
         ipcRenderer.invoke("file:getAudioPlaybackSource", audioPath) as Promise<AudioPlaybackSource>,
     listSongs: (options?: SongLibrarySearchOptions) =>

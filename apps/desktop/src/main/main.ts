@@ -3,10 +3,12 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
+import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { SaveSongAnalysisRequest, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
+import type { VocalRemovalResult } from "@gcd/shared/vocals";
 
 import { AnalysisCache, resolveAnalysisCachePath } from "./analysisCache.js";
-import { analyzeAudioInEngine, transcribeLyricsInEngine } from "./engineProcess.js";
+import { analyzeAudioInEngine, pitchShiftAudioInEngine, removeVocalsInEngine, transcribeLyricsInEngine } from "./engineProcess.js";
 import { buildAudioFileDialogOptions, toFileSelectionResult } from "./fileDialog.js";
 import { SongLibraryStore, resolveSongLibraryPath } from "./songLibrary.js";
 import { buildMainWindowOptions } from "./window.js";
@@ -24,6 +26,15 @@ interface AnalyzeAudioRequest {
 interface GenerateLyricsRequest {
     audioPath: string;
     model?: string;
+}
+
+interface RemoveVocalsRequest {
+    audioPath: string;
+}
+
+interface PitchShiftAudioRequest {
+    audioPath: string;
+    semitones: number;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -76,6 +87,21 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:generateLyrics", async (_event, request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> => {
         return await transcribeLyricsInEngine(request.audioPath, { appPath: app.getAppPath() }, normalizeLyricsModel(request.model));
     });
+    ipcMain.handle("engine:removeVocals", async (_event, request: RemoveVocalsRequest): Promise<VocalRemovalResult> => {
+        return await removeVocalsInEngine(
+            request.audioPath,
+            path.resolve(app.getPath("userData"), "vocal-removal"),
+            { appPath: app.getAppPath() }
+        );
+    });
+    ipcMain.handle("engine:pitchShiftAudio", async (_event, request: PitchShiftAudioRequest): Promise<PitchShiftResult> => {
+        return await pitchShiftAudioInEngine(
+            request.audioPath,
+            path.resolve(app.getPath("userData"), "pitch-shift"),
+            normalizeTransposeSemitones(request.semitones),
+            { appPath: app.getAppPath() }
+        );
+    });
     ipcMain.handle("library:saveAnalysis", async (_event, request: SaveSongAnalysisRequest) => {
         const metadata = normalizeSongMetadata(request.metadata);
         if (!metadata) {
@@ -87,7 +113,8 @@ function registerIpcHandlers(): void {
             contractVersion: ANALYSIS_CONTRACT_VERSION,
             analysis: request.analysis,
             metadata,
-            lyrics: request.lyrics
+            lyrics: request.lyrics,
+            instrumentalAudioPath: request.instrumentalAudioPath
         });
     });
     ipcMain.handle("library:listSongs", async (_event, options?: SongLibrarySearchOptions) => {
@@ -147,6 +174,13 @@ function normalizeSongMetadata(metadata: SongMetadataInput): SongMetadataInput |
 function normalizeLyricsModel(model: string | undefined): string {
     const allowedModels = new Set(["tiny", "base", "small", "medium", "large"]);
     return model && allowedModels.has(model) ? model : "small";
+}
+
+function normalizeTransposeSemitones(semitones: number): number {
+    if (!Number.isFinite(semitones)) {
+        return 0;
+    }
+    return Math.max(-11, Math.min(11, Math.trunc(semitones)));
 }
 
 async function bootstrap(): Promise<void> {

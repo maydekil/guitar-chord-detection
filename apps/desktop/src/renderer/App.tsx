@@ -3,6 +3,8 @@ import type { MouseEvent } from "react";
 import type { ChordAnalysisSuccess, ChordSegment } from "@gcd/shared/analysis";
 import type { SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
+import type { PitchShiftResult } from "@gcd/shared/pitch";
+import type { VocalRemovalResult } from "@gcd/shared/vocals";
 
 type ShellState = "idle" | "loading-file" | "analyzing" | "ready" | "playing" | "paused" | "error";
 type ViewMode = "library" | "detail";
@@ -36,12 +38,20 @@ export function App() {
     const [lyricsText, setLyricsText] = useState<string>("");
     const [isGeneratingLyrics, setIsGeneratingLyrics] = useState<boolean>(false);
     const [lyricsModel, setLyricsModel] = useState<LyricsModel>("small");
+    const [isVocalHidden, setIsVocalHidden] = useState<boolean>(false);
+    const [isRemovingVocals, setIsRemovingVocals] = useState<boolean>(false);
+    const [instrumentalAudioPath, setInstrumentalAudioPath] = useState<string | null>(null);
+    const [isUsingInstrumentalAudio, setIsUsingInstrumentalAudio] = useState<boolean>(false);
+    const [isPitchShiftingAudio, setIsPitchShiftingAudio] = useState<boolean>(false);
     const activeRequestIdRef = useRef<number>(0);
+    const activePitchShiftRequestIdRef = useRef<number>(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const activeBlobUrlRef = useRef<string | null>(null);
     const timelineRef = useRef<HTMLElement | null>(null);
     const lyricsPreviewRef = useRef<HTMLDivElement | null>(null);
     const workspaceRef = useRef<HTMLDivElement | null>(null);
+    const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
+    const audioFadeTimerRef = useRef<number | null>(null);
     const bridge = window.gcd;
 
     useEffect(() => {
@@ -104,6 +114,10 @@ export function App() {
 
     useEffect(() => {
         return () => {
+            if (audioFadeTimerRef.current !== null) {
+                window.clearInterval(audioFadeTimerRef.current);
+                audioFadeTimerRef.current = null;
+            }
             if (activeBlobUrlRef.current) {
                 if (typeof URL.revokeObjectURL === "function") {
                     URL.revokeObjectURL(activeBlobUrlRef.current);
@@ -212,6 +226,8 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setLyricsText("");
+            setInstrumentalAudioPath(null);
             setAnalysisStatus("No analysis yet");
         }
 
@@ -280,6 +296,7 @@ export function App() {
         setTransposeSemitones(0);
         setDetectorTab("timeline");
         setLyricsText("");
+        setInstrumentalAudioPath(null);
         setViewMode("detail");
     };
 
@@ -294,6 +311,7 @@ export function App() {
         setTransposeSemitones(0);
         setDetectorTab("timeline");
         setLyricsText(song.lyrics ?? "");
+        setInstrumentalAudioPath(song.instrumentalAudioPath ?? null);
 
         let playbackSourceUrl: string;
         if (bridge?.getAudioPlaybackSource) {
@@ -358,7 +376,8 @@ export function App() {
             audioPath: selectedFilePath,
             analysis: latestAnalysis,
             metadata,
-            lyrics: lyricsText
+            lyrics: lyricsText,
+            instrumentalAudioPath: instrumentalAudioPath ?? undefined
         });
         setSelectedSongId(savedSong.id);
         setSongTitle(savedSong.title);
@@ -432,6 +451,7 @@ export function App() {
             setSongTitle("");
             setSongArtist("");
             setLyricsText("");
+            setInstrumentalAudioPath(null);
             setAnalysisStatus("Deleted from Song Library.");
             setState("idle");
             setViewMode("library");
@@ -457,6 +477,8 @@ export function App() {
         setIsMediaReady(false);
         setDurationSeconds(0);
         setCurrentTimeSeconds(0);
+        setIsVocalHidden(false);
+        setIsUsingInstrumentalAudio(false);
     };
 
     const handlePlay = async (): Promise<void> => {
@@ -487,6 +509,14 @@ export function App() {
         audio.pause();
     };
 
+    const handleTogglePlayback = async (): Promise<void> => {
+        if (isPlaying) {
+            handlePause();
+            return;
+        }
+        await handlePlay();
+    };
+
     const handleSeek = (value: number): void => {
         const audio = audioRef.current;
         if (!audio) {
@@ -496,6 +526,199 @@ export function App() {
         const safeValue = Math.max(0, Math.min(value, durationSeconds || value));
         audio.currentTime = safeValue;
         setCurrentTimeSeconds(safeValue);
+    };
+
+    const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
+        const safeSemitones = Math.max(-11, Math.min(11, Math.trunc(nextSemitones)));
+        setTransposeSemitones(safeSemitones);
+        await applyTransposeAudio(safeSemitones);
+    };
+
+    const applyTransposeAudio = async (semitones: number): Promise<void> => {
+        const baseAudioPath = isUsingInstrumentalAudio ? instrumentalAudioPath : selectedFilePath;
+        if (!baseAudioPath || !bridge?.getAudioPlaybackSource) {
+            return;
+        }
+
+        const requestId = activePitchShiftRequestIdRef.current + 1;
+        activePitchShiftRequestIdRef.current = requestId;
+        setIsPitchShiftingAudio(semitones !== 0);
+        setAnalysisStatus(semitones === 0 ? "Transpose reset." : `Rendering transpose audio ${formatTranspose(semitones)}...`);
+
+        let playbackPath = baseAudioPath;
+        if (semitones !== 0) {
+            if (!bridge.pitchShiftAudio) {
+                setIsPitchShiftingAudio(false);
+                setAnalysisStatus("Pitch shift API belum tersedia. Restart aplikasi lalu coba lagi.");
+                return;
+            }
+
+            let result: PitchShiftResult;
+            try {
+                result = await bridge.pitchShiftAudio(baseAudioPath, { semitones });
+            } catch {
+                setIsPitchShiftingAudio(false);
+                setAnalysisStatus("Gagal menyesuaikan transpose audio.");
+                return;
+            }
+            if (requestId !== activePitchShiftRequestIdRef.current) {
+                return;
+            }
+            if ("error" in result) {
+                setIsPitchShiftingAudio(false);
+                setAnalysisStatus(result.error.message);
+                return;
+            }
+            playbackPath = result.audio.path;
+        }
+
+        try {
+            const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
+            if (requestId !== activePitchShiftRequestIdRef.current) {
+                return;
+            }
+            const audio = audioRef.current;
+            const previousTime = audio?.currentTime ?? currentTimeSeconds;
+            const wasPlaying = state === "playing";
+            await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+            setAnalysisStatus(semitones === 0 ? "Transpose reset." : `Audio transposed ${formatTranspose(semitones)}.`);
+        } catch {
+            setAnalysisStatus("Gagal memuat audio transpose.");
+        } finally {
+            if (requestId === activePitchShiftRequestIdRef.current) {
+                setIsPitchShiftingAudio(false);
+            }
+        }
+    };
+
+    const handleToggleVocalHide = async (): Promise<void> => {
+        if (isUsingInstrumentalAudio) {
+            await handleUseOriginalAudio();
+            return;
+        }
+
+        if (instrumentalAudioPath) {
+            await handleUseInstrumentalAudio(instrumentalAudioPath, "Karaoke audio enabled.");
+            return;
+        }
+        if (!selectedFilePath) {
+            setAnalysisStatus("Open audio dulu sebelum Vocal Off.");
+            return;
+        }
+        if (!bridge?.removeVocals || !bridge?.getAudioPlaybackSource) {
+            setAnalysisStatus("Vocal Off API belum tersedia. Restart aplikasi lalu coba lagi.");
+            return;
+        }
+
+        setIsRemovingVocals(true);
+        setAnalysisStatus("Preparing Vocal Off...");
+        let result: VocalRemovalResult;
+        try {
+            result = await bridge.removeVocals(selectedFilePath);
+        } catch {
+            setIsRemovingVocals(false);
+            setAnalysisStatus("Vocal Off gagal dibuat.");
+            return;
+        }
+        setIsRemovingVocals(false);
+
+        if ("error" in result) {
+            setAnalysisStatus(result.error.message);
+            return;
+        }
+
+        setInstrumentalAudioPath(result.audio.path);
+        await handleUseInstrumentalAudio(result.audio.path, "Vocal Off ready.");
+    };
+
+    const handleUseInstrumentalAudio = async (audioPath: string, statusMessage: string): Promise<void> => {
+        if (!bridge?.getAudioPlaybackSource) {
+            return;
+        }
+
+        const audio = audioRef.current;
+        const previousTime = audio?.currentTime ?? currentTimeSeconds;
+        const wasPlaying = state === "playing";
+        let playbackPath = audioPath;
+        if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
+            const shifted = await bridge.pitchShiftAudio(audioPath, { semitones: transposeSemitones });
+            if (!("error" in shifted)) {
+                playbackPath = shifted.audio.path;
+            }
+        }
+        const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
+        await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+        setIsUsingInstrumentalAudio(true);
+        setIsVocalHidden(true);
+        setAnalysisStatus(statusMessage);
+    };
+
+    const handleUseOriginalAudio = async (): Promise<void> => {
+        if (!selectedFilePath || !bridge?.getAudioPlaybackSource) {
+            return;
+        }
+
+        const audio = audioRef.current;
+        const previousTime = audio?.currentTime ?? currentTimeSeconds;
+        const wasPlaying = state === "playing";
+        let playbackPath = selectedFilePath;
+        if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
+            const shifted = await bridge.pitchShiftAudio(selectedFilePath, { semitones: transposeSemitones });
+            if (!("error" in shifted)) {
+                playbackPath = shifted.audio.path;
+            }
+        }
+        const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
+        await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+        setIsUsingInstrumentalAudio(false);
+        setIsVocalHidden(false);
+        setAnalysisStatus("Original audio restored.");
+    };
+
+    const replaceAudioSource = async (nextSourceUrl: string, seekTime: number, autoplay: boolean): Promise<void> => {
+        const audio = audioRef.current;
+        const previousBlobUrl = activeBlobUrlRef.current;
+        if (audio) {
+            await fadeAudioVolume(audio, 0, 150);
+        }
+        pendingAudioSwitchRef.current = {
+            time: Math.max(0, seekTime),
+            autoplay,
+            fadeIn: true
+        };
+        setIsMediaReady(false);
+        setState("paused");
+        setAudioSourceUrl(nextSourceUrl);
+        activeBlobUrlRef.current = nextSourceUrl.startsWith("blob:") ? nextSourceUrl : null;
+        if (previousBlobUrl && previousBlobUrl !== nextSourceUrl && typeof URL.revokeObjectURL === "function") {
+            URL.revokeObjectURL(previousBlobUrl);
+        }
+    };
+
+    const fadeAudioVolume = (audio: HTMLAudioElement, targetVolume: number, durationMs: number): Promise<void> => {
+        if (audioFadeTimerRef.current !== null) {
+            window.clearInterval(audioFadeTimerRef.current);
+            audioFadeTimerRef.current = null;
+        }
+
+        const startVolume = Number.isFinite(audio.volume) ? audio.volume : 1;
+        const safeTargetVolume = Math.max(0, Math.min(1, targetVolume));
+        const startedAt = window.performance.now();
+
+        return new Promise((resolve) => {
+            audioFadeTimerRef.current = window.setInterval(() => {
+                const progress = Math.min(1, (window.performance.now() - startedAt) / Math.max(1, durationMs));
+                audio.volume = startVolume + (safeTargetVolume - startVolume) * progress;
+                if (progress >= 1) {
+                    if (audioFadeTimerRef.current !== null) {
+                        window.clearInterval(audioFadeTimerRef.current);
+                        audioFadeTimerRef.current = null;
+                    }
+                    audio.volume = safeTargetVolume;
+                    resolve();
+                }
+            }, 16);
+        });
     };
 
     const handlePanelResizeStart = (event: MouseEvent<HTMLDivElement>): void => {
@@ -674,11 +897,23 @@ export function App() {
                                     const nextDuration = Number.isFinite(event.currentTarget.duration)
                                         ? Math.max(0, event.currentTarget.duration)
                                         : 0;
+                                    const pendingSwitch = pendingAudioSwitchRef.current;
+                                    if (pendingSwitch) {
+                                        event.currentTarget.volume = pendingSwitch.fadeIn ? 0 : 1;
+                                        event.currentTarget.currentTime = Math.min(pendingSwitch.time, nextDuration || pendingSwitch.time);
+                                        pendingAudioSwitchRef.current = null;
+                                    }
                                     if (nextDuration > 0) {
                                         setDurationSeconds(nextDuration);
                                     }
                                     setIsMediaReady(nextDuration > 0);
                                     setCurrentTimeSeconds(event.currentTarget.currentTime || 0);
+                                    if (pendingSwitch?.autoplay) {
+                                        void event.currentTarget.play();
+                                    }
+                                    if (pendingSwitch?.fadeIn) {
+                                        void fadeAudioVolume(event.currentTarget, 1, 220);
+                                    }
                                 }}
                                 onTimeUpdate={(event) => {
                                     if (!isMediaReady && event.currentTarget.currentTime > 0) {
@@ -713,11 +948,18 @@ export function App() {
                             </div>
                             <div className="transport-strip">
                                 <div className="playback-row" aria-label="playback controls">
-                                    <button type="button" onClick={() => void handlePlay()} disabled={!canUsePlayback || isPlaying}>
-                                        Play
+                                    <button type="button" onClick={() => void handleTogglePlayback()} disabled={!canUsePlayback}>
+                                        <span aria-hidden="true">{isPlaying ? "II" : "▶"}</span>
+                                        {isPlaying ? "Pause" : "Play"}
                                     </button>
-                                    <button type="button" onClick={handlePause} disabled={!canUsePlayback || !isPlaying}>
-                                        Pause
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleToggleVocalHide()}
+                                        disabled={!canUsePlayback || isRemovingVocals}
+                                        aria-pressed={isUsingInstrumentalAudio}
+                                    >
+                                        <span aria-hidden="true">{isUsingInstrumentalAudio ? "◼" : "♪"}</span>
+                                        {isRemovingVocals ? "Preparing..." : isUsingInstrumentalAudio ? "Vocal: Off" : "Vocal: On"}
                                     </button>
                                     <p className="time-label" aria-live="polite">
                                         {formatTime(currentTimeSeconds)} / {formatTime(durationSeconds)}
@@ -727,7 +969,8 @@ export function App() {
                                     <span>Transpose</span>
                                     <button
                                         type="button"
-                                        onClick={() => setTransposeSemitones((current) => Math.max(-11, current - 1))}
+                                        onClick={() => void handleSetTranspose(transposeSemitones - 1)}
+                                        disabled={isPitchShiftingAudio}
                                         aria-label="Transpose down"
                                     >
                                         -
@@ -735,14 +978,21 @@ export function App() {
                                     <strong>{formatTranspose(transposeSemitones)}</strong>
                                     <button
                                         type="button"
-                                        onClick={() => setTransposeSemitones((current) => Math.min(11, current + 1))}
+                                        onClick={() => void handleSetTranspose(transposeSemitones + 1)}
+                                        disabled={isPitchShiftingAudio}
                                         aria-label="Transpose up"
                                     >
                                         +
                                     </button>
-                                    <button type="button" onClick={() => setTransposeSemitones(0)}>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleSetTranspose(0)}
+                                        disabled={isPitchShiftingAudio}
+                                    >
+                                        <span aria-hidden="true">↺</span>
                                         Reset
                                     </button>
+                                    {isPitchShiftingAudio ? <small>Rendering audio...</small> : null}
                                 </div>
                             </div>
                             <input

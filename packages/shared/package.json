@@ -9,7 +9,9 @@
         ".": "./src/index.ts",
         "./analysis": "./src/analysis.ts",
         "./library": "./src/library.ts",
-        "./lyrics": "./src/lyrics.ts"
+        "./lyrics": "./src/lyrics.ts",
+        "./vocals": "./src/vocals.ts",
+        "./pitch": "./src/pitch.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit -p tsconfig.json"

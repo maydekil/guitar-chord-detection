@@ -6,6 +6,7 @@ export interface SongLibraryRecord {
     artist: string;
     audioPath: string;
     lyrics?: string;
+    instrumentalAudioPath?: string;
     fileHash: string;
     algorithm: string;
     contractVersion: string;
@@ -29,6 +30,7 @@ export interface SaveSongAnalysisRequest {
     metadata: SongMetadataInput;
     analysis: ChordAnalysisSuccess;
     lyrics?: string;
+    instrumentalAudioPath?: string;
 }
 
 export interface DeleteSongResult {

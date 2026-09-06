@@ -16,6 +16,7 @@ interface UpsertSongAnalysisOptions {
     analysis: ChordAnalysisSuccess;
     metadata: SongMetadataInput;
     lyrics?: string;
+    instrumentalAudioPath?: string;
 }
 
 interface SongLibraryDependencies {
@@ -85,6 +86,7 @@ export class SongLibraryStore {
             artist,
             audioPath: managedAudioPath,
             lyrics: options.lyrics ?? existing?.lyrics ?? "",
+            instrumentalAudioPath: options.instrumentalAudioPath ?? existing?.instrumentalAudioPath,
             fileHash,
             algorithm: options.algorithm,
             contractVersion: options.contractVersion,
@@ -114,6 +116,16 @@ export class SongLibraryStore {
         } catch (error) {
             if (!isMissingFileError(error)) {
                 console.error("[library] failed to delete managed audio file", error);
+            }
+        }
+
+        if (existing.instrumentalAudioPath) {
+            try {
+                await this.deps.unlink(existing.instrumentalAudioPath);
+            } catch (error) {
+                if (!isMissingFileError(error)) {
+                    console.error("[library] failed to delete instrumental audio file", error);
+                }
             }
         }
 

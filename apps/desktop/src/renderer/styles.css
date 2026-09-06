@@ -382,6 +382,9 @@ body {
 }
 
 .transpose-controls button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     border: 1px solid var(--line);
     border-radius: 7px;
     padding: 0.22rem 0.45rem;
@@ -397,6 +400,13 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+.transpose-controls small {
+    color: #6b7374;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 audio[data-testid="audio-player"] {
     display: none;
 }
@@ -409,12 +419,27 @@ audio[data-testid="audio-player"] {
 }
 
 .playback-row button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
     border: 1px solid var(--line);
     background: #fffdf8;
     border-radius: 8px;
     padding: 0.28rem 0.58rem;
     font-weight: 600;
     font-size: 0.86rem;
+}
+
+.playback-row button span {
+    min-width: 0.9rem;
+    text-align: center;
+    font-size: 0.82rem;
+    line-height: 1;
+}
+
+.playback-row button[aria-pressed="true"] {
+    background: #263238;
+    color: #fffaf1;
 }
 
 .time-label {

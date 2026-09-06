@@ -17,6 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 lyrics = ["openai-whisper>=20231117"]
+vocals = ["demucs>=4.0.1"]
 
 [tool.setuptools]
 package-dir = {"" = "."}
