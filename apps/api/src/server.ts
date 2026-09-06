@@ -241,76 +241,20 @@ function listSongs(url: URL): SongLibraryListResult {
     const pageSize = normalizePageSize(Number.parseInt(url.searchParams.get("pageSize") ?? "10", 10));
     const offset = (page - 1) * pageSize;
     const countStatement = query
-        ? database.prepare(`
-            WITH latest_songs AS (
-                SELECT *
-                FROM songs
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM songs newer
-                    WHERE newer.file_hash = songs.file_hash
-                        AND (
-                            newer.updated_at > songs.updated_at
-                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
-                        )
-                )
-            )
-            SELECT COUNT(*) AS total
-            FROM latest_songs
-            WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
-        `)
-        : database.prepare(`
-            SELECT COUNT(*) AS total
-            FROM songs
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM songs newer
-                WHERE newer.file_hash = songs.file_hash
-                    AND (
-                        newer.updated_at > songs.updated_at
-                        OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
-                    )
-            )
-        `);
+        ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
+        : database.prepare("SELECT COUNT(*) AS total FROM songs");
     const total = query
         ? (countStatement.get(`%${query}%`) as { total: number }).total
         : (countStatement.get() as { total: number }).total;
     const rows = query
         ? database.prepare(`
-            WITH latest_songs AS (
-                SELECT *
-                FROM songs
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM songs newer
-                    WHERE newer.file_hash = songs.file_hash
-                        AND (
-                            newer.updated_at > songs.updated_at
-                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
-                        )
-                )
-            )
             SELECT *
-            FROM latest_songs
+            FROM songs
             WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
             ORDER BY updated_at DESC
             LIMIT ? OFFSET ?
         `).all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
-        : database.prepare(`
-            SELECT *
-            FROM songs
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM songs newer
-                WHERE newer.file_hash = songs.file_hash
-                    AND (
-                        newer.updated_at > songs.updated_at
-                        OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
-                    )
-            )
-            ORDER BY updated_at DESC
-            LIMIT ? OFFSET ?
-        `).all(pageSize, offset) as unknown as SongRow[];
+        : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(pageSize, offset) as unknown as SongRow[];
 
     return {
         records: rows.map(rowToRecord),
@@ -920,6 +864,32 @@ function initializeDatabase(db: DatabaseSync): void {
             updated_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_engine_jobs_updated_at ON engine_jobs(updated_at);
+    `);
+    cleanupDuplicateSongRows(db);
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_file_hash_unique ON songs(file_hash);");
+}
+
+function cleanupDuplicateSongRows(db: DatabaseSync): void {
+    db.exec(`
+        DELETE FROM songs
+        WHERE EXISTS (
+            SELECT 1
+            FROM songs newer
+            WHERE newer.file_hash = songs.file_hash
+                AND (
+                    newer.updated_at > songs.updated_at
+                    OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                )
+        );
+
+        UPDATE songs
+        SET id = 'song:' || file_hash
+        WHERE id <> 'song:' || file_hash
+            AND NOT EXISTS (
+                SELECT 1
+                FROM songs existing
+                WHERE existing.id = 'song:' || songs.file_hash
+            );
     `);
 }
 
