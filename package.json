@@ -5,6 +5,7 @@
     "packageManager": "pnpm@11.7.0",
     "scripts": {
         "dev": "pnpm --filter @gcd/desktop run dev",
+        "api": "pnpm --filter @gcd/api run dev",
         "build": "pnpm --filter @gcd/shared run typecheck && pnpm --filter @gcd/desktop run build",
         "test": "pnpm --filter @gcd/desktop run test",
         "lint": "echo 'Phase 0 bootstrap: lint script not implemented yet'",
@@ -12,6 +13,7 @@
         "typecheck:recursive": "pnpm -r run typecheck"
     },
     "devDependencies": {
+        "@types/node": "^24.13.3",
         "typescript": "^7.0.2"
     }
 }
