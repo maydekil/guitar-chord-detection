@@ -74,7 +74,7 @@ export interface DesktopApi {
     getSong?(id: string): Promise<SongLibraryRecord | null>;
     saveSongAnalysis?(request: SaveSongAnalysisRequest): Promise<SongLibraryRecord>;
     deleteSong?(id: string): Promise<DeleteSongResult>;
-    getSongExportUrl?(id: string, format: "txt" | "lrc"): Promise<SongExportUrlResult>;
+    getSongExportUrl?(id: string, format: "txt" | "lrc", transpose?: number): Promise<SongExportUrlResult>;
     cancelApiJob?(id: string): Promise<unknown>;
     onApiJobProgress?(listener: (event: ApiJobProgressEvent) => void): () => void;
 }
@@ -105,8 +105,8 @@ const desktopApi: DesktopApi = {
     saveSongAnalysis: (request: SaveSongAnalysisRequest) =>
         ipcRenderer.invoke("library:saveAnalysis", request) as Promise<SongLibraryRecord>,
     deleteSong: (id: string) => ipcRenderer.invoke("library:deleteSong", id) as Promise<DeleteSongResult>,
-    getSongExportUrl: (id: string, format: "txt" | "lrc") =>
-        ipcRenderer.invoke("library:getExportUrl", { id, format }) as Promise<SongExportUrlResult>,
+    getSongExportUrl: (id: string, format: "txt" | "lrc", transpose?: number) =>
+        ipcRenderer.invoke("library:getExportUrl", { id, format, transpose }) as Promise<SongExportUrlResult>,
     cancelApiJob: (id: string) => ipcRenderer.invoke("engine:cancelApiJob", id) as Promise<unknown>,
     onApiJobProgress: (listener: (event: ApiJobProgressEvent) => void) => {
         const channelListener = (_event: IpcRendererEvent, payload: ApiJobProgressEvent): void => {

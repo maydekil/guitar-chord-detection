@@ -682,7 +682,7 @@ export function App() {
         }
 
         if (isApiMode && bridge?.getSongExportUrl) {
-            const result = await bridge.getSongExportUrl(selectedSongId, format);
+            const result = await bridge.getSongExportUrl(selectedSongId, format, transposeSemitones);
             if (result.url) {
                 triggerDownload(result.url);
                 setAnalysisStatus(`Export ${format.toUpperCase()} ready.`);
@@ -691,8 +691,8 @@ export function App() {
         }
 
         const content = format === "lrc"
-            ? buildLocalLrcExport(lyricsText, timelineSegments)
-            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, timelineSegments, lyricsText);
+            ? buildLocalLrcExport(lyricsText, timelineSegments, transposeSemitones)
+            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, timelineSegments, lyricsText, transposeSemitones);
         triggerDownload(
             URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" })),
             `${safeDownloadName(songArtist)}-${safeDownloadName(songTitle)}.${format}`
@@ -2393,28 +2393,81 @@ function buildLocalChordSheetExport(
     title: string,
     durationSeconds: number,
     segments: ChordSegment[],
-    lyrics: string
+    lyrics: string,
+    transposeSemitones: number
 ): string {
     const lines = [
         `${artist || "Unknown Artist"} - ${title || "Untitled"}`,
         `Duration: ${formatPreciseTime(durationSeconds)}`,
-        "",
-        "Chords:",
-        ...segments.map((segment) => `${formatPreciseTime(segment.start)} - ${formatPreciseTime(segment.end)}  ${segment.chord}`)
+        `Transpose: ${formatTranspose(transposeSemitones)}`,
+        ""
     ];
 
     if (lyrics.trim()) {
-        lines.push("", "Lyrics:", lyrics.trim());
+        lines.push("Chord Sheet:");
+        lines.push(...buildChordOverLyricLines(parseLyrics(lyrics), segments, transposeSemitones));
+        lines.push("");
+        lines.push("Timeline:");
+    } else {
+        lines.push("Timeline:");
     }
+
+    lines.push(...segments.map((segment) => (
+        `${formatPreciseTime(segment.start)} - ${formatPreciseTime(segment.end)}  ${transposeChordLabel(segment.chord, transposeSemitones)}`
+    )));
 
     return `${lines.join("\n")}\n`;
 }
 
-function buildLocalLrcExport(lyrics: string, segments: ChordSegment[]): string {
+function buildLocalLrcExport(lyrics: string, segments: ChordSegment[], transposeSemitones: number): string {
     if (lyrics.trim()) {
-        return `${lyrics.trim()}\n`;
+        return `${buildChordTaggedLrcLines(parseLyrics(lyrics), segments, transposeSemitones).join("\n")}\n`;
     }
-    return `${segments.map((segment) => `[${formatPreciseTime(segment.start)}]${segment.chord}`).join("\n")}\n`;
+    return `${segments.map((segment) => `[${formatPreciseTime(segment.start)}]${transposeChordLabel(segment.chord, transposeSemitones)}`).join("\n")}\n`;
+}
+
+function buildChordOverLyricLines(lines: LyricLine[], segments: ChordSegment[], transposeSemitones: number): string[] {
+    const output: string[] = [];
+    for (const [index, line] of lines.entries()) {
+        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
+        if (line.time === null) {
+            output.push("");
+            output.push(line.text);
+            continue;
+        }
+        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        output.push(renderChordLineAboveLyric(line.text, markers));
+        output.push(line.text);
+    }
+    return output;
+}
+
+function buildChordTaggedLrcLines(lines: LyricLine[], segments: ChordSegment[], transposeSemitones: number): string[] {
+    return lines.map((line, index) => {
+        if (line.time === null) {
+            return line.text;
+        }
+        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
+        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const chordTags = markers.length > 0 ? `${markers.map((marker) => `[${marker.label}]`).join("")} ` : "";
+        return `[${formatPreciseTime(line.time)}]${chordTags}${line.text}`;
+    });
+}
+
+function renderChordLineAboveLyric(text: string, markers: LyricChordMarker[]): string {
+    if (markers.length === 0) {
+        return "";
+    }
+    const width = Math.max(24, text.length);
+    const chars = Array.from({ length: width }, () => " ");
+    for (const marker of markers) {
+        const position = Math.min(width - 1, Math.max(0, Math.round((marker.left / 100) * Math.max(1, width - 1))));
+        const label = marker.label;
+        for (let index = 0; index < label.length && position + index < chars.length; index += 1) {
+            chars[position + index] = label[index] ?? " ";
+        }
+    }
+    return chars.join("").trimEnd();
 }
 
 function safeDownloadName(value: string): string {

@@ -288,12 +288,16 @@ function registerIpcHandlers(): void {
 
         return await getSongLibrary().deleteSong(id);
     });
-    ipcMain.handle("library:getExportUrl", (_event, request: { id: string; format: "txt" | "lrc" }) => {
+    ipcMain.handle("library:getExportUrl", (_event, request: { id: string; format: "txt" | "lrc"; transpose?: number }) => {
         if (!apiBaseUrl) {
             return { url: null };
         }
+        const params = new URLSearchParams({
+            format: request.format,
+            transpose: String(normalizeTransposeSemitones(request.transpose ?? 0))
+        });
         return {
-            url: buildApiUrl(`songs/${encodeURIComponent(request.id)}/export?format=${encodeURIComponent(request.format)}`)
+            url: buildApiUrl(`songs/${encodeURIComponent(request.id)}/export?${params.toString()}`)
         };
     });
     ipcMain.handle("engine:cancelApiJob", async (_event, id: string) => {

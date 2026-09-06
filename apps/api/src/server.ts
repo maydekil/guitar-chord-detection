@@ -51,6 +51,16 @@ interface PitchShiftAudioRequest {
     semitones: number;
 }
 
+interface LyricLine {
+    time: number | null;
+    text: string;
+}
+
+interface LyricChordMarker {
+    label: string;
+    left: number;
+}
+
 interface EngineCommandOptions {
     timeoutMs: number;
     env?: NodeJS.ProcessEnv;
@@ -192,7 +202,12 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
 
     const exportMatch = /^\/songs\/([^/]+)\/export$/.exec(url.pathname);
     if (exportMatch && method === "GET") {
-        exportSong(response, decodeURIComponent(exportMatch[1]), url.searchParams.get("format") ?? "txt");
+        exportSong(
+            response,
+            decodeURIComponent(exportMatch[1]),
+            url.searchParams.get("format") ?? "txt",
+            normalizeTransposeSemitones(Number.parseInt(url.searchParams.get("transpose") ?? "0", 10))
+        );
         return;
     }
 
@@ -398,7 +413,7 @@ async function streamAudioFile(request: http.IncomingMessage, response: http.Ser
     createReadStream(audioPath).pipe(response);
 }
 
-function exportSong(response: http.ServerResponse, id: string, format: string): void {
+function exportSong(response: http.ServerResponse, id: string, format: string, transposeSemitones: number): void {
     const song = getSong(id);
     if (!song) {
         sendJson(response, 404, { message: "Song not found" });
@@ -406,7 +421,7 @@ function exportSong(response: http.ServerResponse, id: string, format: string): 
     }
 
     const safeFormat = format === "lrc" ? "lrc" : "txt";
-    const content = safeFormat === "lrc" ? buildLrcExport(song) : buildChordSheetExport(song);
+    const content = safeFormat === "lrc" ? buildLrcExport(song, transposeSemitones) : buildChordSheetExport(song, transposeSemitones);
     const fileName = `${safeFileName(song.artist)}-${safeFileName(song.title)}.${safeFormat}`;
 
     response.writeHead(200, {
@@ -416,32 +431,158 @@ function exportSong(response: http.ServerResponse, id: string, format: string): 
     response.end(content);
 }
 
-function buildChordSheetExport(song: SongLibraryRecord): string {
+function buildChordSheetExport(song: SongLibraryRecord, transposeSemitones: number): string {
     const lines = [
         `${song.artist} - ${song.title}`,
         `Duration: ${formatExportTime(song.duration)}`,
-        "",
-        "Chords:",
-        ...song.analysis.analysis.chords.map((segment) => (
-            `${formatExportTime(segment.start)} - ${formatExportTime(segment.end)}  ${segment.chord}`
-        ))
+        `Transpose: ${formatTranspose(transposeSemitones)}`,
+        ""
     ];
 
     if (song.lyrics?.trim()) {
-        lines.push("", "Lyrics:", song.lyrics.trim());
+        lines.push("Chord Sheet:");
+        lines.push(...buildChordOverLyricLines(parseLyrics(song.lyrics), song.analysis.analysis.chords, transposeSemitones));
+        lines.push("");
+        lines.push("Timeline:");
+    } else {
+        lines.push("Timeline:");
     }
+
+    lines.push(...song.analysis.analysis.chords.map((segment) => (
+        `${formatExportTime(segment.start)} - ${formatExportTime(segment.end)}  ${transposeChordLabel(segment.chord, transposeSemitones)}`
+    )));
 
     return `${lines.join("\n")}\n`;
 }
 
-function buildLrcExport(song: SongLibraryRecord): string {
+function buildLrcExport(song: SongLibraryRecord, transposeSemitones: number): string {
     if (song.lyrics?.trim()) {
-        return `${song.lyrics.trim()}\n`;
+        return `${buildChordTaggedLrcLines(parseLyrics(song.lyrics), song.analysis.analysis.chords, transposeSemitones).join("\n")}\n`;
     }
 
     return `${song.analysis.analysis.chords.map((segment) => (
-        `[${formatExportTime(segment.start)}]${segment.chord}`
+        `[${formatExportTime(segment.start)}]${transposeChordLabel(segment.chord, transposeSemitones)}`
     )).join("\n")}\n`;
+}
+
+function buildChordOverLyricLines(
+    lines: LyricLine[],
+    segments: SongLibraryRecord["analysis"]["analysis"]["chords"],
+    transposeSemitones: number
+): string[] {
+    const output: string[] = [];
+    for (const [index, line] of lines.entries()) {
+        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
+        if (line.time === null) {
+            output.push("");
+            output.push(line.text);
+            continue;
+        }
+        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        output.push(renderChordLineAboveLyric(line.text, markers));
+        output.push(line.text);
+    }
+    return output;
+}
+
+function buildChordTaggedLrcLines(
+    lines: LyricLine[],
+    segments: SongLibraryRecord["analysis"]["analysis"]["chords"],
+    transposeSemitones: number
+): string[] {
+    return lines.map((line, index) => {
+        if (line.time === null) {
+            return line.text;
+        }
+        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
+        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const chordTags = markers.length > 0 ? `${markers.map((marker) => `[${marker.label}]`).join("")} ` : "";
+        return `[${formatExportTime(line.time)}]${chordTags}${line.text}`;
+    });
+}
+
+function buildLyricChordMarkers(
+    segments: SongLibraryRecord["analysis"]["analysis"]["chords"],
+    startTime: number,
+    endTime: number,
+    transposeSemitones: number
+): LyricChordMarker[] {
+    const safeEndTime = Math.max(startTime + 0.25, endTime);
+    const windowDuration = safeEndTime - startTime;
+    const markers: LyricChordMarker[] = [];
+    const openingChord = findActiveChord(segments, startTime);
+
+    if (openingChord) {
+        markers.push({
+            label: transposeChordLabel(openingChord, transposeSemitones),
+            left: 0
+        });
+    }
+
+    for (const segment of segments) {
+        if (segment.start <= startTime || segment.start >= safeEndTime) {
+            continue;
+        }
+        const label = transposeChordLabel(segment.chord, transposeSemitones);
+        const previous = markers[markers.length - 1];
+        if (previous?.label === label) {
+            continue;
+        }
+        markers.push({
+            label,
+            left: Math.min(92, Math.max(0, ((segment.start - startTime) / windowDuration) * 100))
+        });
+    }
+
+    return markers;
+}
+
+function renderChordLineAboveLyric(text: string, markers: LyricChordMarker[]): string {
+    if (markers.length === 0) {
+        return "";
+    }
+    const width = Math.max(24, text.length);
+    const chars = Array.from({ length: width }, () => " ");
+    for (const marker of markers) {
+        const position = Math.min(width - 1, Math.max(0, Math.round((marker.left / 100) * Math.max(1, width - 1))));
+        for (let index = 0; index < marker.label.length && position + index < chars.length; index += 1) {
+            chars[position + index] = marker.label[index] ?? " ";
+        }
+    }
+    return chars.join("").trimEnd();
+}
+
+function parseLyrics(lyrics: string): LyricLine[] {
+    return lyrics
+        .split(/\r?\n/)
+        .map((rawLine) => rawLine.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => {
+            const match = /^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/.exec(line);
+            if (!match) {
+                return { time: null, text: line };
+            }
+
+            const minutes = Number.parseInt(match[1], 10);
+            const seconds = Number.parseInt(match[2], 10);
+            const fraction = match[3] ? Number.parseFloat(`0.${match[3]}`) : 0;
+            const time = minutes * 60 + seconds + fraction;
+            if (!Number.isFinite(time) || seconds >= 60) {
+                return { time: null, text: line };
+            }
+
+            return {
+                time,
+                text: match[4].trim()
+            };
+        });
+}
+
+function findActiveChord(segments: SongLibraryRecord["analysis"]["analysis"]["chords"], currentTimeSeconds: number): string | null {
+    if (!Number.isFinite(currentTimeSeconds)) {
+        return null;
+    }
+    return segments.find((segment) => segment.start <= currentTimeSeconds && currentTimeSeconds < segment.end)?.chord ?? null;
 }
 
 async function saveUploadedAudio(request: http.IncomingMessage, url: URL): Promise<{ audioPath: string; audioStreamUrl: string; fileHash: string }> {
@@ -976,6 +1117,38 @@ function normalizeTransposeSemitones(semitones: number): number {
         return 0;
     }
     return Math.max(-11, Math.min(11, Math.trunc(semitones)));
+}
+
+const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+
+function formatTranspose(semitones: number): string {
+    if (semitones === 0) {
+        return "0";
+    }
+    return semitones > 0 ? `+${semitones}` : `${semitones}`;
+}
+
+function transposeChordLabel(chord: string, semitones: number): string {
+    if (chord === "N" || semitones === 0) {
+        return chord;
+    }
+
+    const match = /^(C#|D#|F#|G#|A#|C|D|E|F|G|A|B)(.*)$/.exec(chord);
+    if (!match) {
+        return chord;
+    }
+
+    const rootIndex = SHARP_ROOTS.indexOf(match[1] as (typeof SHARP_ROOTS)[number]);
+    if (rootIndex < 0) {
+        return chord;
+    }
+
+    const nextIndex = modulo(rootIndex + semitones, SHARP_ROOTS.length);
+    return `${SHARP_ROOTS[nextIndex]}${match[2]}`;
+}
+
+function modulo(value: number, divisor: number): number {
+    return ((value % divisor) + divisor) % divisor;
 }
 
 async function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {
