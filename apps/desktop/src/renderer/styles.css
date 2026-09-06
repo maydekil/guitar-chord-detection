@@ -1093,7 +1093,7 @@ input[type="range"] {
     box-shadow: inset 0 0 0 2px #243036;
 }
 
-.timeline-segment-label {
+.timeline-segment-label-wrap {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -1117,7 +1117,11 @@ input[type="range"] {
     text-overflow: ellipsis;
 }
 
-.timeline-segment-label small {
+.timeline-segment-label {
+    color: inherit;
+}
+
+.timeline-segment-label-wrap small {
     margin-top: 0.08rem;
     color: rgba(42, 49, 52, 0.6);
     font-size: 0.54rem;
@@ -1125,8 +1129,8 @@ input[type="range"] {
     line-height: 1;
 }
 
-.timeline-segment[data-active="true"] .timeline-segment-label small,
-.timeline-segment[data-selected="true"] .timeline-segment-label small {
+.timeline-segment[data-active="true"] .timeline-segment-label-wrap small,
+.timeline-segment[data-selected="true"] .timeline-segment-label-wrap small {
     color: rgba(42, 49, 52, 0.78);
 }
 

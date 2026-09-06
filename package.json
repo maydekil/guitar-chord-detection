@@ -8,6 +8,7 @@
         "api": "pnpm --filter @gcd/api run dev",
         "build": "pnpm --filter @gcd/shared run typecheck && pnpm --filter @gcd/desktop run build",
         "test": "pnpm --filter @gcd/desktop run test",
+        "engine:eval": "cd engine && ../.venv/bin/python -m chord_engine.cli evaluate-set eval_sets/sr-banyak-cerita.json --baseline eval_outputs/baseline.json --output eval_outputs/latest.json",
         "lint": "echo 'Phase 0 bootstrap: lint script not implemented yet'",
         "typecheck": "pnpm --filter @gcd/desktop run typecheck && pnpm --filter @gcd/shared run typecheck",
         "typecheck:recursive": "pnpm -r run typecheck"

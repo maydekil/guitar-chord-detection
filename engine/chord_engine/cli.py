@@ -10,6 +10,7 @@ from chord_engine.analyze import CONTRACT_VERSION, AnalysisError, analyze_audio
 from chord_engine.evaluation import EvaluationError, evaluate_against_ground_truth
 from chord_engine.lyrics import LyricsError, transcribe_lyrics
 from chord_engine.pitch import PitchShiftError, pitch_shift_audio
+from chord_engine.regression import RegressionEvaluationError, evaluate_regression_set
 from chord_engine.vocals import VocalRemovalError, remove_vocals
 
 
@@ -40,6 +41,11 @@ def _build_parser() -> argparse.ArgumentParser:
 	eval_parser.add_argument("--clip-start", default=None)
 	eval_parser.add_argument("--clip-end", default=None)
 
+	eval_set_parser = subparsers.add_parser("evaluate-set")
+	eval_set_parser.add_argument("manifest_path")
+	eval_set_parser.add_argument("--baseline", default=None)
+	eval_set_parser.add_argument("--output", default=None)
+
 	return parser
 
 
@@ -66,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
 			clip_start=args.clip_start,
 			clip_end=args.clip_end,
 		)
+	if args.command == "evaluate-set":
+		return _run_evaluate_set(args.manifest_path, baseline_path=args.baseline, output_path=args.output)
 
 	parser.print_usage(sys.stderr)
 	return 2
@@ -177,6 +185,26 @@ def _run_evaluate_ground_truth(
 			_print_json(exc.to_dict())
 		else:
 			_print_json(exc.to_dict(version=CONTRACT_VERSION))
+		return 1
+
+
+def _run_evaluate_set(
+	manifest_path: str,
+	*,
+	baseline_path: str | None,
+	output_path: str | None,
+) -> int:
+	try:
+		payload = evaluate_regression_set(manifest_path, baseline_path=baseline_path)
+		if output_path:
+			from pathlib import Path
+
+			Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+			Path(output_path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+		_print_json(payload)
+		return 0 if payload.get("status") == "pass" else 1
+	except RegressionEvaluationError as exc:
+		_print_json(exc.to_dict(version=CONTRACT_VERSION))
 		return 1
 	except Exception as exc:  # pragma: no cover - boundary safeguard
 		print(f"Unexpected CLI failure: {exc}", file=sys.stderr)

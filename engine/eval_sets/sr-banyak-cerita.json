@@ -1,0 +1,27 @@
+{
+  "name": "SR Banyak Cerita smoke/regression set",
+  "samples": [
+    {
+      "name": "Album Lama",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
+      "expectedKey": "A",
+      "allowedChords": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim", "N"],
+      "minSegments": 100,
+      "maxSegments": 210,
+      "minAverageConfidence": 0.16,
+      "maxLowConfidencePercent": 100,
+      "maxTransitionsPerMinute": 42
+    },
+    {
+      "name": "Foto Kita Berdua",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
+      "expectedKey": "C",
+      "allowedChords": ["C", "Dm", "Em", "F", "G", "Am", "Bdim", "N"],
+      "minSegments": 100,
+      "maxSegments": 210,
+      "minAverageConfidence": 0.16,
+      "maxLowConfidencePercent": 100,
+      "maxTransitionsPerMinute": 42
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "failedSampleCount": 0,
+  "manifestPath": "eval_sets/sr-banyak-cerita.json",
+  "sampleCount": 2,
+  "samples": [
+    {
+      "algorithm": "chroma-template-v10",
+      "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
+      "averageConfidence": 0.189,
+      "duration": 282.68,
+      "failures": [],
+      "keyEstimate": "A",
+      "longSegments": [],
+      "lowConfidencePercent": 100.0,
+      "name": "Album Lama",
+      "segmentCount": 154,
+      "status": "pass",
+      "topChords": [
+        {
+          "chord": "A",
+          "duration": 82.27,
+          "percentage": 29.1
+        },
+        {
+          "chord": "E",
+          "duration": 57.26,
+          "percentage": 20.26
+        },
+        {
+          "chord": "C#m",
+          "duration": 54.03,
+          "percentage": 19.11
+        },
+        {
+          "chord": "Bm",
+          "duration": 33.23,
+          "percentage": 11.75
+        },
+        {
+          "chord": "D",
+          "duration": 30.53,
+          "percentage": 10.8
+        },
+        {
+          "chord": "F#m",
+          "duration": 25.36,
+          "percentage": 8.97
+        }
+      ],
+      "transitionsPerMinute": 32.47
+    },
+    {
+      "algorithm": "chroma-template-v10",
+      "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
+      "averageConfidence": 0.2,
+      "duration": 289.12,
+      "failures": [],
+      "keyEstimate": "C",
+      "longSegments": [
+        {
+          "chord": "C",
+          "confidence": 0.206,
+          "duration": 9.08,
+          "end": 145.5,
+          "start": 136.42
+        },
+        {
+          "chord": "C",
+          "confidence": 0.202,
+          "duration": 8.2,
+          "end": 245.83,
+          "start": 237.63
+        }
+      ],
+      "lowConfidencePercent": 100.0,
+      "name": "Foto Kita Berdua",
+      "segmentCount": 153,
+      "status": "pass",
+      "topChords": [
+        {
+          "chord": "C",
+          "duration": 109.1,
+          "percentage": 37.73
+        },
+        {
+          "chord": "G",
+          "duration": 57.63,
+          "percentage": 19.93
+        },
+        {
+          "chord": "Em",
+          "duration": 51.78,
+          "percentage": 17.91
+        },
+        {
+          "chord": "F",
+          "duration": 39.52,
+          "percentage": 13.67
+        },
+        {
+          "chord": "Am",
+          "duration": 19.34,
+          "percentage": 6.69
+        },
+        {
+          "chord": "Dm",
+          "duration": 11.75,
+          "percentage": 4.06
+        }
+      ],
+      "transitionsPerMinute": 31.54
+    }
+  ],
+  "status": "pass",
+  "version": "1"
+}

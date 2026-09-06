@@ -2156,8 +2156,8 @@ function renderTimeline(
                                     }}
                                 >
                                     {showLabel ? (
-                                        <span className="timeline-segment-label">
-                                            <span>{displayedLabel}</span>
+                                        <span className="timeline-segment-label-wrap">
+                                            <span className="timeline-segment-label">{displayedLabel}</span>
                                             <small>{confidencePercent}%</small>
                                         </span>
                                     ) : null}
@@ -2189,10 +2189,10 @@ function chordConfidenceLevel(confidence: number): "high" | "medium" | "low" {
     if (!Number.isFinite(confidence)) {
         return "low";
     }
-    if (confidence >= 0.78) {
+    if (confidence >= 0.22) {
         return "high";
     }
-    if (confidence >= 0.55) {
+    if (confidence >= 0.17) {
         return "medium";
     }
     return "low";
