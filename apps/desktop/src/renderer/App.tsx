@@ -1140,37 +1140,41 @@ export function App() {
                 <div className="shell-title-row">
                     <h1>Guitar Chord Detector</h1>
                     <span className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</span>
-                    <button
-                        type="button"
-                        className="api-settings-toggle"
-                        onClick={() => setIsApiSettingsOpen((current) => !current)}
-                        aria-expanded={isApiSettingsOpen}
-                    >
-                        ⚙ API
-                    </button>
+                    <span className="api-settings-menu">
+                        <button
+                            type="button"
+                            className="api-settings-toggle"
+                            onClick={() => setIsApiSettingsOpen((current) => !current)}
+                            aria-expanded={isApiSettingsOpen}
+                        >
+                            ⚙ API
+                        </button>
+                        {isApiSettingsOpen ? (
+                            <section className="api-settings-panel" aria-label="API settings">
+                                <label>
+                                    <span>API URL</span>
+                                    <input
+                                        type="url"
+                                        value={draftApiBaseUrl}
+                                        onChange={(event) => setDraftApiBaseUrl(event.currentTarget.value)}
+                                        placeholder="Kosongkan untuk Local Mode"
+                                    />
+                                </label>
+                                <div className="api-settings-actions">
+                                    <button type="button" onClick={() => void handleTestApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
+                                        {isTestingApiConfig ? "Testing..." : "Test"}
+                                    </button>
+                                    <button type="button" onClick={() => void handleSaveApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
+                                        {isSavingApiConfig ? "Saving..." : "Save"}
+                                    </button>
+                                </div>
+                                <small>{apiSettingsStatus || (apiBaseUrl ? `Current: ${apiBaseUrl}` : "Current: Local Mode")}</small>
+                            </section>
+                        ) : null}
+                    </span>
                 </div>
                 <p className="shell-meta">Desktop Shell v{version}</p>
             </header>
-            {isApiSettingsOpen ? (
-                <section className="api-settings-panel" aria-label="API settings">
-                    <label>
-                        <span>API URL</span>
-                        <input
-                            type="url"
-                            value={draftApiBaseUrl}
-                            onChange={(event) => setDraftApiBaseUrl(event.currentTarget.value)}
-                            placeholder="Kosongkan untuk Local Mode"
-                        />
-                    </label>
-                    <button type="button" onClick={() => void handleTestApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
-                        {isTestingApiConfig ? "Testing..." : "Test"}
-                    </button>
-                    <button type="button" onClick={() => void handleSaveApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
-                        {isSavingApiConfig ? "Saving..." : "Save"}
-                    </button>
-                    <small>{apiSettingsStatus || (apiBaseUrl ? `Current: ${apiBaseUrl}` : "Current: Local Mode")}</small>
-                </section>
-            ) : null}
 
             <div className="workspace-panels" ref={workspaceRef}>
                 <section
