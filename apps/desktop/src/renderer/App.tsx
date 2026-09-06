@@ -2127,6 +2127,8 @@ function renderTimeline(
                         {row.fragments.map(({ segmentIndex, segment, fragmentStart, fragmentEnd, leftPercent, widthPercent, showLabel, labelText }, index) => {
                             const displayedChord = transposeChordLabel(segment.chord, transposeSemitones);
                             const displayedLabel = transposeChordLabel(labelText, transposeSemitones);
+                            const confidencePercent = Math.round(segment.confidence * 100);
+                            const confidenceLevel = chordConfidenceLevel(segment.confidence);
                             return (
                                 <button
                                     key={`${row.rowIndex}-${segment.start}-${segment.end}-${segment.chord}-${fragmentStart}-${fragmentEnd}-${index}`}
@@ -2137,11 +2139,12 @@ function renderTimeline(
                                     data-show-label={showLabel ? "true" : "false"}
                                     data-fragment-start={fragmentStart}
                                     data-fragment-end={fragmentEnd}
+                                    data-confidence={confidenceLevel}
                                     data-selected={selectedSegmentIndex === segmentIndex ? "true" : "false"}
                                     data-active={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
                                     aria-current={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
-                                    aria-label={`${displayedChord} from ${formatTime(fragmentStart)} to ${formatTime(fragmentEnd)}`}
-                                    title={`${displayedChord} (${Math.round(segment.confidence * 100)}%)`}
+                                    aria-label={`${displayedChord} from ${formatTime(fragmentStart)} to ${formatTime(fragmentEnd)}, confidence ${confidencePercent}%`}
+                                    title={`${displayedChord} confidence ${confidencePercent}%`}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         onSelectSegment(segmentIndex);
@@ -2152,7 +2155,12 @@ function renderTimeline(
                                         width: `${widthPercent}%`
                                     }}
                                 >
-                                    {showLabel ? <span className="timeline-segment-label">{displayedLabel}</span> : null}
+                                    {showLabel ? (
+                                        <span className="timeline-segment-label">
+                                            <span>{displayedLabel}</span>
+                                            <small>{confidencePercent}%</small>
+                                        </span>
+                                    ) : null}
                                 </button>
                             );
                         })}
@@ -2175,6 +2183,19 @@ function timelineClickTime(
     const ratio = offset / width;
     const target = rowStart + ratio * rowDuration;
     return Math.max(0, Math.min(target, durationSeconds));
+}
+
+function chordConfidenceLevel(confidence: number): "high" | "medium" | "low" {
+    if (!Number.isFinite(confidence)) {
+        return "low";
+    }
+    if (confidence >= 0.78) {
+        return "high";
+    }
+    if (confidence >= 0.55) {
+        return "medium";
+    }
+    return "low";
 }
 
 function buildTimelineRows(

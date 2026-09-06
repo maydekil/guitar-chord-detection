@@ -1044,6 +1044,38 @@ input[type="range"] {
     overflow: hidden;
 }
 
+.timeline-segment::after {
+    content: "";
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(35, 111, 73, 0.82);
+    box-shadow: 0 0 0 2px rgba(255, 253, 248, 0.42);
+}
+
+.timeline-segment[data-confidence="medium"] {
+    background:
+        linear-gradient(180deg, rgba(255, 241, 207, 0.24), rgba(198, 106, 43, 0.08)),
+        linear-gradient(180deg, #f1c898 0%, #da9656 100%);
+}
+
+.timeline-segment[data-confidence="medium"]::after {
+    background: rgba(189, 118, 31, 0.9);
+}
+
+.timeline-segment[data-confidence="low"] {
+    background:
+        repeating-linear-gradient(135deg, rgba(255, 253, 248, 0.12) 0 7px, transparent 7px 14px),
+        linear-gradient(180deg, #eab886 0%, #cf814f 100%);
+}
+
+.timeline-segment[data-confidence="low"]::after {
+    background: rgba(159, 53, 42, 0.95);
+}
+
 .timeline-segment[data-chord="N"] {
     background: linear-gradient(180deg, #d9dddf 0%, #bcc4c9 100%);
     color: #394448;
@@ -1066,6 +1098,7 @@ input[type="range"] {
     inset: 0;
     z-index: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     min-width: 0;
@@ -1082,6 +1115,19 @@ input[type="range"] {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.timeline-segment-label small {
+    margin-top: 0.08rem;
+    color: rgba(42, 49, 52, 0.6);
+    font-size: 0.54rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.timeline-segment[data-active="true"] .timeline-segment-label small,
+.timeline-segment[data-selected="true"] .timeline-segment-label small {
+    color: rgba(42, 49, 52, 0.78);
 }
 
 @media (max-width: 680px) {
