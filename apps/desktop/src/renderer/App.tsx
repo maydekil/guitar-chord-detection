@@ -54,6 +54,7 @@ export function App() {
     const [songArtist, setSongArtist] = useState<string>("");
     const [latestAnalysis, setLatestAnalysis] = useState<ChordAnalysisSuccess | null>(null);
     const [isSaveFormOpen, setIsSaveFormOpen] = useState<boolean>(false);
+    const [hasUnsavedChordEdits, setHasUnsavedChordEdits] = useState<boolean>(false);
     const [transposeSemitones, setTransposeSemitones] = useState<number>(0);
     const [detectorTab, setDetectorTab] = useState<DetectorTab>("timeline");
     const [lyricsText, setLyricsText] = useState<string>("");
@@ -261,7 +262,7 @@ export function App() {
         }
     };
 
-    const commitTimelineSegments = (segments: ChordSegment[]): void => {
+    const commitTimelineSegments = (segments: ChordSegment[], options?: { markDirty?: boolean }): void => {
         const normalized = normalizeTimelineSegments(segments, durationSeconds);
         setTimelineSegments(normalized);
         setAnalysisSegmentCount(normalized.length);
@@ -274,6 +275,9 @@ export function App() {
                 }
             }
             : current);
+        if (options?.markDirty) {
+            setHasUnsavedChordEdits(true);
+        }
     };
 
     const runAnalysis = async (audioPath: string, options?: { forceRefresh?: boolean }): Promise<void> => {
@@ -283,6 +287,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -292,6 +297,7 @@ export function App() {
         setTimelineSegments([]);
         setLatestAnalysis(null);
         setIsSaveFormOpen(false);
+        setHasUnsavedChordEdits(false);
         setAnalysisStatus(isApiMode ? "Uploading audio and analyzing on API server..." : "Analyzing...");
 
         const requestId = activeRequestIdRef.current + 1;
@@ -311,6 +317,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -325,6 +332,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -338,6 +346,7 @@ export function App() {
         setTimelineSegments(normalizedTimelineSegments);
         setSelectedSegmentIndex(null);
         setEditingChord("");
+        setHasUnsavedChordEdits(false);
         setDurationSeconds(analysisDuration);
         setCurrentTimeSeconds(0);
         setAnalysisStatus(`Analysis ready: ${segmentCount} segment(s)`);
@@ -369,6 +378,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setLyricsText("");
             setInstrumentalAudioPath(null);
             setInstrumentalAudioStreamUrl(null);
@@ -382,6 +392,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -533,6 +544,7 @@ export function App() {
         setAudioSourceUrl(playbackSourceUrl);
         setLatestAnalysis(song.analysis);
         setIsSaveFormOpen(false);
+        setHasUnsavedChordEdits(false);
         setIsMediaReady(false);
         setDurationSeconds(song.duration);
         setCurrentTimeSeconds(0);
@@ -581,7 +593,8 @@ export function App() {
         setInstrumentalAudioStreamUrl(savedSong.instrumentalAudioStreamUrl ?? null);
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
-        setAnalysisStatus("Saved to Song Library.");
+        setHasUnsavedChordEdits(false);
+        setAnalysisStatus(selectedSongId ? "Saved changes to Song Library." : "Saved to Song Library.");
         await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
     };
 
@@ -649,6 +662,7 @@ export function App() {
             setTimelineSegments([]);
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
+            setHasUnsavedChordEdits(false);
             setSongTitle("");
             setSongArtist("");
             setLyricsText("");
@@ -825,9 +839,9 @@ export function App() {
         const nextSegments = timelineSegments.map((segment, index) => index === selectedSegmentIndex
             ? { ...segment, chord: normalizedChord, confidence: Math.max(segment.confidence, 0.96) }
             : segment);
-        commitTimelineSegments(nextSegments);
+        commitTimelineSegments(nextSegments, { markDirty: true });
         setEditingChord(normalizedChord);
-        setAnalysisStatus(`Chord corrected to ${normalizedChord}.`);
+        setAnalysisStatus(`Chord corrected to ${normalizedChord}. Save to persist.`);
     };
 
     const handleSplitSelectedSegment = (): void => {
@@ -850,10 +864,10 @@ export function App() {
             { ...segment, start: splitTime },
             ...timelineSegments.slice(selectedSegmentIndex + 1)
         ];
-        commitTimelineSegments(nextSegments);
+        commitTimelineSegments(nextSegments, { markDirty: true });
         setSelectedSegmentIndex(selectedSegmentIndex + 1);
         setEditingChord(segment.chord);
-        setAnalysisStatus(`Segment split at ${formatTime(splitTime)}.`);
+        setAnalysisStatus(`Segment split at ${formatTime(splitTime)}. Save to persist.`);
     };
 
     const handleMergeSelectedSegment = (direction: "left" | "right"): void => {
@@ -881,10 +895,10 @@ export function App() {
             merged,
             ...timelineSegments.slice(rightIndex + 1)
         ];
-        commitTimelineSegments(nextSegments);
+        commitTimelineSegments(nextSegments, { markDirty: true });
         setSelectedSegmentIndex(leftIndex);
         setEditingChord(merged.chord);
-        setAnalysisStatus(`Merged segment ${direction}.`);
+        setAnalysisStatus(`Merged segment ${direction}. Save to persist.`);
     };
 
     const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
@@ -1297,11 +1311,17 @@ export function App() {
                                     <button
                                         type="button"
                                         className="open-btn"
-                                        onClick={() => setIsSaveFormOpen(true)}
+                                        onClick={() => {
+                                            if (selectedSongId) {
+                                                void handleSaveAnalysis();
+                                            } else {
+                                                setIsSaveFormOpen(true);
+                                            }
+                                        }}
                                         disabled={!canSaveAnalysis}
-                                        title={canSaveAnalysis ? "Save analysis to Song Library" : "Analyze audio first before saving"}
+                                        title={canSaveAnalysis ? "Save analysis changes to Song Library" : "Analyze audio first before saving"}
                                     >
-                                        Save
+                                        {hasUnsavedChordEdits ? "Save Changes" : "Save"}
                                     </button>
                                     <button
                                         type="button"
@@ -1419,7 +1439,10 @@ export function App() {
                             <div className="detector-summary">
                                 <div>
                                     <p className="file-name" aria-live="polite">{selectedFileName}</p>
-                                    <p className="analysis-label" aria-live="polite">{analysisStatus}</p>
+                                    <p className="analysis-label" aria-live="polite">
+                                        {analysisStatus}
+                                        {hasUnsavedChordEdits ? <span className="unsaved-edits-badge">Unsaved chord edits</span> : null}
+                                    </p>
                                     {apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running") ? (
                                         <div className="job-progress" aria-label="API job progress">
                                             <span>{formatApiJobKind(apiJobProgress.kind)}</span>

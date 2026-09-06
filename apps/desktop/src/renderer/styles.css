@@ -614,6 +614,20 @@ body {
     font-size: 0.86rem;
 }
 
+.unsaved-edits-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.5rem;
+    padding: 0.12rem 0.42rem;
+    border: 1px solid rgba(198, 106, 43, 0.24);
+    border-radius: 999px;
+    background: rgba(198, 106, 43, 0.12);
+    color: #9c521f;
+    font-size: 0.7rem;
+    font-weight: 800;
+    vertical-align: middle;
+}
+
 .active-chord {
     display: inline-flex;
     align-items: baseline;
