@@ -17,6 +17,10 @@ type ApiJobProgressEvent = {
     status: "queued" | "running" | "succeeded" | "failed";
     progress: number;
 };
+type TimelineEditSnapshot = {
+    segments: ChordSegment[];
+    selectedSegmentIndex: number | null;
+};
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
@@ -39,6 +43,8 @@ export function App() {
     const [timelineSegments, setTimelineSegments] = useState<ChordSegment[]>([]);
     const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
     const [editingChord, setEditingChord] = useState<string>("");
+    const [timelineUndoStack, setTimelineUndoStack] = useState<TimelineEditSnapshot[]>([]);
+    const [timelineRedoStack, setTimelineRedoStack] = useState<TimelineEditSnapshot[]>([]);
     const [timelineWidthPx, setTimelineWidthPx] = useState<number>(0);
     const [analysisStatus, setAnalysisStatus] = useState<string>("No analysis yet");
     const [librarySongs, setLibrarySongs] = useState<SongLibraryRecord[]>([]);
@@ -158,6 +164,31 @@ export function App() {
     }, [selectedSegmentIndex]);
 
     useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent): void => {
+            if (viewMode !== "detail" || detectorTab !== "timeline") {
+                return;
+            }
+            const target = event.target;
+            const isTextEditing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+            const isUndo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.shiftKey;
+            const isRedo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && event.shiftKey;
+            if (isUndo && !isTextEditing) {
+                event.preventDefault();
+                handleUndoTimelineEdit();
+            }
+            if (isRedo && !isTextEditing) {
+                event.preventDefault();
+                handleRedoTimelineEdit();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [detectorTab, timelineRedoStack, timelineSegments, timelineUndoStack, viewMode]);
+
+    useEffect(() => {
         const lyricsPreview = lyricsPreviewRef.current;
         if (!lyricsPreview || viewMode !== "detail" || detectorTab !== "lyrics") {
             return;
@@ -262,7 +293,17 @@ export function App() {
         }
     };
 
-    const commitTimelineSegments = (segments: ChordSegment[], options?: { markDirty?: boolean }): void => {
+    const commitTimelineSegments = (segments: ChordSegment[], options?: { markDirty?: boolean; pushHistory?: boolean }): void => {
+        if (options?.pushHistory && timelineSegments.length > 0) {
+            setTimelineUndoStack((current) => [
+                ...current.slice(-24),
+                {
+                    segments: cloneTimelineSegments(timelineSegments),
+                    selectedSegmentIndex
+                }
+            ]);
+            setTimelineRedoStack([]);
+        }
         const normalized = normalizeTimelineSegments(segments, durationSeconds);
         setTimelineSegments(normalized);
         setAnalysisSegmentCount(normalized.length);
@@ -280,6 +321,27 @@ export function App() {
         }
     };
 
+    const restoreTimelineSnapshot = (snapshot: TimelineEditSnapshot): void => {
+        const normalized = normalizeTimelineSegments(snapshot.segments, durationSeconds);
+        setTimelineSegments(normalized);
+        setAnalysisSegmentCount(normalized.length);
+        setLatestAnalysis((current) => current
+            ? {
+                ...current,
+                analysis: {
+                    ...current.analysis,
+                    chords: normalized
+                }
+            }
+            : current);
+        const nextSelectedIndex = snapshot.selectedSegmentIndex !== null && snapshot.selectedSegmentIndex < normalized.length
+            ? snapshot.selectedSegmentIndex
+            : null;
+        setSelectedSegmentIndex(nextSelectedIndex);
+        setEditingChord(nextSelectedIndex === null ? "" : normalized[nextSelectedIndex]?.chord ?? "");
+        setHasUnsavedChordEdits(true);
+    };
+
     const runAnalysis = async (audioPath: string, options?: { forceRefresh?: boolean }): Promise<void> => {
         if (!bridge?.analyzeAudio) {
             setState("error");
@@ -288,6 +350,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -298,6 +362,8 @@ export function App() {
         setLatestAnalysis(null);
         setIsSaveFormOpen(false);
         setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
         setAnalysisStatus(isApiMode ? "Uploading audio and analyzing on API server..." : "Analyzing...");
 
         const requestId = activeRequestIdRef.current + 1;
@@ -318,6 +384,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -333,6 +401,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -347,6 +417,8 @@ export function App() {
         setSelectedSegmentIndex(null);
         setEditingChord("");
         setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
         setDurationSeconds(analysisDuration);
         setCurrentTimeSeconds(0);
         setAnalysisStatus(`Analysis ready: ${segmentCount} segment(s)`);
@@ -379,6 +451,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setLyricsText("");
             setInstrumentalAudioPath(null);
             setInstrumentalAudioStreamUrl(null);
@@ -393,6 +467,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
@@ -545,6 +621,8 @@ export function App() {
         setLatestAnalysis(song.analysis);
         setIsSaveFormOpen(false);
         setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
         setIsMediaReady(false);
         setDurationSeconds(song.duration);
         setCurrentTimeSeconds(0);
@@ -594,6 +672,8 @@ export function App() {
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
         setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
         setAnalysisStatus(selectedSongId ? "Saved changes to Song Library." : "Saved to Song Library.");
         await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
     };
@@ -663,6 +743,8 @@ export function App() {
             setLatestAnalysis(null);
             setIsSaveFormOpen(false);
             setHasUnsavedChordEdits(false);
+            setTimelineUndoStack([]);
+            setTimelineRedoStack([]);
             setSongTitle("");
             setSongArtist("");
             setLyricsText("");
@@ -839,7 +921,7 @@ export function App() {
         const nextSegments = timelineSegments.map((segment, index) => index === selectedSegmentIndex
             ? { ...segment, chord: normalizedChord, confidence: Math.max(segment.confidence, 0.96) }
             : segment);
-        commitTimelineSegments(nextSegments, { markDirty: true });
+        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
         setEditingChord(normalizedChord);
         setAnalysisStatus(`Chord corrected to ${normalizedChord}. Save to persist.`);
     };
@@ -852,9 +934,10 @@ export function App() {
         if (!segment) {
             return;
         }
-        const splitTime = currentTimeSeconds > segment.start + 0.2 && currentTimeSeconds < segment.end - 0.2
+        const rawSplitTime = currentTimeSeconds > segment.start + 0.2 && currentTimeSeconds < segment.end - 0.2
             ? currentTimeSeconds
             : segment.start + ((segment.end - segment.start) / 2);
+        const splitTime = snapSplitTime(rawSplitTime, segment);
         if (splitTime <= segment.start || splitTime >= segment.end) {
             return;
         }
@@ -864,10 +947,10 @@ export function App() {
             { ...segment, start: splitTime },
             ...timelineSegments.slice(selectedSegmentIndex + 1)
         ];
-        commitTimelineSegments(nextSegments, { markDirty: true });
+        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
         setSelectedSegmentIndex(selectedSegmentIndex + 1);
         setEditingChord(segment.chord);
-        setAnalysisStatus(`Segment split at ${formatTime(splitTime)}. Save to persist.`);
+        setAnalysisStatus(`Segment split at ${formatTime(splitTime)} with snap. Save to persist.`);
     };
 
     const handleMergeSelectedSegment = (direction: "left" | "right"): void => {
@@ -895,10 +978,44 @@ export function App() {
             merged,
             ...timelineSegments.slice(rightIndex + 1)
         ];
-        commitTimelineSegments(nextSegments, { markDirty: true });
+        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
         setSelectedSegmentIndex(leftIndex);
         setEditingChord(merged.chord);
         setAnalysisStatus(`Merged segment ${direction}. Save to persist.`);
+    };
+
+    const handleUndoTimelineEdit = (): void => {
+        const previous = timelineUndoStack[timelineUndoStack.length - 1];
+        if (!previous) {
+            return;
+        }
+        setTimelineUndoStack((current) => current.slice(0, -1));
+        setTimelineRedoStack((current) => [
+            ...current.slice(-24),
+            {
+                segments: cloneTimelineSegments(timelineSegments),
+                selectedSegmentIndex
+            }
+        ]);
+        restoreTimelineSnapshot(previous);
+        setAnalysisStatus("Chord edit undone. Save to persist.");
+    };
+
+    const handleRedoTimelineEdit = (): void => {
+        const next = timelineRedoStack[timelineRedoStack.length - 1];
+        if (!next) {
+            return;
+        }
+        setTimelineRedoStack((current) => current.slice(0, -1));
+        setTimelineUndoStack((current) => [
+            ...current.slice(-24),
+            {
+                segments: cloneTimelineSegments(timelineSegments),
+                selectedSegmentIndex
+            }
+        ]);
+        restoreTimelineSnapshot(next);
+        setAnalysisStatus("Chord edit redone. Save to persist.");
     };
 
     const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
@@ -1145,6 +1262,8 @@ export function App() {
     const canSaveAnalysis = Boolean(selectedFilePath) && Boolean(latestAnalysis);
     const canCancelApiJob = Boolean(apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running"));
     const selectedTimelineSegment = selectedSegmentIndex === null ? null : timelineSegments[selectedSegmentIndex] ?? null;
+    const canUndoTimelineEdit = timelineUndoStack.length > 0;
+    const canRedoTimelineEdit = timelineRedoStack.length > 0;
     const activeChord = findActiveChord(timelineSegments, currentTimeSeconds);
     const activeChordLabel = activeChord ? transposeChordLabel(activeChord, transposeSemitones) : "None";
 
@@ -1549,6 +1668,17 @@ export function App() {
                                                     type="text"
                                                     value={editingChord}
                                                     onChange={(event) => setEditingChord(event.currentTarget.value)}
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === "Enter") {
+                                                            event.preventDefault();
+                                                            handleApplyEditedChord();
+                                                        }
+                                                        if (event.key === "Escape") {
+                                                            event.preventDefault();
+                                                            setSelectedSegmentIndex(null);
+                                                            setEditingChord("");
+                                                        }
+                                                    }}
                                                     aria-label="Edit selected chord"
                                                     list="chord-editor-options"
                                                 />
@@ -1573,6 +1703,13 @@ export function App() {
                                                 >
                                                     Merge ›
                                                 </button>
+                                                <button type="button" onClick={handleUndoTimelineEdit} disabled={!canUndoTimelineEdit}>
+                                                    Undo
+                                                </button>
+                                                <button type="button" onClick={handleRedoTimelineEdit} disabled={!canRedoTimelineEdit}>
+                                                    Redo
+                                                </button>
+                                                <small className="chord-editor-shortcuts">Enter apply, Esc cancel, Cmd/Ctrl+Z undo</small>
                                             </>
                                         ) : (
                                             <span>Click chord segment untuk edit, split, atau merge.</span>
@@ -2007,6 +2144,16 @@ function spreadAnchors(anchors: number[], lineCount: number): number[] {
     });
 }
 
+function cloneTimelineSegments(segments: ChordSegment[]): ChordSegment[] {
+    return segments.map((segment) => ({ ...segment }));
+}
+
+function snapSplitTime(rawSplitTime: number, segment: ChordSegment): number {
+    const minEdgePadding = Math.min(0.45, Math.max(0.18, (segment.end - segment.start) * 0.12));
+    const snapped = Math.round(rawSplitTime / SPLIT_SNAP_GRID_SECONDS) * SPLIT_SNAP_GRID_SECONDS;
+    return Math.max(segment.start + minEdgePadding, Math.min(segment.end - minEdgePadding, snapped));
+}
+
 function formatLrcTime(seconds: number): string {
     const safeSeconds = Math.max(0, seconds);
     const minutes = Math.floor(safeSeconds / 60);
@@ -2017,6 +2164,7 @@ function formatLrcTime(seconds: number): string {
 
 const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const EDITABLE_CHORD_OPTIONS = ["N", ...SHARP_ROOTS.flatMap((root) => [root, `${root}m`, `${root}dim`])];
+const SPLIT_SNAP_GRID_SECONDS = 0.5;
 
 function formatTranspose(semitones: number): string {
     if (semitones === 0) {

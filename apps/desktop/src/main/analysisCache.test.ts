@@ -194,21 +194,26 @@ describe("AnalysisCache", () => {
         const audioPath = await createTempAudio("same-content");
         const cachePath = resolveAnalysisCachePath(path.dirname(audioPath));
         await writeFile(cachePath, "not-json", "utf-8");
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => { });
 
         const cache = new AnalysisCache(cachePath);
         const analyze = vi.fn(async () => successResult(audioPath));
 
-        await cache.analyzeWithCache({
-            audioPath,
-            algorithm: "chroma-template-v1",
-            contractVersion: "1",
-            analyze
-        });
+        try {
+            await cache.analyzeWithCache({
+                audioPath,
+                algorithm: "chroma-template-v1",
+                contractVersion: "1",
+                analyze
+            });
 
-        const healed = await readFile(cachePath, "utf-8");
-        const parsed = JSON.parse(healed) as { entries: Record<string, unknown> };
-        expect(parsed.entries).toBeDefined();
-        expect(Object.keys(parsed.entries).length).toBe(1);
+            const healed = await readFile(cachePath, "utf-8");
+            const parsed = JSON.parse(healed) as { entries: Record<string, unknown> };
+            expect(parsed.entries).toBeDefined();
+            expect(Object.keys(parsed.entries).length).toBe(1);
+        } finally {
+            consoleError.mockRestore();
+        }
     });
 
     it("returns analysis result even when cache persistence fails", async () => {

@@ -805,6 +805,12 @@ input[type="range"] {
     opacity: 0.45;
 }
 
+.chord-editor-shortcuts {
+    color: #7b8587;
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
 .timeline-frame {
     flex: 1 1 auto;
     min-height: 0;
