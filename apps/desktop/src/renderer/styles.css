@@ -600,6 +600,86 @@ body {
     color: #3b4547;
 }
 
+.library-song-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.28rem;
+    margin-top: 0.18rem;
+}
+
+.library-song-meta small {
+    border: 1px solid rgba(92, 76, 45, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 250, 241, 0.76);
+    color: #586569;
+    font-size: 0.66rem;
+    font-weight: 800;
+    padding: 0.08rem 0.34rem;
+}
+
+.export-preview {
+    margin: 0.55rem 0 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 253, 248, 0.82);
+    overflow: hidden;
+}
+
+.export-preview-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    padding: 0.55rem 0.65rem;
+    border-bottom: 1px solid rgba(92, 76, 45, 0.12);
+    background: rgba(246, 237, 221, 0.72);
+}
+
+.export-preview-head > div {
+    display: grid;
+    gap: 0.12rem;
+}
+
+.export-preview-head small {
+    color: #687376;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.export-preview-head > div:last-child {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.export-preview button {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 800;
+    padding: 0.26rem 0.48rem;
+}
+
+.export-preview button:first-child {
+    border-color: rgba(143, 87, 42, 0.32);
+    background: var(--accent);
+    color: #fffdf8;
+}
+
+.export-preview pre {
+    max-height: 180px;
+    margin: 0;
+    padding: 0.65rem;
+    overflow: auto;
+    color: #263238;
+    font-family: "SFMono-Regular", "Menlo", monospace;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    white-space: pre;
+}
+
 .state-label {
     margin: 0;
     color: #4d5b5f;

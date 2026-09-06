@@ -11,6 +11,7 @@ type ViewMode = "library" | "detail";
 type DetectorTab = "timeline" | "lyrics";
 type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
 type ApiHealthState = "local" | "checking" | "connected" | "offline";
+type ExportFormat = "txt" | "lrc";
 type ApiJobProgressEvent = {
     id: string;
     kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
@@ -61,6 +62,7 @@ export function App() {
     const [latestAnalysis, setLatestAnalysis] = useState<ChordAnalysisSuccess | null>(null);
     const [isSaveFormOpen, setIsSaveFormOpen] = useState<boolean>(false);
     const [hasUnsavedChordEdits, setHasUnsavedChordEdits] = useState<boolean>(false);
+    const [exportPreviewFormat, setExportPreviewFormat] = useState<ExportFormat | null>(null);
     const [transposeSemitones, setTransposeSemitones] = useState<number>(0);
     const [detectorTab, setDetectorTab] = useState<DetectorTab>("timeline");
     const [lyricsText, setLyricsText] = useState<string>("");
@@ -757,7 +759,15 @@ export function App() {
         await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
     };
 
-    const handleExportSong = async (format: "txt" | "lrc"): Promise<void> => {
+    const handleOpenExportPreview = (format: ExportFormat): void => {
+        if (!selectedSongId || !latestAnalysis) {
+            setAnalysisStatus("Save song dulu sebelum export.");
+            return;
+        }
+        setExportPreviewFormat(format);
+    };
+
+    const handleExportSong = async (format: ExportFormat): Promise<void> => {
         if (!selectedSongId || !latestAnalysis) {
             setAnalysisStatus("Save song dulu sebelum export.");
             return;
@@ -1264,6 +1274,11 @@ export function App() {
     const selectedTimelineSegment = selectedSegmentIndex === null ? null : timelineSegments[selectedSegmentIndex] ?? null;
     const canUndoTimelineEdit = timelineUndoStack.length > 0;
     const canRedoTimelineEdit = timelineRedoStack.length > 0;
+    const exportPreviewContent = exportPreviewFormat === null
+        ? ""
+        : exportPreviewFormat === "lrc"
+            ? buildLocalLrcExport(lyricsText, timelineSegments, transposeSemitones)
+            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, timelineSegments, lyricsText, transposeSemitones);
     const activeChord = findActiveChord(timelineSegments, currentTimeSeconds);
     const activeChordLabel = activeChord ? transposeChordLabel(activeChord, transposeSemitones) : "None";
 
@@ -1350,6 +1365,11 @@ export function App() {
                                         <span>{song.title}</span>
                                         <small className="library-song-artist">{song.artist || "Unknown artist"}</small>
                                         <small>{song.analysis.analysis.chords.length} chords - {formatTime(song.duration)}</small>
+                                        <span className="library-song-meta">
+                                            <small>Key {estimateMajorKey(song.analysis.analysis.chords)}</small>
+                                            <small>Conf {formatAverageConfidence(song.analysis.analysis.chords)}</small>
+                                            <small>{formatShortDate(song.updatedAt)}</small>
+                                        </span>
                                     </button>
                                     <button
                                         type="button"
@@ -1445,18 +1465,18 @@ export function App() {
                                     <button
                                         type="button"
                                         className="open-btn secondary-btn"
-                                        onClick={() => void handleExportSong("txt")}
+                                        onClick={() => handleOpenExportPreview("txt")}
                                         disabled={!selectedSongId}
                                     >
-                                        Export TXT
+                                        Preview TXT
                                     </button>
                                     <button
                                         type="button"
                                         className="open-btn secondary-btn"
-                                        onClick={() => void handleExportSong("lrc")}
+                                        onClick={() => handleOpenExportPreview("lrc")}
                                         disabled={!selectedSongId}
                                     >
-                                        Export LRC
+                                        Preview LRC
                                     </button>
                                 </div>
                                 <p className="state-label">State: {state}</p>
@@ -1494,6 +1514,25 @@ export function App() {
                                         Save to Library
                                     </button>
                                 </form>
+                            ) : null}
+                            {exportPreviewFormat ? (
+                                <section className="export-preview" aria-label="Export preview">
+                                    <div className="export-preview-head">
+                                        <div>
+                                            <strong>{exportPreviewFormat.toUpperCase()} Preview</strong>
+                                            <small>Transpose {formatTranspose(transposeSemitones)} mengikuti nada aktif.</small>
+                                        </div>
+                                        <div>
+                                            <button type="button" onClick={() => void handleExportSong(exportPreviewFormat)}>
+                                                Download
+                                            </button>
+                                            <button type="button" onClick={() => setExportPreviewFormat(null)}>
+                                                Close
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <pre>{exportPreviewContent}</pre>
+                                </section>
                             ) : null}
                             <audio
                                 ref={audioRef}
@@ -2165,6 +2204,20 @@ function formatLrcTime(seconds: number): string {
 const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const EDITABLE_CHORD_OPTIONS = ["N", ...SHARP_ROOTS.flatMap((root) => [root, `${root}m`, `${root}dim`])];
 const SPLIT_SNAP_GRID_SECONDS = 0.5;
+const MAJOR_KEY_CHORDS: Record<string, Set<string>> = {
+    C: new Set(["C", "Dm", "Em", "F", "G", "Am", "Bdim"]),
+    "C#": new Set(["C#", "D#m", "Fm", "F#", "G#", "A#m", "Cdim"]),
+    D: new Set(["D", "Em", "F#m", "G", "A", "Bm", "C#dim"]),
+    "D#": new Set(["D#", "Fm", "Gm", "G#", "A#", "Cm", "Ddim"]),
+    E: new Set(["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"]),
+    F: new Set(["F", "Gm", "Am", "A#", "C", "Dm", "Edim"]),
+    "F#": new Set(["F#", "G#m", "A#m", "B", "C#", "D#m", "Fdim"]),
+    G: new Set(["G", "Am", "Bm", "C", "D", "Em", "F#dim"]),
+    "G#": new Set(["G#", "A#m", "Cm", "C#", "D#", "Fm", "Gdim"]),
+    A: new Set(["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"]),
+    "A#": new Set(["A#", "Cm", "Dm", "D#", "F", "Gm", "Adim"]),
+    B: new Set(["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"])
+};
 
 function formatTranspose(semitones: number): string {
     if (semitones === 0) {
@@ -2194,6 +2247,43 @@ function transposeChordLabel(chord: string, semitones: number): string {
 
 function modulo(value: number, divisor: number): number {
     return ((value % divisor) + divisor) % divisor;
+}
+
+function estimateMajorKey(segments: ChordSegment[]): string {
+    if (segments.length === 0) {
+        return "-";
+    }
+    let bestKey = "-";
+    let bestScore = -1;
+    for (const [key, chords] of Object.entries(MAJOR_KEY_CHORDS)) {
+        const score = segments.reduce((total, segment) => (
+            total + (chords.has(segment.chord) ? Math.max(0, segment.end - segment.start) : 0)
+        ), 0);
+        if (score > bestScore) {
+            bestKey = key;
+            bestScore = score;
+        }
+    }
+    return bestKey;
+}
+
+function formatAverageConfidence(segments: ChordSegment[]): string {
+    if (segments.length === 0) {
+        return "-";
+    }
+    const average = segments.reduce((total, segment) => total + segment.confidence, 0) / segments.length;
+    return `${Math.round(average * 100)}%`;
+}
+
+function formatShortDate(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "No date";
+    }
+    return date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric"
+    });
 }
 
 function normalizeEditableChord(value: string): ChordLabel | null {
