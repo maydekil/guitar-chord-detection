@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { copyFile, mkdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -203,6 +204,7 @@ export class SongLibraryStore {
     }
 
     private cleanupDuplicateRows(database: DatabaseSync): void {
+        this.migrateInvalidFileHashRows(database);
         database.exec(`
             DELETE FROM songs
             WHERE EXISTS (
@@ -222,8 +224,38 @@ export class SongLibraryStore {
                     SELECT 1
                     FROM songs existing
                     WHERE existing.id = 'song:' || songs.file_hash
-                );
+            );
         `);
+    }
+
+    private migrateInvalidFileHashRows(database: DatabaseSync): void {
+        const rows = database.prepare(`
+            SELECT id, audio_path, file_hash
+            FROM songs
+            WHERE file_hash LIKE '/%'
+                OR file_hash LIKE '%.mp3'
+                OR file_hash LIKE '%.wav'
+                OR id LIKE 'song:/%'
+        `).all() as unknown as Array<{ id: string; audio_path: string; file_hash: string }>;
+
+        for (const row of rows) {
+            let fileHash: string;
+            try {
+                fileHash = buildFileHash(readFileSync(row.audio_path));
+            } catch {
+                database.prepare("DELETE FROM songs WHERE id = ?").run(row.id);
+                continue;
+            }
+
+            const nextId = buildSongId(fileHash);
+            const existing = database.prepare("SELECT id FROM songs WHERE (id = ? OR file_hash = ?) AND id <> ?").get(nextId, fileHash, row.id);
+            if (existing) {
+                database.prepare("DELETE FROM songs WHERE id = ?").run(row.id);
+                continue;
+            }
+
+            database.prepare("UPDATE songs SET id = ?, file_hash = ? WHERE id = ?").run(nextId, fileHash, row.id);
+        }
     }
 
     private async migrateLegacyJsonIfNeeded(database: DatabaseSync): Promise<void> {

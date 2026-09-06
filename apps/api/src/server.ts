@@ -1133,6 +1133,7 @@ function initializeDatabase(db: DatabaseSync): void {
 }
 
 function cleanupDuplicateSongRows(db: DatabaseSync): void {
+    migrateInvalidSongFileHashes(db);
     db.exec(`
         DELETE FROM songs
         WHERE EXISTS (
@@ -1154,6 +1155,36 @@ function cleanupDuplicateSongRows(db: DatabaseSync): void {
                 WHERE existing.id = 'song:' || songs.file_hash
             );
     `);
+}
+
+function migrateInvalidSongFileHashes(db: DatabaseSync): void {
+    const rows = db.prepare(`
+        SELECT id, audio_path, file_hash
+        FROM songs
+        WHERE file_hash LIKE '/%'
+            OR file_hash LIKE '%.mp3'
+            OR file_hash LIKE '%.wav'
+            OR id LIKE 'song:/%'
+    `).all() as unknown as Array<{ id: string; audio_path: string; file_hash: string }>;
+
+    for (const row of rows) {
+        let fileHash: string;
+        try {
+            fileHash = createHash("sha256").update(readFileSync(row.audio_path)).digest("hex");
+        } catch {
+            db.prepare("DELETE FROM songs WHERE id = ?").run(row.id);
+            continue;
+        }
+
+        const nextId = buildSongId(fileHash);
+        const existing = db.prepare("SELECT id FROM songs WHERE (id = ? OR file_hash = ?) AND id <> ?").get(nextId, fileHash, row.id);
+        if (existing) {
+            db.prepare("DELETE FROM songs WHERE id = ?").run(row.id);
+            continue;
+        }
+
+        db.prepare("UPDATE songs SET id = ?, file_hash = ? WHERE id = ?").run(nextId, fileHash, row.id);
+    }
 }
 
 function markInterruptedJobs(db: DatabaseSync): void {
