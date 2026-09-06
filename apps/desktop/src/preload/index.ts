@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { IpcRendererEvent } from "electron";
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
 import type { DeleteSongResult, SaveSongAnalysisRequest, SongLibraryListResult, SongLibraryRecord, SongLibrarySearchOptions } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
@@ -42,6 +43,17 @@ export interface ApiStatus {
     healthy: boolean;
 }
 
+export interface ApiJobProgressEvent {
+    id: string;
+    kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
+    status: "queued" | "running" | "succeeded" | "failed";
+    progress: number;
+}
+
+export interface SongExportUrlResult {
+    url: string | null;
+}
+
 export interface DesktopApi {
     getAppVersion(): Promise<string>;
     isApiMode?(): Promise<boolean>;
@@ -56,6 +68,8 @@ export interface DesktopApi {
     getSong?(id: string): Promise<SongLibraryRecord | null>;
     saveSongAnalysis?(request: SaveSongAnalysisRequest): Promise<SongLibraryRecord>;
     deleteSong?(id: string): Promise<DeleteSongResult>;
+    getSongExportUrl?(id: string, format: "txt" | "lrc"): Promise<SongExportUrlResult>;
+    onApiJobProgress?(listener: (event: ApiJobProgressEvent) => void): () => void;
 }
 
 const desktopApi: DesktopApi = {
@@ -81,7 +95,18 @@ const desktopApi: DesktopApi = {
     getSong: (id: string) => ipcRenderer.invoke("library:getSong", id) as Promise<SongLibraryRecord | null>,
     saveSongAnalysis: (request: SaveSongAnalysisRequest) =>
         ipcRenderer.invoke("library:saveAnalysis", request) as Promise<SongLibraryRecord>,
-    deleteSong: (id: string) => ipcRenderer.invoke("library:deleteSong", id) as Promise<DeleteSongResult>
+    deleteSong: (id: string) => ipcRenderer.invoke("library:deleteSong", id) as Promise<DeleteSongResult>,
+    getSongExportUrl: (id: string, format: "txt" | "lrc") =>
+        ipcRenderer.invoke("library:getExportUrl", { id, format }) as Promise<SongExportUrlResult>,
+    onApiJobProgress: (listener: (event: ApiJobProgressEvent) => void) => {
+        const channelListener = (_event: IpcRendererEvent, payload: ApiJobProgressEvent): void => {
+            listener(payload);
+        };
+        ipcRenderer.on("api:jobProgress", channelListener);
+        return () => {
+            ipcRenderer.off("api:jobProgress", channelListener);
+        };
+    }
 };
 
 contextBridge.exposeInMainWorld("gcd", desktopApi);

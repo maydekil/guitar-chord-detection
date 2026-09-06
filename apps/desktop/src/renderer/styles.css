@@ -133,6 +133,43 @@ body {
     color: #4a555b;
 }
 
+.secondary-btn {
+    background: #fffaf1;
+    color: #4a555b;
+}
+
+.job-progress {
+    align-items: center;
+    color: #5d686d;
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.28rem;
+    max-width: 340px;
+}
+
+.job-progress span,
+.job-progress strong {
+    flex: 0 0 auto;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.job-progress-track {
+    background: rgba(36, 48, 54, 0.11);
+    border-radius: 999px;
+    flex: 1 1 auto;
+    height: 6px;
+    overflow: hidden;
+}
+
+.job-progress-track span {
+    background: linear-gradient(90deg, #c16426, #e2a368);
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+    transition: width 180ms ease;
+}
+
 .shell-card {
     border: 1px solid var(--line);
     border-radius: 16px;

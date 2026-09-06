@@ -6,6 +6,7 @@ export interface PitchShiftSuccess {
     };
     audio: {
         path: string;
+        streamUrl?: string;
         format: "wav";
     };
 }

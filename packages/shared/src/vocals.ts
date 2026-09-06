@@ -5,6 +5,7 @@ export interface VocalRemovalSuccess {
     };
     audio: {
         path: string;
+        streamUrl?: string;
         stem: "instrumental";
     };
 }

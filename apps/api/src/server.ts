@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,6 +74,17 @@ interface EngineJob {
     updatedAt: string;
 }
 
+interface EngineJobRow {
+    id: string;
+    kind: string;
+    status: string;
+    progress: number;
+    result_json: string | null;
+    error_json: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
@@ -90,6 +101,7 @@ await mkdir(audioDir, { recursive: true });
 await mkdir(engineOutputDir, { recursive: true });
 const database = new DatabaseSync(path.join(dataDir, "guitar-chord-detection.sqlite"));
 initializeDatabase(database);
+markInterruptedJobs(database);
 const engineJobs = new Map<string, EngineJob>();
 
 const server = http.createServer((request, response) => {
@@ -131,7 +143,7 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
 
     const jobMatch = /^\/jobs\/([^/]+)$/.exec(url.pathname);
     if (jobMatch && method === "GET") {
-        const job = engineJobs.get(decodeURIComponent(jobMatch[1]));
+        const job = getEngineJob(decodeURIComponent(jobMatch[1]));
         if (!job) {
             sendJson(response, 404, { message: "Job not found" });
             return;
@@ -160,6 +172,12 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     if (songMatch && method === "DELETE") {
         const deleted = deleteSong(decodeURIComponent(songMatch[1]));
         sendJson(response, 200, { deleted });
+        return;
+    }
+
+    const exportMatch = /^\/songs\/([^/]+)\/export$/.exec(url.pathname);
+    if (exportMatch && method === "GET") {
+        exportSong(response, decodeURIComponent(exportMatch[1]), url.searchParams.get("format") ?? "txt");
         return;
     }
 
@@ -359,6 +377,52 @@ async function streamAudioFile(request: http.IncomingMessage, response: http.Ser
     createReadStream(audioPath).pipe(response);
 }
 
+function exportSong(response: http.ServerResponse, id: string, format: string): void {
+    const song = getSong(id);
+    if (!song) {
+        sendJson(response, 404, { message: "Song not found" });
+        return;
+    }
+
+    const safeFormat = format === "lrc" ? "lrc" : "txt";
+    const content = safeFormat === "lrc" ? buildLrcExport(song) : buildChordSheetExport(song);
+    const fileName = `${safeFileName(song.artist)}-${safeFileName(song.title)}.${safeFormat}`;
+
+    response.writeHead(200, {
+        "content-disposition": `attachment; filename="${fileName}"`,
+        "content-type": "text/plain; charset=utf-8"
+    });
+    response.end(content);
+}
+
+function buildChordSheetExport(song: SongLibraryRecord): string {
+    const lines = [
+        `${song.artist} - ${song.title}`,
+        `Duration: ${formatExportTime(song.duration)}`,
+        "",
+        "Chords:",
+        ...song.analysis.analysis.chords.map((segment) => (
+            `${formatExportTime(segment.start)} - ${formatExportTime(segment.end)}  ${segment.chord}`
+        ))
+    ];
+
+    if (song.lyrics?.trim()) {
+        lines.push("", "Lyrics:", song.lyrics.trim());
+    }
+
+    return `${lines.join("\n")}\n`;
+}
+
+function buildLrcExport(song: SongLibraryRecord): string {
+    if (song.lyrics?.trim()) {
+        return `${song.lyrics.trim()}\n`;
+    }
+
+    return `${song.analysis.analysis.chords.map((segment) => (
+        `[${formatExportTime(segment.start)}]${segment.chord}`
+    )).join("\n")}\n`;
+}
+
 async function saveUploadedAudio(request: http.IncomingMessage, url: URL): Promise<{ audioPath: string; audioStreamUrl: string; fileHash: string }> {
     const body = await readRawBody(request);
     if (body.length === 0) {
@@ -397,6 +461,7 @@ function createEngineJob(request: EngineJobRequest): EngineJob {
     };
 
     engineJobs.set(job.id, job);
+    persistEngineJob(job);
     void runEngineJob(job, request.payload);
     return toEngineJobSnapshot(job);
 }
@@ -457,10 +522,58 @@ async function executeEngineJob(kind: EngineJobKind, payload: unknown): Promise<
 
 function updateEngineJob(job: EngineJob, patch: Partial<EngineJob>): void {
     Object.assign(job, patch, { updatedAt: new Date().toISOString() });
+    persistEngineJob(job);
 }
 
 function toEngineJobSnapshot(job: EngineJob): EngineJob {
     return { ...job };
+}
+
+function getEngineJob(id: string): EngineJob | null {
+    const memoryJob = engineJobs.get(id);
+    if (memoryJob) {
+        return memoryJob;
+    }
+
+    const row = database.prepare("SELECT * FROM engine_jobs WHERE id = ?").get(id) as EngineJobRow | undefined;
+    return row ? rowToEngineJob(row) : null;
+}
+
+function persistEngineJob(job: EngineJob): void {
+    database.prepare(`
+        INSERT INTO engine_jobs (
+            id, kind, status, progress, result_json, error_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            kind = excluded.kind,
+            status = excluded.status,
+            progress = excluded.progress,
+            result_json = excluded.result_json,
+            error_json = excluded.error_json,
+            updated_at = excluded.updated_at
+    `).run(
+        job.id,
+        job.kind,
+        job.status,
+        job.progress,
+        JSON.stringify(job.result),
+        JSON.stringify(job.error),
+        job.createdAt,
+        job.updatedAt
+    );
+}
+
+function rowToEngineJob(row: EngineJobRow): EngineJob {
+    return {
+        id: row.id,
+        kind: row.kind as EngineJobKind,
+        status: row.status as EngineJobStatus,
+        progress: row.progress,
+        result: row.result_json ? JSON.parse(row.result_json) as unknown : null,
+        error: row.error_json ? JSON.parse(row.error_json) as EngineJob["error"] : null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
 }
 
 async function analyzeAudio(request: AnalyzeAudioRequest): Promise<ChordAnalysisResult> {
@@ -492,7 +605,7 @@ async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalR
         return enginePlaceholder("VOCAL_REMOVAL_INVALID_INPUT", "Audio path is required") satisfies VocalRemovalResult;
     }
 
-    return await runEngineJson<VocalRemovalResult>(
+    const result = await runEngineJson<VocalRemovalResult>(
         ["-m", "chord_engine.cli", "remove-vocals", request.audioPath, "--output-root", path.join(engineOutputDir, "vocal-removal"), "--model", "htdemucs"],
         "VOCAL_REMOVAL",
         {
@@ -505,6 +618,7 @@ async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalR
             }
         }
     );
+    return await withStreamableAudioResult(result);
 }
 
 async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchShiftResult> {
@@ -512,7 +626,7 @@ async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchSh
         return enginePlaceholder("PITCH_SHIFT_INVALID_INPUT", "Audio path is required") satisfies PitchShiftResult;
     }
 
-    return await runEngineJson<PitchShiftResult>(
+    const result = await runEngineJson<PitchShiftResult>(
         [
             "-m",
             "chord_engine.cli",
@@ -526,6 +640,42 @@ async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchSh
         "PITCH_SHIFT",
         { timeoutMs: 5 * 60_000 }
     );
+    return await withStreamableAudioResult(result);
+}
+
+async function withStreamableAudioResult<T extends { audio?: { path: string; streamUrl?: string }; error?: unknown }>(result: T): Promise<T> {
+    if (result.error || !result.audio?.path) {
+        return result;
+    }
+
+    const uploaded = await materializeAudioAsset(result.audio.path);
+    return {
+        ...result,
+        audio: {
+            ...result.audio,
+            path: uploaded.audioPath,
+            streamUrl: uploaded.audioStreamUrl
+        }
+    };
+}
+
+async function materializeAudioAsset(sourcePath: string): Promise<{ audioPath: string; audioStreamUrl: string; fileHash: string }> {
+    const bytes = await readFile(sourcePath);
+    const fileHash = createHash("sha256").update(bytes).digest("hex");
+    const extension = resolveSafeAudioExtension(sourcePath);
+    const audioPath = path.join(audioDir, `${fileHash}${extension}`);
+
+    await writeFile(audioPath, bytes, { flag: "wx" }).catch(async (error: unknown) => {
+        if (!isAlreadyExistsError(error)) {
+            throw error;
+        }
+    });
+
+    return {
+        audioPath,
+        audioStreamUrl: `${publicBaseUrl}/audio/${encodeURIComponent(fileHash)}${extension}/stream`,
+        fileHash
+    };
 }
 
 async function runEngineJson<T extends { version: string; error?: { code: string; message: string } }>(
@@ -607,7 +757,36 @@ function initializeDatabase(db: DatabaseSync): void {
         );
         CREATE INDEX IF NOT EXISTS idx_songs_updated_at ON songs(updated_at);
         CREATE INDEX IF NOT EXISTS idx_songs_title_artist ON songs(title, artist);
+        CREATE TABLE IF NOT EXISTS engine_jobs (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            status TEXT NOT NULL,
+            progress REAL NOT NULL,
+            result_json TEXT,
+            error_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_engine_jobs_updated_at ON engine_jobs(updated_at);
     `);
+}
+
+function markInterruptedJobs(db: DatabaseSync): void {
+    const now = new Date().toISOString();
+    db.prepare(`
+        UPDATE engine_jobs
+        SET status = 'failed',
+            progress = 100,
+            error_json = ?,
+            updated_at = ?
+        WHERE status IN ('queued', 'running')
+    `).run(
+        JSON.stringify({
+            code: "ENGINE_JOB_INTERRUPTED",
+            message: "API server restarted before this job finished"
+        }),
+        now
+    );
 }
 
 function rowToRecord(row: SongRow): SongLibraryRecord {
@@ -691,6 +870,18 @@ function resolveAudioContentType(audioPath: string): string {
         return "audio/wav";
     }
     return "application/octet-stream";
+}
+
+function safeFileName(value: string): string {
+    const safe = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+    return safe || "song";
+}
+
+function formatExportTime(totalSeconds: number): string {
+    const safe = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
+    const minutes = Math.floor(safe / 60);
+    const seconds = safe % 60;
+    return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(2).padStart(5, "0")}`;
 }
 
 function parseRangeHeader(rangeHeader: string | undefined, fileSize: number): { start: number; end: number } | null {

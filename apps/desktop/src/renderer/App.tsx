@@ -11,6 +11,12 @@ type ViewMode = "library" | "detail";
 type DetectorTab = "timeline" | "lyrics";
 type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
 type ApiHealthState = "local" | "checking" | "connected" | "offline";
+type ApiJobProgressEvent = {
+    id: string;
+    kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
+    status: "queued" | "running" | "succeeded" | "failed";
+    progress: number;
+};
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
@@ -48,8 +54,10 @@ export function App() {
     const [isVocalHidden, setIsVocalHidden] = useState<boolean>(false);
     const [isRemovingVocals, setIsRemovingVocals] = useState<boolean>(false);
     const [instrumentalAudioPath, setInstrumentalAudioPath] = useState<string | null>(null);
+    const [instrumentalAudioStreamUrl, setInstrumentalAudioStreamUrl] = useState<string | null>(null);
     const [isUsingInstrumentalAudio, setIsUsingInstrumentalAudio] = useState<boolean>(false);
     const [isPitchShiftingAudio, setIsPitchShiftingAudio] = useState<boolean>(false);
+    const [apiJobProgress, setApiJobProgress] = useState<ApiJobProgressEvent | null>(null);
     const activeRequestIdRef = useRef<number>(0);
     const activePitchShiftRequestIdRef = useRef<number>(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -162,6 +170,19 @@ export function App() {
         } else if (!bridge.isApiMode) {
             setApiHealthState("local");
         }
+    }, [bridge]);
+
+    useEffect(() => {
+        if (!bridge?.onApiJobProgress) {
+            return;
+        }
+
+        return bridge.onApiJobProgress((event) => {
+            setApiJobProgress(event);
+            if (event.status === "queued" || event.status === "running") {
+                setAnalysisStatus(`${formatApiJobKind(event.kind)} ${event.status}: ${Math.round(event.progress)}%`);
+            }
+        });
     }, [bridge]);
 
     useEffect(() => {
@@ -283,6 +304,7 @@ export function App() {
             setIsSaveFormOpen(false);
             setLyricsText("");
             setInstrumentalAudioPath(null);
+            setInstrumentalAudioStreamUrl(null);
             setAnalysisStatus("No analysis yet");
         }
 
@@ -352,6 +374,7 @@ export function App() {
         setDetectorTab("timeline");
         setLyricsText("");
         setInstrumentalAudioPath(null);
+        setInstrumentalAudioStreamUrl(null);
         setViewMode("detail");
     };
 
@@ -366,7 +389,8 @@ export function App() {
         setTransposeSemitones(0);
         setDetectorTab("timeline");
         setLyricsText(song.lyrics ?? "");
-        setInstrumentalAudioPath(song.instrumentalAudioStreamUrl ?? song.instrumentalAudioPath ?? null);
+        setInstrumentalAudioPath(song.instrumentalAudioPath ?? null);
+        setInstrumentalAudioStreamUrl(song.instrumentalAudioStreamUrl ?? null);
 
         let playbackSourceUrl: string;
         if (bridge?.getAudioPlaybackSource) {
@@ -438,7 +462,8 @@ export function App() {
         setSongTitle(savedSong.title);
         setSongArtist(savedSong.artist);
         setSelectedFilePath(savedSong.audioPath);
-        setInstrumentalAudioPath(savedSong.instrumentalAudioPath ?? savedSong.instrumentalAudioStreamUrl ?? null);
+        setInstrumentalAudioPath(savedSong.instrumentalAudioPath ?? null);
+        setInstrumentalAudioStreamUrl(savedSong.instrumentalAudioStreamUrl ?? null);
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
         setAnalysisStatus("Saved to Song Library.");
@@ -509,11 +534,51 @@ export function App() {
             setSongArtist("");
             setLyricsText("");
             setInstrumentalAudioPath(null);
+            setInstrumentalAudioStreamUrl(null);
             setAnalysisStatus("Deleted from Song Library.");
             setState("idle");
             setViewMode("library");
         }
         await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
+    };
+
+    const handleExportSong = async (format: "txt" | "lrc"): Promise<void> => {
+        if (!selectedSongId || !latestAnalysis) {
+            setAnalysisStatus("Save song dulu sebelum export.");
+            return;
+        }
+
+        if (isApiMode && bridge?.getSongExportUrl) {
+            const result = await bridge.getSongExportUrl(selectedSongId, format);
+            if (result.url) {
+                triggerDownload(result.url);
+                setAnalysisStatus(`Export ${format.toUpperCase()} ready.`);
+                return;
+            }
+        }
+
+        const content = format === "lrc"
+            ? buildLocalLrcExport(lyricsText, timelineSegments)
+            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, timelineSegments, lyricsText);
+        triggerDownload(
+            URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" })),
+            `${safeDownloadName(songArtist)}-${safeDownloadName(songTitle)}.${format}`
+        );
+        setAnalysisStatus(`Export ${format.toUpperCase()} ready.`);
+    };
+
+    const triggerDownload = (url: string, fileName?: string): void => {
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        if (fileName) {
+            anchor.download = fileName;
+        }
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        if (url.startsWith("blob:")) {
+            window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
     };
 
     const resetPlaybackState = (): void => {
@@ -632,7 +697,7 @@ export function App() {
                 setAnalysisStatus(result.error.message);
                 return;
             }
-            playbackPath = result.audio.path;
+            playbackPath = result.audio.streamUrl ?? result.audio.path;
         }
 
         try {
@@ -661,7 +726,7 @@ export function App() {
         }
 
         if (instrumentalAudioPath) {
-            await handleUseInstrumentalAudio(instrumentalAudioPath, "Karaoke audio enabled.");
+            await handleUseInstrumentalAudio(instrumentalAudioPath, instrumentalAudioStreamUrl, "Karaoke audio enabled.");
             return;
         }
         if (!selectedFilePath) {
@@ -691,10 +756,11 @@ export function App() {
         }
 
         setInstrumentalAudioPath(result.audio.path);
-        await handleUseInstrumentalAudio(result.audio.path, "Vocal Off ready.");
+        setInstrumentalAudioStreamUrl(result.audio.streamUrl ?? null);
+        await handleUseInstrumentalAudio(result.audio.path, result.audio.streamUrl ?? null, "Vocal Off ready.");
     };
 
-    const handleUseInstrumentalAudio = async (audioPath: string, statusMessage: string): Promise<void> => {
+    const handleUseInstrumentalAudio = async (audioPath: string, audioStreamUrl: string | null, statusMessage: string): Promise<void> => {
         if (!bridge?.getAudioPlaybackSource) {
             return;
         }
@@ -706,10 +772,10 @@ export function App() {
         if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
             const shifted = await bridge.pitchShiftAudio(audioPath, { semitones: transposeSemitones });
             if (!("error" in shifted)) {
-                playbackPath = shifted.audio.path;
+                playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
             }
         }
-        const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
+        const playbackSource = await bridge.getAudioPlaybackSource(transposeSemitones === 0 ? audioStreamUrl ?? playbackPath : playbackPath);
         await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
         setIsUsingInstrumentalAudio(true);
         setIsVocalHidden(true);
@@ -728,7 +794,7 @@ export function App() {
         if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
             const shifted = await bridge.pitchShiftAudio(selectedFilePath, { semitones: transposeSemitones });
             if (!("error" in shifted)) {
-                playbackPath = shifted.audio.path;
+                playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
             }
         }
         const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
@@ -960,6 +1026,22 @@ export function App() {
                                     >
                                         Save
                                     </button>
+                                    <button
+                                        type="button"
+                                        className="open-btn secondary-btn"
+                                        onClick={() => void handleExportSong("txt")}
+                                        disabled={!selectedSongId}
+                                    >
+                                        Export TXT
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="open-btn secondary-btn"
+                                        onClick={() => void handleExportSong("lrc")}
+                                        disabled={!selectedSongId}
+                                    >
+                                        Export LRC
+                                    </button>
                                 </div>
                                 <p className="state-label">State: {state}</p>
                             </div>
@@ -1026,7 +1108,7 @@ export function App() {
                                 onTimeUpdate={(event) => {
                                     const nextTime = event.currentTarget.currentTime || 0;
                                     const pendingSeekTime = pendingSeekTimeRef.current;
-                                    if (pendingSeekTime !== null && Math.abs(nextTime - pendingSeekTime) > 0.35) {
+                                    if (pendingSeekTime !== null && nextTime < pendingSeekTime - 0.35) {
                                         return;
                                     }
                                     if (pendingSeekTime !== null) {
@@ -1061,6 +1143,15 @@ export function App() {
                                 <div>
                                     <p className="file-name" aria-live="polite">{selectedFileName}</p>
                                     <p className="analysis-label" aria-live="polite">{analysisStatus}</p>
+                                    {apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running") ? (
+                                        <div className="job-progress" aria-label="API job progress">
+                                            <span>{formatApiJobKind(apiJobProgress.kind)}</span>
+                                            <div className="job-progress-track">
+                                                <span style={{ width: `${Math.max(5, Math.min(100, apiJobProgress.progress))}%` }} />
+                                            </div>
+                                            <strong>{Math.round(apiJobProgress.progress)}%</strong>
+                                        </div>
+                                    ) : null}
                                 </div>
                                 <p className="active-chord" aria-live="polite" data-testid="active-chord">
                                     Active chord: <span>{activeChordLabel}</span>
@@ -1895,4 +1986,58 @@ function formatApiHealthLabel(state: ApiHealthState): string {
         return "Checking API";
     }
     return "Local Mode";
+}
+
+function formatApiJobKind(kind: ApiJobProgressEvent["kind"]): string {
+    if (kind === "analysis") {
+        return "Analyzing";
+    }
+    if (kind === "lyrics") {
+        return "Lyrics";
+    }
+    if (kind === "vocals") {
+        return "Vocal Off";
+    }
+    return "Transpose";
+}
+
+function buildLocalChordSheetExport(
+    artist: string,
+    title: string,
+    durationSeconds: number,
+    segments: ChordSegment[],
+    lyrics: string
+): string {
+    const lines = [
+        `${artist || "Unknown Artist"} - ${title || "Untitled"}`,
+        `Duration: ${formatPreciseTime(durationSeconds)}`,
+        "",
+        "Chords:",
+        ...segments.map((segment) => `${formatPreciseTime(segment.start)} - ${formatPreciseTime(segment.end)}  ${segment.chord}`)
+    ];
+
+    if (lyrics.trim()) {
+        lines.push("", "Lyrics:", lyrics.trim());
+    }
+
+    return `${lines.join("\n")}\n`;
+}
+
+function buildLocalLrcExport(lyrics: string, segments: ChordSegment[]): string {
+    if (lyrics.trim()) {
+        return `${lyrics.trim()}\n`;
+    }
+    return `${segments.map((segment) => `[${formatPreciseTime(segment.start)}]${segment.chord}`).join("\n")}\n`;
+}
+
+function safeDownloadName(value: string): string {
+    const safe = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+    return safe || "song";
+}
+
+function formatPreciseTime(totalSeconds: number): string {
+    const safe = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
+    const minutes = Math.floor(safe / 60);
+    const seconds = safe % 60;
+    return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(2).padStart(5, "0")}`;
 }
