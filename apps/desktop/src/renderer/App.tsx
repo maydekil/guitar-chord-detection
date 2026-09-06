@@ -59,6 +59,7 @@ export function App() {
     const workspaceRef = useRef<HTMLDivElement | null>(null);
     const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
     const audioFadeTimerRef = useRef<number | null>(null);
+    const pendingSeekTimeRef = useRef<number | null>(null);
     const bridge = window.gcd;
 
     useEffect(() => {
@@ -516,6 +517,7 @@ export function App() {
     };
 
     const resetPlaybackState = (): void => {
+        pendingSeekTimeRef.current = null;
         const audio = audioRef.current;
         if (audio) {
             try {
@@ -580,6 +582,7 @@ export function App() {
         }
 
         const safeValue = Math.max(0, Math.min(value, durationSeconds || value));
+        pendingSeekTimeRef.current = safeValue;
         audio.currentTime = safeValue;
         setCurrentTimeSeconds(safeValue);
     };
@@ -738,6 +741,7 @@ export function App() {
     const replaceAudioSource = async (nextSourceUrl: string, seekTime: number, autoplay: boolean): Promise<void> => {
         const audio = audioRef.current;
         const previousBlobUrl = activeBlobUrlRef.current;
+        pendingSeekTimeRef.current = null;
         if (audio) {
             await fadeAudioVolume(audio, 0, 150);
         }
@@ -822,9 +826,11 @@ export function App() {
     return (
         <main className="shell" data-state={state}>
             <header className="shell-header">
-                <h1>Guitar Chord Detector</h1>
+                <div className="shell-title-row">
+                    <h1>Guitar Chord Detector</h1>
+                    <span className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</span>
+                </div>
                 <p className="shell-meta">Desktop Shell v{version}</p>
-                <p className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</p>
             </header>
 
             <div className="workspace-panels" ref={workspaceRef}>
@@ -1018,9 +1024,21 @@ export function App() {
                                     }
                                 }}
                                 onTimeUpdate={(event) => {
+                                    const nextTime = event.currentTarget.currentTime || 0;
+                                    const pendingSeekTime = pendingSeekTimeRef.current;
+                                    if (pendingSeekTime !== null && Math.abs(nextTime - pendingSeekTime) > 0.35) {
+                                        return;
+                                    }
+                                    if (pendingSeekTime !== null) {
+                                        pendingSeekTimeRef.current = null;
+                                    }
                                     if (!isMediaReady && event.currentTarget.currentTime > 0) {
                                         setIsMediaReady(true);
                                     }
+                                    setCurrentTimeSeconds(nextTime);
+                                }}
+                                onSeeked={(event) => {
+                                    pendingSeekTimeRef.current = null;
                                     setCurrentTimeSeconds(event.currentTarget.currentTime || 0);
                                 }}
                                 onPlay={() => {

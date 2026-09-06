@@ -165,13 +165,13 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
 
     const streamMatch = /^\/songs\/([^/]+)\/audio\/(original|instrumental)\/stream$/.exec(url.pathname);
     if (streamMatch && method === "GET") {
-        await streamSongAudio(response, decodeURIComponent(streamMatch[1]), streamMatch[2] as "original" | "instrumental");
+        await streamSongAudio(request, response, decodeURIComponent(streamMatch[1]), streamMatch[2] as "original" | "instrumental");
         return;
     }
 
     const uploadedAudioStreamMatch = /^\/audio\/([a-f0-9]{64})(\.[a-z0-9]+)\/stream$/.exec(url.pathname);
     if (uploadedAudioStreamMatch && method === "GET") {
-        await streamAudioFile(response, path.join(audioDir, `${uploadedAudioStreamMatch[1]}${uploadedAudioStreamMatch[2]}`));
+        await streamAudioFile(request, response, path.join(audioDir, `${uploadedAudioStreamMatch[1]}${uploadedAudioStreamMatch[2]}`));
         return;
     }
 
@@ -310,7 +310,7 @@ function deleteSong(id: string): boolean {
     return deleted;
 }
 
-async function streamSongAudio(response: http.ServerResponse, id: string, kind: "original" | "instrumental"): Promise<void> {
+async function streamSongAudio(request: http.IncomingMessage, response: http.ServerResponse, id: string, kind: "original" | "instrumental"): Promise<void> {
     const song = getSong(id);
     if (!song) {
         sendJson(response, 404, { message: "Song not found" });
@@ -329,17 +329,30 @@ async function streamSongAudio(response: http.ServerResponse, id: string, kind: 
         return;
     }
 
-    await streamAudioFile(response, audioPath);
+    await streamAudioFile(request, response, audioPath);
 }
 
-async function streamAudioFile(response: http.ServerResponse, audioPath: string): Promise<void> {
+async function streamAudioFile(request: http.IncomingMessage, response: http.ServerResponse, audioPath: string): Promise<void> {
     const fileStat = await stat(audioPath).catch(() => null);
     if (!fileStat) {
         sendJson(response, 404, { message: "Audio file not found" });
         return;
     }
 
+    const range = parseRangeHeader(request.headers.range, fileStat.size);
+    if (range) {
+        response.writeHead(206, {
+            "accept-ranges": "bytes",
+            "content-length": range.end - range.start + 1,
+            "content-range": `bytes ${range.start}-${range.end}/${fileStat.size}`,
+            "content-type": resolveAudioContentType(audioPath)
+        });
+        createReadStream(audioPath, { start: range.start, end: range.end }).pipe(response);
+        return;
+    }
+
     response.writeHead(200, {
+        "accept-ranges": "bytes",
         "content-length": fileStat.size,
         "content-type": resolveAudioContentType(audioPath)
     });
@@ -678,6 +691,43 @@ function resolveAudioContentType(audioPath: string): string {
         return "audio/wav";
     }
     return "application/octet-stream";
+}
+
+function parseRangeHeader(rangeHeader: string | undefined, fileSize: number): { start: number; end: number } | null {
+    if (!rangeHeader) {
+        return null;
+    }
+
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    if (!match) {
+        return null;
+    }
+
+    const rawStart = match[1];
+    const rawEnd = match[2];
+    if (!rawStart && !rawEnd) {
+        return null;
+    }
+
+    if (!rawStart) {
+        const suffixLength = Number.parseInt(rawEnd, 10);
+        if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+            return null;
+        }
+        const start = Math.max(0, fileSize - suffixLength);
+        return { start, end: fileSize - 1 };
+    }
+
+    const start = Number.parseInt(rawStart, 10);
+    const end = rawEnd ? Number.parseInt(rawEnd, 10) : fileSize - 1;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= fileSize) {
+        return null;
+    }
+
+    return {
+        start,
+        end: Math.min(end, fileSize - 1)
+    };
 }
 
 function resolveSafeAudioExtension(fileName: string): string {
