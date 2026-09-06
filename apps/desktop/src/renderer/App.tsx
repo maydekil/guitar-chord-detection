@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { ChordAnalysisSuccess, ChordSegment } from "@gcd/shared/analysis";
+import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordSegment } from "@gcd/shared/analysis";
 import type { SongLibraryListResult, SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -186,9 +186,23 @@ export function App() {
         const requestId = activeRequestIdRef.current + 1;
         activeRequestIdRef.current = requestId;
 
-        const analysis = await bridge.analyzeAudio(audioPath, {
-            forceRefresh: options?.forceRefresh === true
-        });
+        let analysis: ChordAnalysisResult;
+        try {
+            analysis = await bridge.analyzeAudio(audioPath, {
+                forceRefresh: options?.forceRefresh === true
+            });
+        } catch {
+            if (requestId !== activeRequestIdRef.current) {
+                return;
+            }
+            setState("error");
+            setAnalysisSegmentCount(null);
+            setTimelineSegments([]);
+            setLatestAnalysis(null);
+            setIsSaveFormOpen(false);
+            setAnalysisStatus("Could not analyze this audio file.");
+            return;
+        }
 
         if (requestId !== activeRequestIdRef.current) {
             return;

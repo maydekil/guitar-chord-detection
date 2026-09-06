@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -30,15 +31,44 @@ interface SongRow {
     updated_at: string;
 }
 
+interface AnalyzeAudioRequest {
+    audioPath: string;
+    forceRefresh?: boolean;
+}
+
+interface GenerateLyricsRequest {
+    audioPath: string;
+    model?: string;
+}
+
+interface RemoveVocalsRequest {
+    audioPath: string;
+}
+
+interface PitchShiftAudioRequest {
+    audioPath: string;
+    semitones: number;
+}
+
+interface EngineCommandOptions {
+    timeoutMs: number;
+    env?: NodeJS.ProcessEnv;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = process.env.GCD_API_DATA_DIR ?? path.resolve(__dirname, "..", ".data");
 const audioDir = path.join(dataDir, "audio");
+const engineOutputDir = path.join(dataDir, "engine-output");
+const repositoryRoot = process.env.GCD_REPOSITORY_ROOT ?? path.resolve(__dirname, "../../..");
+const engineCwd = path.join(repositoryRoot, "engine");
+const pythonExecutable = process.env.GCD_PYTHON ?? path.join(repositoryRoot, ".venv", "bin", "python");
 const publicBaseUrl = (process.env.GCD_API_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/+$/, "");
 
 await mkdir(dataDir, { recursive: true });
 await mkdir(audioDir, { recursive: true });
+await mkdir(engineOutputDir, { recursive: true });
 const database = new DatabaseSync(path.join(dataDir, "guitar-chord-detection.sqlite"));
 initializeDatabase(database);
 
@@ -109,22 +139,26 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     }
 
     if (method === "POST" && url.pathname === "/analysis") {
-        sendJson(response, 501, enginePlaceholder("ANALYSIS_API_NOT_IMPLEMENTED", "Analysis worker belum dipasang di API server.") satisfies ChordAnalysisResult);
+        const body = await readJsonBody<AnalyzeAudioRequest>(request);
+        sendJson(response, 200, await analyzeAudio(body));
         return;
     }
 
     if (method === "POST" && url.pathname === "/lyrics/transcribe") {
-        sendJson(response, 501, enginePlaceholder("LYRICS_API_NOT_IMPLEMENTED", "Lyrics transcription worker belum dipasang di API server.") satisfies LyricsTranscriptionResult);
+        const body = await readJsonBody<GenerateLyricsRequest>(request);
+        sendJson(response, 200, await transcribeLyrics(body));
         return;
     }
 
     if (method === "POST" && url.pathname === "/vocals/remove") {
-        sendJson(response, 501, enginePlaceholder("VOCAL_REMOVAL_API_NOT_IMPLEMENTED", "Vocal removal worker belum dipasang di API server.") satisfies VocalRemovalResult);
+        const body = await readJsonBody<RemoveVocalsRequest>(request);
+        sendJson(response, 200, await removeVocals(body));
         return;
     }
 
     if (method === "POST" && url.pathname === "/audio/pitch-shift") {
-        sendJson(response, 501, enginePlaceholder("PITCH_SHIFT_API_NOT_IMPLEMENTED", "Pitch shift worker belum dipasang di API server.") satisfies PitchShiftResult);
+        const body = await readJsonBody<PitchShiftAudioRequest>(request);
+        sendJson(response, 200, await pitchShiftAudio(body));
         return;
     }
 
@@ -299,6 +333,129 @@ async function saveUploadedAudio(request: http.IncomingMessage, url: URL): Promi
     };
 }
 
+async function analyzeAudio(request: AnalyzeAudioRequest): Promise<ChordAnalysisResult> {
+    if (!request.audioPath) {
+        return enginePlaceholder("ENGINE_INVALID_INPUT", "Audio path is required") satisfies ChordAnalysisResult;
+    }
+
+    return await runEngineJson<ChordAnalysisResult>(
+        ["-m", "chord_engine.cli", "analyze", request.audioPath],
+        "ENGINE",
+        { timeoutMs: 5 * 60_000 }
+    );
+}
+
+async function transcribeLyrics(request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> {
+    if (!request.audioPath) {
+        return enginePlaceholder("LYRICS_INVALID_INPUT", "Audio path is required") satisfies LyricsTranscriptionResult;
+    }
+
+    return await runEngineJson<LyricsTranscriptionResult>(
+        ["-m", "chord_engine.cli", "transcribe-lyrics", request.audioPath, "--model", normalizeLyricsModel(request.model)],
+        "LYRICS",
+        { timeoutMs: 10 * 60_000 }
+    );
+}
+
+async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalResult> {
+    if (!request.audioPath) {
+        return enginePlaceholder("VOCAL_REMOVAL_INVALID_INPUT", "Audio path is required") satisfies VocalRemovalResult;
+    }
+
+    return await runEngineJson<VocalRemovalResult>(
+        ["-m", "chord_engine.cli", "remove-vocals", request.audioPath, "--output-root", path.join(engineOutputDir, "vocal-removal"), "--model", "htdemucs"],
+        "VOCAL_REMOVAL",
+        {
+            timeoutMs: 20 * 60_000,
+            env: {
+                ...process.env,
+                DEMUCS_CACHE: path.join(engineOutputDir, "vocal-removal", "model-cache", "demucs"),
+                HF_HOME: path.join(engineOutputDir, "vocal-removal", "model-cache", "huggingface"),
+                TORCH_HOME: path.join(engineOutputDir, "vocal-removal", "model-cache", "torch")
+            }
+        }
+    );
+}
+
+async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchShiftResult> {
+    if (!request.audioPath) {
+        return enginePlaceholder("PITCH_SHIFT_INVALID_INPUT", "Audio path is required") satisfies PitchShiftResult;
+    }
+
+    return await runEngineJson<PitchShiftResult>(
+        [
+            "-m",
+            "chord_engine.cli",
+            "pitch-shift-audio",
+            request.audioPath,
+            "--output-root",
+            path.join(engineOutputDir, "pitch-shift"),
+            "--semitones",
+            String(normalizeTransposeSemitones(request.semitones))
+        ],
+        "PITCH_SHIFT",
+        { timeoutMs: 5 * 60_000 }
+    );
+}
+
+async function runEngineJson<T extends { version: string; error?: { code: string; message: string } }>(
+    args: string[],
+    errorPrefix: string,
+    options: EngineCommandOptions
+): Promise<T> {
+    return await new Promise<T>((resolve) => {
+        let settled = false;
+        let stdout = "";
+        let stderr = "";
+        const child = spawn(pythonExecutable, args, {
+            cwd: engineCwd,
+            env: options.env ?? process.env
+        });
+
+        const finish = (result: T): void => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            clearTimeout(timeoutId);
+            if (stderr.trim()) {
+                console.error(`[api engine stderr] ${stderr.trim()}`);
+            }
+            resolve(result);
+        };
+
+        const timeoutId = setTimeout(() => {
+            child.kill("SIGKILL");
+            finish(enginePlaceholder(`${errorPrefix}_TIMEOUT`, "Engine request timed out") as T);
+        }, options.timeoutMs);
+
+        child.stdout.on("data", (chunk: Buffer | string) => {
+            stdout += String(chunk);
+        });
+
+        child.stderr.on("data", (chunk: Buffer | string) => {
+            stderr += String(chunk);
+        });
+
+        child.on("error", () => {
+            finish(enginePlaceholder(`${errorPrefix}_SPAWN_FAILED`, "Could not start engine process") as T);
+        });
+
+        child.on("close", (code) => {
+            const parsed = parseEngineJson<T>(stdout);
+            if (!parsed) {
+                finish(enginePlaceholder(`${errorPrefix}_INVALID_JSON`, "Engine returned invalid JSON output") as T);
+                return;
+            }
+            if (code !== 0 && !parsed.error) {
+                finish(enginePlaceholder(`${errorPrefix}_EXIT_NONZERO`, "Engine failed with non-zero exit code") as T);
+                return;
+            }
+            finish(parsed);
+        });
+    });
+}
+
 function initializeDatabase(db: DatabaseSync): void {
     db.exec(`
         CREATE TABLE IF NOT EXISTS songs (
@@ -351,6 +508,31 @@ function enginePlaceholder(code: string, message: string) {
             message
         }
     };
+}
+
+function parseEngineJson<T>(stdout: string): T | null {
+    const trimmed = stdout.trim();
+    if (!trimmed) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(trimmed) as T;
+    } catch {
+        return null;
+    }
+}
+
+function normalizeLyricsModel(model: string | undefined): string {
+    const allowedModels = new Set(["tiny", "base", "small", "medium", "large"]);
+    return model && allowedModels.has(model) ? model : "small";
+}
+
+function normalizeTransposeSemitones(semitones: number): number {
+    if (!Number.isFinite(semitones)) {
+        return 0;
+    }
+    return Math.max(-11, Math.min(11, Math.trunc(semitones)));
 }
 
 async function readJsonBody<T>(request: http.IncomingMessage): Promise<T> {

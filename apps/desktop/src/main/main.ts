@@ -1,7 +1,8 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import electronMain from "electron/main";
+import type { BrowserWindow as ElectronBrowserWindow } from "electron/main";
 import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -13,6 +14,8 @@ import { analyzeAudioInEngine, pitchShiftAudioInEngine, removeVocalsInEngine, tr
 import { buildAudioFileDialogOptions, toFileSelectionResult } from "./fileDialog.js";
 import { SongLibraryStore, resolveSongLibraryPath } from "./songLibrary.js";
 import { buildMainWindowOptions } from "./window.js";
+
+const { app, BrowserWindow, dialog, ipcMain } = electronMain;
 
 type AudioPlaybackSource = AudioPlaybackBytesSource | AudioPlaybackUrlSource;
 
@@ -74,7 +77,7 @@ function resolveAudioMimeType(audioPath: string): AudioPlaybackBytesSource["mime
     return null;
 }
 
-function createMainWindow(): BrowserWindow {
+function createMainWindow(): ElectronBrowserWindow {
     const preloadPath = path.resolve(__dirname, "../preload/index.js");
     const window = new BrowserWindow(buildMainWindowOptions(preloadPath, WINDOW_ICON_PATH));
 
