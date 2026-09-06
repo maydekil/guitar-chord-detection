@@ -13,6 +13,7 @@ type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
+    const [isApiMode, setIsApiMode] = useState<boolean>(false);
     const [state, setState] = useState<ShellState>("idle");
     const [selectedFileName, setSelectedFileName] = useState<string>("No file selected");
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -137,6 +138,7 @@ export function App() {
             return;
         }
         void bridge.getAppVersion().then(setVersion).catch(() => setVersion("unknown"));
+        void bridge.isApiMode?.().then(setIsApiMode).catch(() => setIsApiMode(false));
     }, [bridge]);
 
     useEffect(() => {
@@ -181,7 +183,7 @@ export function App() {
         setTimelineSegments([]);
         setLatestAnalysis(null);
         setIsSaveFormOpen(false);
-        setAnalysisStatus("Analyzing...");
+        setAnalysisStatus(isApiMode ? "Uploading audio and analyzing on API server..." : "Analyzing...");
 
         const requestId = activeRequestIdRef.current + 1;
         activeRequestIdRef.current = requestId;
@@ -442,7 +444,7 @@ export function App() {
         }
 
         setIsGeneratingLyrics(true);
-        setAnalysisStatus("Generating lyrics from audio...");
+        setAnalysisStatus(isApiMode ? "Uploading audio and generating lyrics on API server..." : "Generating lyrics from audio...");
         let result: LyricsTranscriptionResult;
         try {
             result = await bridge.generateLyricsFromAudio(selectedFilePath, { model: lyricsModel });
@@ -575,7 +577,11 @@ export function App() {
         const requestId = activePitchShiftRequestIdRef.current + 1;
         activePitchShiftRequestIdRef.current = requestId;
         setIsPitchShiftingAudio(semitones !== 0);
-        setAnalysisStatus(semitones === 0 ? "Transpose reset." : `Rendering transpose audio ${formatTranspose(semitones)}...`);
+        setAnalysisStatus(semitones === 0
+            ? "Transpose reset."
+            : isApiMode
+                ? `Rendering transpose audio ${formatTranspose(semitones)} on API server...`
+                : `Rendering transpose audio ${formatTranspose(semitones)}...`);
 
         let playbackPath = baseAudioPath;
         if (semitones !== 0) {
@@ -643,7 +649,7 @@ export function App() {
         }
 
         setIsRemovingVocals(true);
-        setAnalysisStatus("Preparing Vocal Off...");
+        setAnalysisStatus(isApiMode ? "Uploading audio and preparing Vocal Off on API server..." : "Preparing Vocal Off...");
         let result: VocalRemovalResult;
         try {
             result = await bridge.removeVocals(selectedFilePath);
@@ -796,6 +802,7 @@ export function App() {
             <header className="shell-header">
                 <h1>Guitar Chord Detector</h1>
                 <p className="shell-meta">Desktop Shell v{version}</p>
+                <p className="mode-badge">{isApiMode ? "API Mode" : "Local Mode"}</p>
             </header>
 
             <div className="workspace-panels" ref={workspaceRef}>

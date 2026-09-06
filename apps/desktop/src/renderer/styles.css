@@ -74,6 +74,21 @@ body {
     color: #4a555b;
 }
 
+.mode-badge {
+    align-items: center;
+    background: rgba(193, 100, 38, 0.12);
+    border: 1px solid rgba(193, 100, 38, 0.22);
+    border-radius: 999px;
+    color: var(--accent-strong);
+    display: inline-flex;
+    font-size: 0.82rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    margin: 0.55rem 0 0;
+    padding: 0.32rem 0.72rem;
+    text-transform: uppercase;
+}
+
 .shell-card {
     border: 1px solid var(--line);
     border-radius: 16px;

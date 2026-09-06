@@ -93,6 +93,7 @@ function createMainWindow(): ElectronBrowserWindow {
 
 function registerIpcHandlers(): void {
     ipcMain.handle("app:getVersion", () => app.getVersion());
+    ipcMain.handle("app:isApiMode", () => Boolean(API_BASE_URL));
     ipcMain.handle("engine:analyzeAudio", async (_event, request: string | AnalyzeAudioRequest) => {
         const normalized = typeof request === "string" ? { audioPath: request, forceRefresh: false } : request;
         if (API_BASE_URL) {
