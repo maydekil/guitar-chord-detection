@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
+import type { DeleteSongResult, SaveSongAnalysisRequest, SongLibraryRecord, SongLibrarySearchOptions } from "@gcd/shared/library";
+import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 
 export interface FileSelectionResult {
     canceled: boolean;
@@ -16,11 +18,20 @@ export interface AnalyzeAudioOptions {
     forceRefresh?: boolean;
 }
 
+export interface GenerateLyricsOptions {
+    model?: string;
+}
+
 export interface DesktopApi {
     getAppVersion(): Promise<string>;
     selectAudioFile(): Promise<FileSelectionResult>;
     analyzeAudio?(audioPath: string, options?: AnalyzeAudioOptions): Promise<ChordAnalysisResult>;
+    generateLyricsFromAudio?(audioPath: string, options?: GenerateLyricsOptions): Promise<LyricsTranscriptionResult>;
     getAudioPlaybackSource?(audioPath: string): Promise<AudioPlaybackSource>;
+    listSongs?(options?: SongLibrarySearchOptions): Promise<SongLibraryRecord[]>;
+    getSong?(id: string): Promise<SongLibraryRecord | null>;
+    saveSongAnalysis?(request: SaveSongAnalysisRequest): Promise<SongLibraryRecord>;
+    deleteSong?(id: string): Promise<DeleteSongResult>;
 }
 
 const desktopApi: DesktopApi = {
@@ -31,8 +42,16 @@ const desktopApi: DesktopApi = {
             audioPath,
             forceRefresh: options?.forceRefresh === true
         }) as Promise<ChordAnalysisResult>,
+    generateLyricsFromAudio: (audioPath: string, options?: GenerateLyricsOptions) =>
+        ipcRenderer.invoke("engine:generateLyrics", { audioPath, model: options?.model }) as Promise<LyricsTranscriptionResult>,
     getAudioPlaybackSource: (audioPath: string) =>
-        ipcRenderer.invoke("file:getAudioPlaybackSource", audioPath) as Promise<AudioPlaybackSource>
+        ipcRenderer.invoke("file:getAudioPlaybackSource", audioPath) as Promise<AudioPlaybackSource>,
+    listSongs: (options?: SongLibrarySearchOptions) =>
+        ipcRenderer.invoke("library:listSongs", options) as Promise<SongLibraryRecord[]>,
+    getSong: (id: string) => ipcRenderer.invoke("library:getSong", id) as Promise<SongLibraryRecord | null>,
+    saveSongAnalysis: (request: SaveSongAnalysisRequest) =>
+        ipcRenderer.invoke("library:saveAnalysis", request) as Promise<SongLibraryRecord>,
+    deleteSong: (id: string) => ipcRenderer.invoke("library:deleteSong", id) as Promise<DeleteSongResult>
 };
 
 contextBridge.exposeInMainWorld("gcd", desktopApi);

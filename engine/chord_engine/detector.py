@@ -13,7 +13,7 @@ FRAME_BINS = 12
 
 # Centralized detector thresholds for MVP baseline.
 MIN_FRAME_ENERGY = 1e-6
-MIN_TEMPLATE_SIMILARITY = 0.35
+MIN_TEMPLATE_SIMILARITY = 0.38
 KEY_PRIOR_WEIGHT = 0.08
 
 MAJOR_SCALE_INTERVALS = (0, 2, 4, 5, 7, 9, 11)
@@ -159,32 +159,32 @@ def _key_prior_bonus(chord_name: str, key_estimate: KeyEstimate) -> float:
 	if root_pc is None:
 		return 0.0
 
-	is_minor = chord_name.endswith("m")
-	match = _diatonic_match_score(root_pc, is_minor, key_estimate)
+	_, quality = _parse_chord_quality(chord_name)
+	match = _diatonic_match_score(root_pc, quality, key_estimate)
 	return KEY_PRIOR_WEIGHT * key_estimate.confidence * match
 
 
-def _diatonic_match_score(root_pc: int, is_minor: bool, key_estimate: KeyEstimate) -> float:
+def _diatonic_match_score(root_pc: int, quality: str | None, key_estimate: KeyEstimate) -> float:
 	if key_estimate.mode == "major":
 		diatonic_chords = {
-			0: False,
-			2: True,
-			4: True,
-			5: False,
-			7: False,
-			9: True,
-			11: True,
+			0: "major",
+			2: "minor",
+			4: "minor",
+			5: "major",
+			7: "major",
+			9: "minor",
+			11: "diminished",
 		}
 		scale_intervals = MAJOR_SCALE_INTERVALS
 	else:
 		diatonic_chords = {
-			0: True,
-			2: True,
-			3: False,
-			5: True,
-			7: True,
-			8: False,
-			10: False,
+			0: "minor",
+			2: "diminished",
+			3: "major",
+			5: "minor",
+			7: "minor",
+			8: "major",
+			10: "major",
 		}
 		scale_intervals = MINOR_SCALE_INTERVALS
 
@@ -192,12 +192,12 @@ def _diatonic_match_score(root_pc: int, is_minor: bool, key_estimate: KeyEstimat
 	if interval not in scale_intervals:
 		return 0.0
 
-	expected_minor = diatonic_chords.get(interval)
-	if expected_minor is None:
-		return 0.25
-	if expected_minor == is_minor:
+	expected_quality = diatonic_chords.get(interval)
+	if expected_quality is None:
+		return 0.0
+	if expected_quality == quality:
 		return 1.0
-	return 0.45
+	return 0.30
 
 
 def _scale_membership_profile(tonic_pc: int, mode: str) -> np.ndarray:
@@ -209,7 +209,12 @@ def _scale_membership_profile(tonic_pc: int, mode: str) -> np.ndarray:
 
 
 def _chord_root_pc(chord_name: str) -> int | None:
-	name = chord_name[:-1] if chord_name.endswith("m") else chord_name
+	if chord_name.endswith("dim"):
+		name = chord_name[:-3]
+	elif chord_name.endswith("m"):
+		name = chord_name[:-1]
+	else:
+		name = chord_name
 	lookup = {
 		"C": 0,
 		"C#": 1,
@@ -225,6 +230,16 @@ def _chord_root_pc(chord_name: str) -> int | None:
 		"B": 11,
 	}
 	return lookup.get(name)
+
+
+def _parse_chord_quality(label: str) -> tuple[str | None, str | None]:
+	if label == "N":
+		return None, None
+	if label.endswith("dim"):
+		return label[:-3], "diminished"
+	if label.endswith("m"):
+		return label[:-1], "minor"
+	return label, "major"
 
 
 def _match_confidence(best_score: float, second_score: float) -> float:

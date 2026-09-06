@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+lyrics = ["openai-whisper>=20231117"]
 
 [tool.setuptools]
 package-dir = {"" = "."}

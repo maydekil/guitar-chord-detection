@@ -363,6 +363,8 @@ def _parse_root_quality(chord: str) -> tuple[str | None, str | None]:
 	label = chord.strip()
 	if label == "N":
 		return None, None
+	if label.endswith("dim"):
+		return label[:-3], "diminished"
 	if label.endswith("m"):
 		return label[:-1], "minor"
 	return label, "major"

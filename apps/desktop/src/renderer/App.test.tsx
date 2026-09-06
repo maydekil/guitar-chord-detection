@@ -20,7 +20,56 @@ function activeChords(): string[] {
         .map((segment) => segment.getAttribute("data-chord") ?? "");
 }
 
+async function openAnalyzerForm(): Promise<void> {
+    fireEvent.click(await screen.findByRole("button", { name: "Add Song" }));
+}
+
 describe("App", () => {
+    it("renders searchable analyzed song library records", async () => {
+        const listSongs = vi.fn().mockResolvedValue([
+            {
+                id: "song-1",
+                title: "Album Lama",
+                artist: "SR Banyak Cerita",
+                audioPath: "/tmp/Album Lama.mp3",
+                fileHash: "hash",
+                algorithm: "chroma-template-v3",
+                contractVersion: "1",
+                duration: 282,
+                analysis: {
+                    version: "1",
+                    source: {
+                        path: "/tmp/Album Lama.mp3",
+                        duration: 282,
+                        sampleRate: 22050
+                    },
+                    analysis: {
+                        algorithm: "chroma-template-v3",
+                        chords: [{ start: 0, end: 282, chord: "A", confidence: 0.9 }]
+                    }
+                },
+                createdAt: "2026-09-06T00:00:00.000Z",
+                updatedAt: "2026-09-06T00:00:00.000Z"
+            }
+        ]);
+        window.gcd = {
+            getAppVersion: vi.fn().mockResolvedValue("0.0.0"),
+            selectAudioFile: vi.fn(),
+            analyzeAudio: vi.fn(),
+            listSongs
+        };
+
+        render(<App />);
+
+        expect(await screen.findByText("Album Lama")).toBeInTheDocument();
+        expect(screen.getByText("SR Banyak Cerita")).toBeInTheDocument();
+        expect(screen.getByText("1 chords - 04:42")).toBeInTheDocument();
+
+        fireEvent.change(screen.getByRole("searchbox", { name: "Search library" }), { target: { value: "sr" } });
+        expect(await screen.findByDisplayValue("sr")).toBeInTheDocument();
+        expect(listSongs).toHaveBeenLastCalledWith({ query: "sr" });
+    });
+
     it("keeps playback controls disabled when no audio is selected", async () => {
         window.gcd = {
             getAppVersion: vi.fn().mockResolvedValue("0.0.0"),
@@ -33,6 +82,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
 
         expect(screen.getByRole("button", { name: "Play" })).toBeDisabled();
         expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
@@ -66,6 +116,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -100,6 +151,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -141,6 +193,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -177,6 +230,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -208,6 +262,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -248,6 +303,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -301,6 +357,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -336,6 +393,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -367,6 +425,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -402,6 +461,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -445,6 +505,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("Analysis ready: 273 segment(s)")).toBeInTheDocument();
 
@@ -462,7 +523,8 @@ describe("App", () => {
         render(<App />);
 
         expect(screen.getByRole("heading", { name: "Guitar Chord Detector" })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Open Audio" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Add Song" })).toBeDisabled();
+        expect(screen.queryByRole("button", { name: "Open Audio" })).not.toBeInTheDocument();
         expect(screen.getByText("Desktop Shell vbridge-unavailable")).toBeInTheDocument();
     });
 
@@ -480,13 +542,16 @@ describe("App", () => {
         render(<App />);
 
         expect(screen.getByRole("heading", { name: "Guitar Chord Detector" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Add Song" })).toBeEnabled();
+        expect(screen.queryByRole("button", { name: "Open Audio" })).not.toBeInTheDocument();
+        await openAnalyzerForm();
         expect(screen.getByText("State: idle")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Open Audio" })).toBeEnabled();
         expect(screen.getByText("No file selected")).toBeInTheDocument();
     });
 
     it("shows selected filename after bridge returns selection", async () => {
-        const analyzeAudio = vi.fn().mockResolvedValue({
+        const analysisResult = {
             version: "1",
             source: {
                 path: "/tmp/demo.wav",
@@ -497,6 +562,22 @@ describe("App", () => {
                 algorithm: "chroma-template-v1",
                 chords: []
             }
+        } as const;
+        const analyzeAudio = vi.fn().mockResolvedValue({
+            ...analysisResult
+        });
+        const saveSongAnalysis = vi.fn().mockResolvedValue({
+            id: "saved-demo",
+            title: "Demo Title",
+            artist: "Demo Artist",
+            audioPath: "/tmp/demo.wav",
+            fileHash: "hash",
+            algorithm: "chroma-template-v3",
+            contractVersion: "1",
+            duration: 1,
+            analysis: analysisResult,
+            createdAt: "2026-09-06T00:00:00.000Z",
+            updatedAt: "2026-09-06T00:00:00.000Z"
         });
         window.gcd = {
             getAppVersion: vi.fn().mockResolvedValue("0.0.0"),
@@ -505,16 +586,38 @@ describe("App", () => {
                 path: "/tmp/demo.wav",
                 fileName: "demo.wav"
             }),
-            analyzeAudio
+            analyzeAudio,
+            saveSongAnalysis
         };
 
         render(<App />);
+        await openAnalyzerForm();
+        expect(screen.queryByPlaceholderText("Contoh: SR Banyak Cerita")).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
 
         expect(await screen.findByText("demo.wav")).toBeInTheDocument();
         expect(analyzeAudio).toHaveBeenCalledWith("/tmp/demo.wav", { forceRefresh: false });
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
         expect(await screen.findByText("Analysis ready: 0 segment(s)")).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "Save" }));
+        fireEvent.change(await screen.findByPlaceholderText("Contoh: SR Banyak Cerita"), {
+            target: { value: "Demo Artist" }
+        });
+        fireEvent.change(screen.getByPlaceholderText("Contoh: Album Lama"), {
+            target: { value: "Demo Title" }
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
+        expect(saveSongAnalysis).toHaveBeenCalledWith({
+            audioPath: "/tmp/demo.wav",
+            analysis: analysisResult,
+            lyrics: "",
+            metadata: {
+                artist: "Demo Artist",
+                title: "Demo Title"
+            }
+        });
+        expect(await screen.findByText("Saved to Song Library.")).toBeInTheDocument();
     });
 
     it("shows Re-analyze only when a valid selected file exists", async () => {
@@ -548,6 +651,7 @@ describe("App", () => {
 
         render(<App />);
         expect(screen.queryByRole("button", { name: "Re-analyze" })).not.toBeInTheDocument();
+        await openAnalyzerForm();
 
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: idle")).toBeInTheDocument();
@@ -592,6 +696,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("Analysis ready: 1 segment(s)")).toBeInTheDocument();
 
@@ -665,6 +770,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("Analysis ready: 1 segment(s)")).toBeInTheDocument();
 
@@ -745,6 +851,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("Analysis ready: 1 segment(s)")).toBeInTheDocument();
 
@@ -790,6 +897,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -832,6 +940,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -900,6 +1009,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -933,6 +1043,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
 
         expect(await screen.findByText("No file selected")).toBeInTheDocument();
@@ -980,6 +1091,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
 
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("Analysis ready: 1 segment(s)")).toBeInTheDocument();
@@ -1036,6 +1148,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
 
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: analyzing")).toBeInTheDocument();
@@ -1102,6 +1215,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
 
         expect(await screen.findByText("State: analyzing")).toBeInTheDocument();
@@ -1146,6 +1260,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1197,6 +1312,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1241,6 +1357,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1282,6 +1399,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
 
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
@@ -1336,6 +1454,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1392,6 +1511,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
 
         expect(await screen.findByText("State: error")).toBeInTheDocument();
@@ -1423,6 +1543,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1462,6 +1583,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1477,6 +1599,60 @@ describe("App", () => {
         setMediaTiming(audio, { duration: 14, currentTime: 7 });
         fireEvent.timeUpdate(audio);
         expect(screen.getByText("00:07 / 00:14")).toBeInTheDocument();
+    });
+
+    it("seeks audio when timeline rows and segments are clicked", async () => {
+        window.gcd = {
+            getAppVersion: vi.fn().mockResolvedValue("0.0.0"),
+            selectAudioFile: vi.fn().mockResolvedValue({
+                canceled: false,
+                path: "/tmp/timeline-seek.mp3",
+                fileName: "timeline-seek.mp3"
+            }),
+            analyzeAudio: vi.fn().mockResolvedValue({
+                version: "1",
+                source: {
+                    path: "/tmp/timeline-seek.mp3",
+                    duration: 30,
+                    sampleRate: 22050
+                },
+                analysis: {
+                    algorithm: "chroma-template-v1",
+                    chords: [
+                        { start: 0, end: 15, chord: "C", confidence: 0.9 },
+                        { start: 15, end: 30, chord: "G", confidence: 0.85 }
+                    ]
+                }
+            })
+        };
+
+        render(<App />);
+        await openAnalyzerForm();
+        fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
+        expect(await screen.findByText("State: ready")).toBeInTheDocument();
+
+        const audio = screen.getByTestId("audio-player") as HTMLAudioElement;
+        setMediaTiming(audio, { duration: 30, currentTime: 0 });
+        fireEvent.loadedMetadata(audio);
+
+        const tracks = screen.getAllByTestId("timeline-track");
+        Object.defineProperty(tracks[0], "getBoundingClientRect", {
+            value: () => ({ left: 100, width: 300 }),
+            configurable: true
+        });
+        fireEvent.click(tracks[0], { clientX: 250 });
+        expect(audio.currentTime).toBeCloseTo(7.5, 2);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: C");
+
+        const secondRow = screen.getAllByTestId("timeline-row")[1];
+        const secondRowSegment = within(secondRow).getByTestId("timeline-segment");
+        Object.defineProperty(secondRowSegment, "getBoundingClientRect", {
+            value: () => ({ left: 40, width: 200 }),
+            configurable: true
+        });
+        fireEvent.click(secondRowSegment, { clientX: 140 });
+        expect(audio.currentTime).toBeCloseTo(22.5, 2);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: G");
     });
 
     it("marks active chord with deterministic boundary rule during playback updates", async () => {
@@ -1506,6 +1682,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1514,22 +1691,27 @@ describe("App", () => {
         fireEvent.loadedMetadata(audio);
 
         expect(activeChords()).toEqual(["C"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: C");
 
         setMediaTiming(audio, { duration: 12, currentTime: 4.99 });
         fireEvent.timeUpdate(audio);
         expect(activeChords()).toEqual(["C"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: C");
 
         setMediaTiming(audio, { duration: 12, currentTime: 5 });
         fireEvent.timeUpdate(audio);
         expect(activeChords()).toEqual(["G"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: G");
 
         setMediaTiming(audio, { duration: 12, currentTime: 10 });
         fireEvent.timeUpdate(audio);
         expect(activeChords()).toEqual(["N"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: N");
 
         setMediaTiming(audio, { duration: 12, currentTime: 12 });
         fireEvent.timeUpdate(audio);
         expect(activeChords()).toEqual([]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: None");
     });
 
     it("updates active chord immediately when seek changes current time", async () => {
@@ -1559,6 +1741,7 @@ describe("App", () => {
         };
 
         render(<App />);
+        await openAnalyzerForm();
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));
         expect(await screen.findByText("State: ready")).toBeInTheDocument();
 
@@ -1571,12 +1754,15 @@ describe("App", () => {
         const slider = screen.getByRole("slider", { name: "Seek" });
         fireEvent.change(slider, { target: { value: "10" } });
         expect(activeChords()).toEqual(["N"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: N");
 
         fireEvent.change(slider, { target: { value: "5" } });
         expect(activeChords()).toEqual(["G"]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: G");
 
         fireEvent.change(slider, { target: { value: "12" } });
         expect(activeChords()).toEqual([]);
+        expect(screen.getByTestId("active-chord")).toHaveTextContent("Active chord: None");
     });
 
     it("keeps the same audio element across analysis and playback state changes", async () => {
@@ -1605,6 +1791,7 @@ describe("App", () => {
         const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => { });
 
         render(<App />);
+        await openAnalyzerForm();
         const initialAudio = screen.getByTestId("audio-player") as HTMLAudioElement;
 
         fireEvent.click(screen.getByRole("button", { name: "Open Audio" }));

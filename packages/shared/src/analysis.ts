@@ -23,6 +23,18 @@ export type ChordLabel =
     | "Am"
     | "A#m"
     | "Bm"
+    | "Cdim"
+    | "C#dim"
+    | "Ddim"
+    | "D#dim"
+    | "Edim"
+    | "Fdim"
+    | "F#dim"
+    | "Gdim"
+    | "G#dim"
+    | "Adim"
+    | "A#dim"
+    | "Bdim"
     | "N";
 
 export interface ChordSegment {

@@ -6,16 +6,24 @@ from dataclasses import dataclass
 
 import librosa
 import numpy as np
+try:
+	from scipy.ndimage import median_filter
+except Exception:  # pragma: no cover - fallback when scipy is unavailable
+	median_filter = None
 
 from chord_engine.audio import AudioBuffer, TARGET_SAMPLE_RATE
 
 DEFAULT_HOP_LENGTH = 512
 DEFAULT_N_CHROMA = 12
 MIN_SIGNAL_ENERGY = 1e-7
-HPSS_MARGIN = 1.0
+HPSS_MARGIN = 1.6
 MAX_BEAT_REGION_SECONDS = 0.7
 LOW_FREQUENCY_FMIN_HZ = 65.40639132514966  # C2
 LOW_FREQUENCY_OCTAVES = 2
+LOW_FREQUENCY_WEIGHT = 0.10
+CHROMA_MEDIAN_WINDOW_FRAMES = 7
+CHROMA_CENS_BLEND = 0.38
+CHROMA_STABILITY_MIN_ENERGY = 0.05
 PITCH_CLASS_ORDER = (
 	"C",
 	"C#",
@@ -116,13 +124,24 @@ def extract_chroma(
 			n_chroma=DEFAULT_N_CHROMA,
 			norm=2,
 		)
-
 		chroma = np.asarray(chroma, dtype=np.float32)
+		stable_chroma = _stable_harmonic_chroma(
+			working,
+			sample_rate=audio.sample_rate,
+			hop_length=hop_length,
+		)
+		if stable_chroma.shape == chroma.shape:
+			chroma = (1.0 - CHROMA_CENS_BLEND) * chroma + CHROMA_CENS_BLEND * stable_chroma
+		else:
+			chroma = _temporal_smoothing(chroma)
+
 		if chroma.ndim != 2 or chroma.shape[0] != DEFAULT_N_CHROMA:
 			raise FeatureExtractionError("FEATURE_EXTRACTION_FAILED", "Unexpected chroma shape")
 
 		if chroma.shape[1] == 0:
 			chroma = np.zeros((DEFAULT_N_CHROMA, 1), dtype=np.float32)
+		else:
+			chroma = _temporal_smoothing(chroma)
 
 	chroma = np.nan_to_num(chroma, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32, copy=False)
 	if not np.isfinite(chroma).all():
@@ -202,10 +221,62 @@ def extract_low_frequency_chroma(
 			low = np.concatenate((low, pad), axis=1)
 		elif low.shape[1] > n_frames:
 			low = low[:, :n_frames]
+		low *= LOW_FREQUENCY_WEIGHT
 
 		return low.astype(np.float32, copy=False)
 	except Exception:
 		return np.zeros((n_chroma, n_frames), dtype=np.float32)
+
+
+def _stable_harmonic_chroma(
+	samples: np.ndarray,
+	*,
+	sample_rate: int,
+	hop_length: int,
+) -> np.ndarray:
+	"""Return a smoothed chroma representation from CENS (harmonic-stable)."""
+	try:
+		cens = librosa.feature.chroma_cens(
+			y=samples,
+			sr=sample_rate,
+			hop_length=hop_length,
+			n_chroma=DEFAULT_N_CHROMA,
+			norm=2,
+		)
+		cens = np.nan_to_num(np.asarray(cens, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+		if cens.ndim != 2 or cens.shape[0] != DEFAULT_N_CHROMA:
+			return np.zeros((DEFAULT_N_CHROMA, 1), dtype=np.float32)
+		return _temporal_smoothing(cens)
+	except Exception:
+		return np.zeros((DEFAULT_N_CHROMA, 1), dtype=np.float32)
+
+
+def _temporal_smoothing(chroma: np.ndarray) -> np.ndarray:
+	"""Apply median smoothing over short time windows to dampen percussive spikes."""
+	arr = np.asarray(chroma, dtype=np.float32)
+	if arr.ndim != 2 or arr.shape[1] < max(CHROMA_MEDIAN_WINDOW_FRAMES, 3):
+		return arr
+	window = CHROMA_MEDIAN_WINDOW_FRAMES if CHROMA_MEDIAN_WINDOW_FRAMES % 2 == 1 else CHROMA_MEDIAN_WINDOW_FRAMES + 1
+	if median_filter is None:
+		smoothed = _fallback_median_temporal(arr, window=window)
+	else:
+		smoothed = median_filter(arr, size=(1, window), mode="nearest")
+	stable = (1.0 - CHROMA_STABILITY_MIN_ENERGY) * arr + CHROMA_STABILITY_MIN_ENERGY * smoothed
+	return np.asarray(stable, dtype=np.float32, copy=False)
+
+
+def _fallback_median_temporal(chroma: np.ndarray, *, window: int) -> np.ndarray:
+	"""Fallback median smoothing using NumPy when scipy is unavailable."""
+	arr = np.asarray(chroma, dtype=np.float32)
+	if arr.ndim != 2 or arr.size == 0:
+		return arr
+	frames = arr.shape[1]
+	radius = max(1, window // 2)
+	padded = np.pad(arr, ((0, 0), (radius, radius)), mode="edge")
+	smoothed = np.empty_like(arr, dtype=np.float32)
+	for idx in range(frames):
+		smoothed[:, idx] = np.median(padded[:, idx : idx + 2 * radius + 1], axis=1)
+	return smoothed
 
 
 def estimate_beat_frame_boundaries(

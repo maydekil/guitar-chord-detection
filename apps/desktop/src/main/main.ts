@@ -2,10 +2,13 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
+import type { SaveSongAnalysisRequest, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
 
 import { AnalysisCache, resolveAnalysisCachePath } from "./analysisCache.js";
-import { analyzeAudioInEngine } from "./engineProcess.js";
+import { analyzeAudioInEngine, transcribeLyricsInEngine } from "./engineProcess.js";
 import { buildAudioFileDialogOptions, toFileSelectionResult } from "./fileDialog.js";
+import { SongLibraryStore, resolveSongLibraryPath } from "./songLibrary.js";
 import { buildMainWindowOptions } from "./window.js";
 
 interface AudioPlaybackSource {
@@ -18,12 +21,18 @@ interface AnalyzeAudioRequest {
     forceRefresh?: boolean;
 }
 
+interface GenerateLyricsRequest {
+    audioPath: string;
+    model?: string;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ANALYSIS_CONTRACT_VERSION = "1";
 const ANALYSIS_ALGORITHM = "chroma-template-v3";
 
 let analysisCache: AnalysisCache | null = null;
+let songLibrary: SongLibraryStore | null = null;
 
 function resolveAudioMimeType(audioPath: string): AudioPlaybackSource["mimeType"] | null {
     const extension = path.extname(audioPath).toLowerCase();
@@ -55,13 +64,40 @@ function registerIpcHandlers(): void {
     ipcMain.handle("engine:analyzeAudio", async (_event, request: string | AnalyzeAudioRequest) => {
         const normalized = typeof request === "string" ? { audioPath: request, forceRefresh: false } : request;
         const cache = getAnalysisCache();
-        return await cache.analyzeWithCache({
+        const result = await cache.analyzeWithCache({
             audioPath: normalized.audioPath,
             algorithm: ANALYSIS_ALGORITHM,
             contractVersion: ANALYSIS_CONTRACT_VERSION,
             forceRefresh: normalized.forceRefresh === true,
             analyze: (pathToAnalyze) => analyzeAudioInEngine(pathToAnalyze, { appPath: app.getAppPath() })
         });
+        return result;
+    });
+    ipcMain.handle("engine:generateLyrics", async (_event, request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> => {
+        return await transcribeLyricsInEngine(request.audioPath, { appPath: app.getAppPath() }, normalizeLyricsModel(request.model));
+    });
+    ipcMain.handle("library:saveAnalysis", async (_event, request: SaveSongAnalysisRequest) => {
+        const metadata = normalizeSongMetadata(request.metadata);
+        if (!metadata) {
+            throw new Error("Song title and artist are required");
+        }
+        return await getSongLibrary().upsertAnalysis({
+            audioPath: request.audioPath,
+            algorithm: ANALYSIS_ALGORITHM,
+            contractVersion: ANALYSIS_CONTRACT_VERSION,
+            analysis: request.analysis,
+            metadata,
+            lyrics: request.lyrics
+        });
+    });
+    ipcMain.handle("library:listSongs", async (_event, options?: SongLibrarySearchOptions) => {
+        return await getSongLibrary().listSongs(options);
+    });
+    ipcMain.handle("library:getSong", async (_event, id: string) => {
+        return await getSongLibrary().getSong(id);
+    });
+    ipcMain.handle("library:deleteSong", async (_event, id: string) => {
+        return await getSongLibrary().deleteSong(id);
     });
     ipcMain.handle("file:selectAudio", async () => {
         const response = await dialog.showOpenDialog(buildAudioFileDialogOptions());
@@ -90,6 +126,27 @@ function getAnalysisCache(): AnalysisCache {
         analysisCache = new AnalysisCache(cacheFilePath);
     }
     return analysisCache;
+}
+
+function getSongLibrary(): SongLibraryStore {
+    if (!songLibrary) {
+        songLibrary = new SongLibraryStore(resolveSongLibraryPath(app.getPath("userData")));
+    }
+    return songLibrary;
+}
+
+function normalizeSongMetadata(metadata: SongMetadataInput): SongMetadataInput | null {
+    const title = metadata.title.trim();
+    const artist = metadata.artist.trim();
+    if (!title || !artist) {
+        return null;
+    }
+    return { title, artist };
+}
+
+function normalizeLyricsModel(model: string | undefined): string {
+    const allowedModels = new Set(["tiny", "base", "small", "medium", "large"]);
+    return model && allowedModels.has(model) ? model : "small";
 }
 
 async function bootstrap(): Promise<void> {

@@ -98,8 +98,8 @@ BOUNDARY_CONSOLIDATION_CONTRAST_MIN = 0.08
 
 GLOBAL_DECODE_TOP_K = 6
 GLOBAL_DECODE_EVIDENCE_MARGIN_WEIGHT = 0.24
-GLOBAL_DECODE_SELF_STABILITY_BONUS = 0.03
-GLOBAL_DECODE_CHANGE_BASE_COST = 0.06
+GLOBAL_DECODE_SELF_STABILITY_BONUS = 0.05
+GLOBAL_DECODE_CHANGE_BASE_COST = 0.09
 GLOBAL_DECODE_RELATIONSHIP_WEIGHT = 0.22
 GLOBAL_DECODE_LOCAL_CONFIDENCE_WEIGHT = 0.10
 GLOBAL_DECODE_STRONG_SWITCH_ADVANTAGE = 0.16
@@ -109,20 +109,34 @@ GLOBAL_DECODE_QUALITY_SWITCH_STRONG_MARGIN_MIN = 0.006
 GLOBAL_DECODE_QUALITY_SWITCH_STRONG_QMARGIN_MIN = 0.14
 GLOBAL_DECODE_QUALITY_SWITCH_POSITIVE_TRANSITION = 0.055
 
-CONTEXT_SHORT_SEGMENT_MAX_SECONDS = 1.00
-CONTEXT_SHORT_STRONG_CONFIDENCE_MIN = 0.78
-CONTEXT_SHORT_LOW_CONFIDENCE_MAX = 0.76
+CONTEXT_SHORT_SEGMENT_MAX_SECONDS = 1.35
+CONTEXT_SHORT_STRONG_CONFIDENCE_MIN = 0.32
+CONTEXT_SHORT_LOW_CONFIDENCE_MAX = 0.30
 CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS = 0.40
-CONTEXT_NEIGHBOR_MIN_CONFIDENCE = 0.60
-CONTEXT_CANDIDATE_SUPPORT_MIN = 0.58
+CONTEXT_NEIGHBOR_MIN_CONFIDENCE = 0.14
+CONTEXT_CANDIDATE_SUPPORT_MIN = 0.42
 CONTEXT_SUPPORT_GAP_MIN = 0.00
 CONTEXT_CORRECTION_SCORE_MIN = 0.24
 CONTEXT_SAME_CHORD_STABILITY_BONUS = 0.12
+CONTEXT_NON_DIATONIC_SHORT_BONUS = 0.18
+WEAK_DIMINISHED_MAX_SECONDS = 1.05
+WEAK_DIMINISHED_MAX_CONFIDENCE = 0.22
+WEAK_MICRO_SEGMENT_MAX_SECONDS = 0.60
+WEAK_MICRO_SEGMENT_MAX_CONFIDENCE = 0.21
+WEAK_EDGE_SEGMENT_MAX_SECONDS = 1.25
+WEAK_EDGE_SEGMENT_MAX_CONFIDENCE = 0.18
+LONG_SEGMENT_REFINE_MIN_SECONDS = 4.80
+LONG_SEGMENT_REFINE_WINDOW_SECONDS = 0.70
+LONG_SEGMENT_REFINE_MIN_CHILD_SECONDS = 0.65
+LONG_SEGMENT_REFINE_SCORE_MARGIN = 0.006
+LONG_SEGMENT_REFINE_MIN_SCORE = 0.135
 
 HARMONIC_PLAUSIBILITY_DIATONIC = 1.0
 HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED = 0.60
-HARMONIC_PLAUSIBILITY_NON_DIATONIC = 0.35
+HARMONIC_PLAUSIBILITY_NON_DIATONIC = 0.20
 HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR = 0.92
+BEAT_PROFILE_HARMONIC_WEIGHT = 0.96
+BEAT_PROFILE_LOW_WEIGHT = 0.04
 
 MUSICAL_KEEP_STREAK_REFERENCE_BEATS = 3
 MUSICAL_SWITCH_REFERENCE_SECONDS = 0.75
@@ -144,12 +158,12 @@ MUSICAL_EXCEPTIONAL_SUPPORT_CONFIDENCE = 0.70
 ROOT_AWARE_TEMPLATE_WEIGHT = 0.74
 ROOT_AWARE_ROOT_WEIGHT = 0.15
 ROOT_AWARE_QUALITY_WEIGHT = 0.11
-ROOT_AWARE_KEY_CONTEXT_WEIGHT = 0.10
+ROOT_AWARE_KEY_CONTEXT_WEIGHT = 0.18
 
 ROOT_AWARE_ROOT_ENERGY_WEIGHT = 0.64
 ROOT_AWARE_FIFTH_ENERGY_WEIGHT = 0.22
-ROOT_AWARE_BASS_ROOT_WEIGHT = 0.10
-ROOT_AWARE_BASS_FIFTH_WEIGHT = 0.04
+ROOT_AWARE_BASS_ROOT_WEIGHT = 0.06
+ROOT_AWARE_BASS_FIFTH_WEIGHT = 0.03
 
 ROOT_AWARE_QUALITY_THIRD_WEIGHT = 0.62
 ROOT_AWARE_QUALITY_SUPPORT_WEIGHT = 0.38
@@ -328,7 +342,7 @@ def analyze_audio(path: str | Path) -> AnalysisResult:
 		use_harmonic_preprocessing=True,
 		use_beat_sync=True,
 		use_key_prior=True,
-		use_context_correction=False,
+		use_context_correction=True,
 	)
 	return run.result
 
@@ -347,7 +361,7 @@ def compare_baseline_vs_improved(path: str | Path) -> dict[str, object]:
 		use_harmonic_preprocessing=True,
 		use_beat_sync=True,
 		use_key_prior=True,
-		use_context_correction=False,
+		use_context_correction=True,
 	)
 
 	baseline_summary = _summarize_analysis(baseline.result, baseline.detected_key, baseline.beat_timing)
@@ -478,8 +492,21 @@ def compare_baseline_vs_improved(path: str | Path) -> dict[str, object]:
 			],
 		},
 		"contextCorrection": {
-			"appliedCount": 0,
-			"appliedExamples": [],
+			"appliedCount": len(improved.correction_events or []),
+			"appliedExamples": [
+				{
+					"index": event.index,
+					"replacedChord": event.replaced_chord,
+					"newChord": event.new_chord,
+					"start": event.start,
+					"end": event.end,
+					"duration": event.duration,
+					"score": event.score,
+					"harmonicPlausibilityBefore": event.harmonic_plausibility_before,
+					"harmonicPlausibilityAfter": event.harmonic_plausibility_after,
+				}
+				for event in (improved.correction_events or [])[:20]
+			],
 		},
 		"harmonicSegmentation": {
 			"localNoveltyCandidateCount": improved.local_novelty_candidate_count,
@@ -614,6 +641,38 @@ def _run_pipeline(
 			sample_rate=features.sample_rate,
 			source_duration=audio.duration,
 		)
+		detected_key = _resolve_relative_key_context(segments, detected_key)
+		correction_events: list[CorrectionEvent] = []
+		if use_context_correction:
+			segments, correction_events = _apply_context_aware_short_segment_correction(
+				segments,
+				detected_key=detected_key,
+			)
+			segments, diminished_events = _suppress_weak_diminished_passing_segments(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(diminished_events)
+			segments, cleanup_events = _suppress_weak_timeline_fragments(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(cleanup_events)
+			segments, refinement_events = _refine_long_segments_with_harmonic_evidence(
+				segments,
+				chroma=features.chroma,
+				low_chroma=low_chroma,
+				boundaries=beat_timing.boundaries,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+				detected_key=detected_key,
+			)
+			correction_events.extend(refinement_events)
+			segments, cleanup_events = _suppress_weak_timeline_fragments(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(cleanup_events)
 		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 
 		result = AnalysisResult(
@@ -634,7 +693,7 @@ def _run_pipeline(
 			beat_timing=beat_timing,
 			region_observations=decoded_regions,
 			persistence_events=[],
-			correction_events=[],
+			correction_events=correction_events,
 			accepted_boundaries=decoded_boundaries,
 			rejected_novelty_peaks=rejected_peaks,
 			global_decoder_path_score=decoder_path_score,
@@ -753,7 +812,10 @@ def _build_harmonic_regions_from_change_points(
 		region_chroma = np.asarray(chroma[:, start:end], dtype=np.float32)
 		region_low = np.asarray(low_chroma[:, start:end], dtype=np.float32)
 		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=key_estimate)
-		profile = _normalize_nonnegative(0.82 * np.mean(np.clip(region_chroma, 0.0, None), axis=1) + 0.18 * np.mean(np.clip(region_low, 0.0, None), axis=1))
+		profile = _normalize_nonnegative(
+			(BEAT_PROFILE_HARMONIC_WEIGHT * np.mean(np.clip(region_chroma, 0.0, None), axis=1))
+			+ (BEAT_PROFILE_LOW_WEIGHT * np.mean(np.clip(region_low, 0.0, None), axis=1))
+		)
 		beat_profiles.append(profile)
 		beat_local_chords.append(str(root_aware["winner_label"]))
 
@@ -1590,7 +1652,9 @@ def _profile_from_frame_range(chroma: np.ndarray, low_chroma: np.ndarray, start:
 		return np.zeros((12,), dtype=np.float32)
 	high = np.mean(np.clip(np.asarray(chroma[:, left:right], dtype=np.float32), 0.0, None), axis=1)
 	low = np.mean(np.clip(np.asarray(low_chroma[:, left:right], dtype=np.float32), 0.0, None), axis=1)
-	return _normalize_nonnegative(0.82 * high + 0.18 * low)
+	return _normalize_nonnegative(
+		BEAT_PROFILE_HARMONIC_WEIGHT * high + BEAT_PROFILE_LOW_WEIGHT * low
+	)
 
 
 def _region_beat_lengths_from_edges(region_edges: list[int], beat_ranges: list[tuple[int, int]]) -> list[float]:
@@ -1800,7 +1864,7 @@ def _local_evidence_score(
 	):
 		# Short non-diatonic regions are often ornamental tones; dampen switch pressure.
 		short_factor = float(np.clip((1.0 - obs.duration_seconds) / 1.0, 0.0, 1.0))
-		score -= 0.10 * short_factor
+		score -= (0.16 + (0.06 if obs.is_quality_ambiguous else 0.0)) * short_factor
 	if chord == "N" and obs.duration_seconds < 0.30:
 		score -= 0.06
 	return score
@@ -1832,6 +1896,13 @@ def _transition_score(
 	if _is_root_preserving_quality_switch(prev_chord, curr_chord) and obs.quality_margin >= 0.12:
 		switch_bonus += GLOBAL_DECODE_QUALITY_SWITCH_BONUS
 	penalty = GLOBAL_DECODE_CHANGE_BASE_COST - (GLOBAL_DECODE_RELATIONSHIP_WEIGHT * relationship) - confidence_bonus - switch_bonus
+	if (
+		detected_key is not None
+		and curr_chord != "N"
+		and obs.duration_seconds < CONTEXT_SHORT_SEGMENT_MAX_SECONDS
+		and not _is_diatonic_chord(curr_chord, detected_key)
+	):
+		penalty += 0.12 * float(np.clip((CONTEXT_SHORT_SEGMENT_MAX_SECONDS - obs.duration_seconds) / CONTEXT_SHORT_SEGMENT_MAX_SECONDS, 0.0, 1.0))
 	penalty = float(max(0.02, penalty))
 	return -penalty
 
@@ -2343,8 +2414,20 @@ def _estimate_region_root_aware_identity(
 		root_pc = _chord_root_pc(label)
 		if root_pc is None:
 			continue
-		is_minor_label = label.endswith("m")
-		quality_component = major_quality_evidence if not label.endswith("m") else minor_quality_evidence
+		_, label_quality = _parse_chord_quality(label)
+		is_minor_label = label_quality == "minor"
+		is_diminished_label = label_quality == "diminished"
+		diminished_quality_evidence = float(
+			0.52 * energy[(root_pc + 3) % 12]
+			+ 0.38 * energy[(root_pc + 6) % 12]
+			+ 0.10 * energy[root_pc]
+		)
+		if is_diminished_label:
+			quality_component = diminished_quality_evidence
+		elif is_minor_label:
+			quality_component = minor_quality_evidence
+		else:
+			quality_component = major_quality_evidence
 		if is_quality_ambiguous:
 			quality_component *= 0.55
 		key_context_adjust = 0.0
@@ -2354,8 +2437,9 @@ def _estimate_region_root_aware_identity(
 				root_pc == selected_root_pc
 				and quality_margin >= ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN
 				and (
-					(is_minor_label and (minor_quality_evidence > major_quality_evidence))
-					or ((not is_minor_label) and (major_quality_evidence > minor_quality_evidence))
+					(is_diminished_label and (diminished_quality_evidence > major_quality_evidence))
+					or (is_minor_label and (minor_quality_evidence > major_quality_evidence))
+					or ((not is_minor_label and not is_diminished_label) and (major_quality_evidence > minor_quality_evidence))
 				)
 			)
 			template_root_support = bool(template_top_root is not None and root_pc == template_top_root)
@@ -2442,32 +2526,32 @@ def _key_prior_bonus(chord_name: str, key_estimate: KeyEstimate) -> float:
 	if root_pc is None:
 		return 0.0
 
-	is_minor = chord_name.endswith("m")
-	match = _diatonic_match_score(root_pc, is_minor, key_estimate)
+	_, quality = _parse_chord_quality(chord_name)
+	match = _diatonic_match_score(root_pc, quality, key_estimate)
 	return 0.08 * key_estimate.confidence * match
 
 
-def _diatonic_match_score(root_pc: int, is_minor: bool, key_estimate: KeyEstimate) -> float:
+def _diatonic_match_score(root_pc: int, quality: str | None, key_estimate: KeyEstimate) -> float:
 	if key_estimate.mode == "major":
 		diatonic_chords = {
-			0: False,
-			2: True,
-			4: True,
-			5: False,
-			7: False,
-			9: True,
-			11: True,
+			0: "major",
+			2: "minor",
+			4: "minor",
+			5: "major",
+			7: "major",
+			9: "minor",
+			11: "diminished",
 		}
 		scale_intervals = (0, 2, 4, 5, 7, 9, 11)
 	else:
 		diatonic_chords = {
-			0: True,
-			2: True,
-			3: False,
-			5: True,
-			7: True,
-			8: False,
-			10: False,
+			0: "minor",
+			2: "diminished",
+			3: "major",
+			5: "minor",
+			7: "minor",
+			8: "major",
+			10: "major",
 		}
 		scale_intervals = (0, 2, 3, 5, 7, 8, 10)
 
@@ -2475,16 +2559,21 @@ def _diatonic_match_score(root_pc: int, is_minor: bool, key_estimate: KeyEstimat
 	if interval not in scale_intervals:
 		return 0.0
 
-	expected_minor = diatonic_chords.get(interval)
-	if expected_minor is None:
-		return 0.25
-	if expected_minor == is_minor:
+	expected_quality = diatonic_chords.get(interval)
+	if expected_quality is None:
+		return 0.0
+	if expected_quality == quality:
 		return 1.0
-	return 0.45
+	return 0.30
 
 
 def _chord_root_pc(chord_name: str) -> int | None:
-	name = chord_name[:-1] if chord_name.endswith("m") else chord_name
+	if chord_name.endswith("dim"):
+		name = chord_name[:-3]
+	elif chord_name.endswith("m"):
+		name = chord_name[:-1]
+	else:
+		name = chord_name
 	lookup = {
 		"C": 0,
 		"C#": 1,
@@ -2529,6 +2618,9 @@ def _compute_harmonic_change_evidence(
 def _parse_chord_quality(label: str) -> tuple[str | None, str | None]:
 	if label == "N":
 		return None, None
+	if label.endswith("dim"):
+		root = label[:-3]
+		return root, "diminished"
 	if label.endswith("m"):
 		root = label[:-1]
 		return root, "minor"
@@ -2787,6 +2879,8 @@ def _apply_context_aware_short_segment_correction(
 
 		current_plausibility = _harmonic_plausibility(current.chord, detected_key)
 		replacement_plausibility = _harmonic_plausibility(candidate.chord, detected_key)
+		current_is_diatonic = _is_diatonic_chord(current.chord, detected_key)
+		candidate_is_diatonic = _is_diatonic_chord(candidate.chord, detected_key)
 
 		if current_plausibility >= HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR and current.confidence >= 0.68:
 			continue
@@ -2803,6 +2897,7 @@ def _apply_context_aware_short_segment_correction(
 			+ 0.18 * plausibility_gap
 			+ 0.16 * support_gap
 			+ (CONTEXT_SAME_CHORD_STABILITY_BONUS if neighbors_same else 0.0)
+			+ (CONTEXT_NON_DIATONIC_SHORT_BONUS if candidate_is_diatonic and not current_is_diatonic else 0.0)
 		)
 
 		if score < CONTEXT_CORRECTION_SCORE_MIN:
@@ -2861,6 +2956,341 @@ def _merge_adjacent_same_chord_segments(segments: list[ChordSegment]) -> list[Ch
 		)
 
 	return merged
+
+
+def _suppress_weak_diminished_passing_segments(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Absorb very short weak diminished flashes into stable neighboring chords."""
+	if len(segments) < 3:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for idx in range(1, len(working) - 1):
+		current = working[idx]
+		if not current.chord.endswith("dim"):
+			continue
+
+		duration = _segment_duration(current)
+		if duration > WEAK_DIMINISHED_MAX_SECONDS or current.confidence > WEAK_DIMINISHED_MAX_CONFIDENCE:
+			continue
+
+		left = working[idx - 1]
+		right = working[idx + 1]
+		left_quality = _parse_chord_quality(left.chord)[1]
+		right_quality = _parse_chord_quality(right.chord)[1]
+		left_ok = left.chord != "N" and left_quality != "diminished" and _segment_duration(left) >= CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS
+		right_ok = right.chord != "N" and right_quality != "diminished" and _segment_duration(right) >= CONTEXT_NEIGHBOR_MIN_DURATION_SECONDS
+		if not left_ok and not right_ok:
+			continue
+
+		left_support = _neighbor_support(left, detected_key) if left_ok else -1.0
+		right_support = _neighbor_support(right, detected_key) if right_ok else -1.0
+		candidate = right if right_support > left_support else left
+		candidate_support = max(left_support, right_support)
+		if candidate_support < CONTEXT_CANDIDATE_SUPPORT_MIN:
+			continue
+
+		before = _harmonic_plausibility(current.chord, detected_key)
+		after = _harmonic_plausibility(candidate.chord, detected_key)
+		new_confidence = float(np.clip(candidate.confidence * 0.94, 0.0, 1.0))
+		working[idx] = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=candidate.chord,
+			confidence=new_confidence,
+		)
+		events.append(
+			CorrectionEvent(
+				index=idx,
+				replaced_chord=current.chord,
+				new_chord=candidate.chord,
+				start=float(current.start),
+				end=float(current.end),
+				duration=float(duration),
+				original_confidence=float(current.confidence),
+				new_confidence=float(new_confidence),
+				score=float(candidate_support),
+				harmonic_plausibility_before=float(before),
+				harmonic_plausibility_after=float(after),
+			)
+		)
+
+	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _suppress_weak_timeline_fragments(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Absorb implausibly brief low-confidence chord fragments in the final timeline."""
+	if len(segments) < 2:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+
+	for idx, current in enumerate(list(working)):
+		duration = _segment_duration(current)
+		if current.chord == "N":
+			continue
+
+		is_first = idx == 0
+		is_last = idx == len(working) - 1
+		is_edge = is_first or is_last
+		if is_edge:
+			if duration > WEAK_EDGE_SEGMENT_MAX_SECONDS or current.confidence > WEAK_EDGE_SEGMENT_MAX_CONFIDENCE:
+				continue
+			neighbor_idx = 1 if is_first else idx - 1
+			if neighbor_idx < 0 or neighbor_idx >= len(working):
+				continue
+			candidate = working[neighbor_idx]
+			if _segment_duration(candidate) < 2.0:
+				continue
+		else:
+			if duration > WEAK_MICRO_SEGMENT_MAX_SECONDS or current.confidence > WEAK_MICRO_SEGMENT_MAX_CONFIDENCE:
+				continue
+			left = working[idx - 1]
+			right = working[idx + 1]
+			if left.chord == current.chord or right.chord == current.chord:
+				continue
+			left_support = _neighbor_support(left, detected_key)
+			right_support = _neighbor_support(right, detected_key)
+			candidate = right if right_support > left_support else left
+			if max(left_support, right_support) < CONTEXT_CANDIDATE_SUPPORT_MIN:
+				continue
+
+		before = _harmonic_plausibility(current.chord, detected_key)
+		after = _harmonic_plausibility(candidate.chord, detected_key)
+		new_confidence = float(np.clip(candidate.confidence * 0.94, 0.0, 1.0))
+		working[idx] = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=candidate.chord,
+			confidence=new_confidence,
+		)
+		events.append(
+			CorrectionEvent(
+				index=idx,
+				replaced_chord=current.chord,
+				new_chord=candidate.chord,
+				start=float(current.start),
+				end=float(current.end),
+				duration=float(duration),
+				original_confidence=float(current.confidence),
+				new_confidence=float(new_confidence),
+				score=float(max(_neighbor_support(candidate, detected_key), 0.0)),
+				harmonic_plausibility_before=float(before),
+				harmonic_plausibility_after=float(after),
+			)
+		)
+
+	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _refine_long_segments_with_harmonic_evidence(
+	segments: list[ChordSegment],
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Split long chord holds when internal beat-level harmony consistently disagrees."""
+	if len(segments) == 0 or boundaries.size < 2:
+		return segments, []
+
+	refined: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	for segment_idx, segment in enumerate(segments):
+		duration = _segment_duration(segment)
+		if duration < LONG_SEGMENT_REFINE_MIN_SECONDS or segment.chord == "N":
+			refined.append(segment)
+			continue
+
+		start_frame = int(max(0, round(segment.start * sample_rate / hop_length)))
+		end_frame = int(min(chroma.shape[1], round(segment.end * sample_rate / hop_length)))
+		subsegments = _long_segment_candidate_subsegments(
+			segment,
+			start_frame=start_frame,
+			end_frame=end_frame,
+			chroma=chroma,
+			low_chroma=low_chroma,
+			boundaries=boundaries,
+			hop_length=hop_length,
+			sample_rate=sample_rate,
+			detected_key=detected_key,
+		)
+		if len(subsegments) <= 1:
+			refined.append(segment)
+			continue
+
+		refined.extend(subsegments)
+		for sub in subsegments:
+			if sub.chord == segment.chord:
+				continue
+			events.append(
+				CorrectionEvent(
+					index=segment_idx,
+					replaced_chord=segment.chord,
+					new_chord=sub.chord,
+					start=float(sub.start),
+					end=float(sub.end),
+					duration=float(_segment_duration(sub)),
+					original_confidence=float(segment.confidence),
+					new_confidence=float(sub.confidence),
+					score=float(sub.confidence),
+					harmonic_plausibility_before=float(_harmonic_plausibility(segment.chord, detected_key)),
+					harmonic_plausibility_after=float(_harmonic_plausibility(sub.chord, detected_key)),
+				)
+			)
+
+	return _merge_adjacent_same_chord_segments(refined), events
+
+
+def _long_segment_candidate_subsegments(
+	segment: ChordSegment,
+	*,
+	start_frame: int,
+	end_frame: int,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> list[ChordSegment]:
+	frame_edges = [start_frame]
+	for boundary in boundaries.tolist():
+		frame = int(boundary)
+		if start_frame < frame < end_frame:
+			frame_edges.append(frame)
+	refine_step_frames = max(1, int(round(LONG_SEGMENT_REFINE_WINDOW_SECONDS * sample_rate / hop_length)))
+	for frame in range(start_frame + refine_step_frames, end_frame, refine_step_frames):
+		frame_edges.append(int(frame))
+	frame_edges.append(end_frame)
+	frame_edges = sorted(set(frame_edges))
+	if len(frame_edges) < 3:
+		return [segment]
+
+	beat_segments: list[ChordSegment] = []
+	for left, right in zip(frame_edges[:-1], frame_edges[1:], strict=False):
+		if right <= left:
+			continue
+		region_chroma = np.asarray(chroma[:, left:right], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, left:right], dtype=np.float32)
+		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=detected_key)
+		scores = dict(root_aware["combined_scores"])
+		winner = str(root_aware["winner_label"])
+		winner_score = float(scores.get(winner, 0.0))
+		parent_score = float(scores.get(segment.chord, 0.0))
+		if (
+			winner != segment.chord
+			and winner_score >= LONG_SEGMENT_REFINE_MIN_SCORE
+			and (winner_score - parent_score) >= LONG_SEGMENT_REFINE_SCORE_MARGIN
+		):
+			label = winner
+			confidence = winner_score
+		else:
+			label = segment.chord
+			confidence = max(float(segment.confidence), parent_score)
+
+		beat_segments.append(
+			ChordSegment(
+				start=float(left * hop_length / sample_rate),
+				end=float(right * hop_length / sample_rate),
+				chord=label,
+				confidence=float(np.clip(confidence, 0.0, 1.0)),
+			)
+		)
+
+	collapsed = _merge_adjacent_same_chord_segments(beat_segments)
+	cleaned: list[ChordSegment] = []
+	for child in collapsed:
+		child_duration = _segment_duration(child)
+		if child.chord == segment.chord or child_duration >= LONG_SEGMENT_REFINE_MIN_CHILD_SECONDS:
+			cleaned.append(child)
+			continue
+		if cleaned:
+			prev = cleaned[-1]
+			cleaned[-1] = ChordSegment(
+				start=prev.start,
+				end=child.end,
+				chord=prev.chord,
+				confidence=prev.confidence,
+			)
+		else:
+			cleaned.append(
+				ChordSegment(
+					start=child.start,
+					end=child.end,
+					chord=segment.chord,
+					confidence=segment.confidence,
+				)
+			)
+
+	if len(cleaned) > 1:
+		first = cleaned[0]
+		last = cleaned[-1]
+		cleaned[0] = ChordSegment(start=segment.start, end=first.end, chord=first.chord, confidence=first.confidence)
+		cleaned[-1] = ChordSegment(start=last.start, end=segment.end, chord=last.chord, confidence=last.confidence)
+		return _merge_adjacent_same_chord_segments(cleaned)
+
+	return [segment]
+
+
+def _resolve_relative_key_context(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate | None,
+) -> KeyEstimate | None:
+	"""Prefer relative major when the chord-duration center clearly points there."""
+	if detected_key is None or detected_key.mode != "minor" or not segments:
+		return detected_key
+
+	relative_major_pc = (detected_key.tonic_pc + 3) % 12
+	major_tonic = _root_name_from_pc(relative_major_pc)
+	major_dominant = _root_name_from_pc((relative_major_pc + 7) % 12)
+	major_subdominant = _root_name_from_pc((relative_major_pc + 5) % 12)
+	major_mediant_minor = f"{_root_name_from_pc((relative_major_pc + 4) % 12)}m"
+
+	minor_tonic = f"{_root_name_from_pc(detected_key.tonic_pc)}m"
+	minor_dominant_minor = f"{_root_name_from_pc((detected_key.tonic_pc + 7) % 12)}m"
+	minor_subdominant_minor = f"{_root_name_from_pc((detected_key.tonic_pc + 5) % 12)}m"
+
+	durations = _chord_duration_map(segments)
+	major_center_score = (
+		durations.get(major_tonic, 0.0)
+		+ 0.80 * durations.get(major_dominant, 0.0)
+		+ 0.70 * durations.get(major_subdominant, 0.0)
+		+ 0.35 * durations.get(major_mediant_minor, 0.0)
+	)
+	minor_center_score = (
+		durations.get(minor_tonic, 0.0)
+		+ 0.80 * durations.get(minor_dominant_minor, 0.0)
+		+ 0.70 * durations.get(minor_subdominant_minor, 0.0)
+	)
+	major_tonic_duration = durations.get(major_tonic, 0.0)
+	minor_tonic_duration = durations.get(minor_tonic, 0.0)
+
+	if major_center_score >= (minor_center_score * 1.12) and major_tonic_duration >= (minor_tonic_duration * 1.05):
+		return KeyEstimate(
+			tonic_pc=relative_major_pc,
+			mode="major",
+			confidence=float(np.clip(detected_key.confidence * 0.92, 0.0, 1.0)),
+		)
+
+	return detected_key
+
+
+def _chord_duration_map(segments: list[ChordSegment]) -> dict[str, float]:
+	durations: dict[str, float] = {}
+	for segment in segments:
+		durations[segment.chord] = durations.get(segment.chord, 0.0) + _segment_duration(segment)
+	return durations
 
 
 def _segment_duration(segment: ChordSegment) -> float:
@@ -2965,8 +3395,7 @@ def _is_diatonic_chord(chord_name: str, detected_key: KeyEstimate | None) -> boo
 		"B": 11,
 	}
 
-	is_minor = chord_name.endswith("m")
-	root_name = chord_name[:-1] if is_minor else chord_name
+	root_name, quality = _parse_chord_quality(chord_name)
 	root_pc = root_to_pc.get(root_name)
 	if root_pc is None:
 		return False
@@ -2974,29 +3403,29 @@ def _is_diatonic_chord(chord_name: str, detected_key: KeyEstimate | None) -> boo
 	interval = (root_pc - detected_key.tonic_pc) % 12
 	if detected_key.mode == "major":
 		diatonic_chords = {
-			0: False,
-			2: True,
-			4: True,
-			5: False,
-			7: False,
-			9: True,
-			11: True,
+			0: "major",
+			2: "minor",
+			4: "minor",
+			5: "major",
+			7: "major",
+			9: "minor",
+			11: "diminished",
 		}
 	else:
 		diatonic_chords = {
-			0: True,
-			2: True,
-			3: False,
-			5: True,
-			7: True,
-			8: False,
-			10: False,
+			0: "minor",
+			2: "diminished",
+			3: "major",
+			5: "minor",
+			7: "minor",
+			8: "major",
+			10: "major",
 		}
 
-	expected_minor = diatonic_chords.get(interval)
-	if expected_minor is None:
+	expected_quality = diatonic_chords.get(interval)
+	if expected_quality is None:
 		return False
-	return expected_minor == is_minor
+	return expected_quality == quality
 
 
 def _harmonic_plausibility(chord_name: str, detected_key: KeyEstimate | None) -> float:
@@ -3024,14 +3453,13 @@ def _harmonic_plausibility(chord_name: str, detected_key: KeyEstimate | None) ->
 		"B": 11,
 	}
 
-	is_minor = chord_name.endswith("m")
-	root_name = chord_name[:-1] if is_minor else chord_name
+	root_name, quality = _parse_chord_quality(chord_name)
 	root_pc = root_to_pc.get(root_name)
 	if root_pc is None:
 		return HARMONIC_PLAUSIBILITY_NON_DIATONIC
 
 	interval = (root_pc - detected_key.tonic_pc) % 12
-	if detected_key.mode == "minor" and interval == 7 and not is_minor:
+	if detected_key.mode == "minor" and interval == 7 and quality == "major":
 		# Harmonic-minor dominant major quality (e.g. C# in F#m) is musically plausible.
 		return HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR
 

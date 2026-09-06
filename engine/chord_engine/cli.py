@@ -8,6 +8,7 @@ import sys
 
 from chord_engine.analyze import CONTRACT_VERSION, AnalysisError, analyze_audio
 from chord_engine.evaluation import EvaluationError, evaluate_against_ground_truth
+from chord_engine.lyrics import LyricsError, transcribe_lyrics
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -16,6 +17,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	analyze_parser = subparsers.add_parser("analyze")
 	analyze_parser.add_argument("path")
+
+	lyrics_parser = subparsers.add_parser("transcribe-lyrics")
+	lyrics_parser.add_argument("path")
+	lyrics_parser.add_argument("--model", default="base")
 
 	eval_parser = subparsers.add_parser("evaluate-ground-truth")
 	eval_parser.add_argument("audio_path")
@@ -36,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
 
 	if args.command == "analyze":
 		return _run_analyze(args.path)
+	if args.command == "transcribe-lyrics":
+		return _run_transcribe_lyrics(args.path, model_name=args.model)
 	if args.command == "evaluate-ground-truth":
 		return _run_evaluate_ground_truth(
 			args.audio_path,
@@ -55,6 +62,27 @@ def _run_analyze(path: str) -> int:
 		return 0
 	except AnalysisError as exc:
 		_print_json(exc.to_dict())
+		return 1
+
+
+def _run_transcribe_lyrics(path: str, *, model_name: str) -> int:
+	try:
+		_print_json(transcribe_lyrics(path, model_name=model_name))
+		return 0
+	except LyricsError as exc:
+		_print_json(exc.to_dict())
+		return 1
+	except Exception as exc:  # pragma: no cover - boundary safeguard
+		print(f"Unexpected lyrics CLI failure: {exc}", file=sys.stderr)
+		_print_json(
+			{
+				"version": CONTRACT_VERSION,
+				"error": {
+					"code": "LYRICS_TRANSCRIPTION_FAILED",
+					"message": "Failed to transcribe lyrics",
+				},
+			}
+		)
 		return 1
 	except Exception as exc:  # pragma: no cover - boundary safeguard
 		print(f"Unexpected CLI failure: {exc}", file=sys.stderr)
