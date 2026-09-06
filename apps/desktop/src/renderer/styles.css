@@ -133,6 +133,76 @@ body {
     color: #4a555b;
 }
 
+.api-settings-toggle {
+    border: 1px solid rgba(92, 76, 45, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 252, 244, 0.74);
+    color: #465459;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.24rem 0.54rem;
+}
+
+.api-settings-panel {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-width: 0;
+    margin-top: -0.35rem;
+    padding: 0.42rem 0.54rem;
+    border: 1px solid rgba(92, 76, 45, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 250, 241, 0.72);
+}
+
+.api-settings-panel label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 0 1 420px;
+    color: #526166;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.api-settings-panel input {
+    width: 100%;
+    min-width: 140px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.32rem 0.48rem;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+}
+
+.api-settings-panel button {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.32rem 0.55rem;
+    background: #fffdf8;
+    color: var(--ink);
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.api-settings-panel button:last-of-type {
+    border-color: rgba(143, 87, 42, 0.32);
+    background: var(--accent);
+    color: #fffdf8;
+}
+
+.api-settings-panel small {
+    overflow: hidden;
+    color: #6b7374;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .secondary-btn {
     background: #fffaf1;
     color: #4a555b;
@@ -144,7 +214,7 @@ body {
     display: flex;
     gap: 0.5rem;
     margin-top: 0.28rem;
-    max-width: 340px;
+    max-width: 440px;
 }
 
 .job-progress span,
@@ -168,6 +238,17 @@ body {
     display: block;
     height: 100%;
     transition: width 180ms ease;
+}
+
+.job-progress button {
+    border: 1px solid rgba(127, 47, 32, 0.18);
+    border-radius: 7px;
+    background: #f7ebe0;
+    color: #7f2f20;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.18rem 0.42rem;
 }
 
 .shell-card {
@@ -936,6 +1017,17 @@ input[type="range"] {
         align-items: flex-start;
         display: grid;
         gap: 0.45rem;
+    }
+
+    .api-settings-panel {
+        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+    }
+
+    .api-settings-panel label,
+    .api-settings-panel small {
+        grid-column: 1 / -1;
     }
 
     .workspace-panels {

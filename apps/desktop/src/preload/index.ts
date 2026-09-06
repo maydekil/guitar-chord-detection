@@ -43,6 +43,10 @@ export interface ApiStatus {
     healthy: boolean;
 }
 
+export interface ApiConfig {
+    baseUrl: string | null;
+}
+
 export interface ApiJobProgressEvent {
     id: string;
     kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
@@ -58,6 +62,8 @@ export interface DesktopApi {
     getAppVersion(): Promise<string>;
     isApiMode?(): Promise<boolean>;
     getApiStatus?(): Promise<ApiStatus>;
+    testApiConfig?(config: ApiConfig): Promise<ApiStatus>;
+    saveApiConfig?(config: ApiConfig): Promise<ApiStatus>;
     selectAudioFile(): Promise<FileSelectionResult>;
     analyzeAudio?(audioPath: string, options?: AnalyzeAudioOptions): Promise<ChordAnalysisResult>;
     generateLyricsFromAudio?(audioPath: string, options?: GenerateLyricsOptions): Promise<LyricsTranscriptionResult>;
@@ -69,6 +75,7 @@ export interface DesktopApi {
     saveSongAnalysis?(request: SaveSongAnalysisRequest): Promise<SongLibraryRecord>;
     deleteSong?(id: string): Promise<DeleteSongResult>;
     getSongExportUrl?(id: string, format: "txt" | "lrc"): Promise<SongExportUrlResult>;
+    cancelApiJob?(id: string): Promise<unknown>;
     onApiJobProgress?(listener: (event: ApiJobProgressEvent) => void): () => void;
 }
 
@@ -76,6 +83,8 @@ const desktopApi: DesktopApi = {
     getAppVersion: () => ipcRenderer.invoke("app:getVersion") as Promise<string>,
     isApiMode: () => ipcRenderer.invoke("app:isApiMode") as Promise<boolean>,
     getApiStatus: () => ipcRenderer.invoke("app:getApiStatus") as Promise<ApiStatus>,
+    testApiConfig: (config: ApiConfig) => ipcRenderer.invoke("app:testApiConfig", config) as Promise<ApiStatus>,
+    saveApiConfig: (config: ApiConfig) => ipcRenderer.invoke("app:saveApiConfig", config) as Promise<ApiStatus>,
     selectAudioFile: () => ipcRenderer.invoke("file:selectAudio") as Promise<FileSelectionResult>,
     analyzeAudio: (audioPath: string, options?: AnalyzeAudioOptions) =>
         ipcRenderer.invoke("engine:analyzeAudio", {
@@ -98,6 +107,7 @@ const desktopApi: DesktopApi = {
     deleteSong: (id: string) => ipcRenderer.invoke("library:deleteSong", id) as Promise<DeleteSongResult>,
     getSongExportUrl: (id: string, format: "txt" | "lrc") =>
         ipcRenderer.invoke("library:getExportUrl", { id, format }) as Promise<SongExportUrlResult>,
+    cancelApiJob: (id: string) => ipcRenderer.invoke("engine:cancelApiJob", id) as Promise<unknown>,
     onApiJobProgress: (listener: (event: ApiJobProgressEvent) => void) => {
         const channelListener = (_event: IpcRendererEvent, payload: ApiJobProgressEvent): void => {
             listener(payload);

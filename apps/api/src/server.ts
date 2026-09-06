@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -53,6 +54,7 @@ interface PitchShiftAudioRequest {
 interface EngineCommandOptions {
     timeoutMs: number;
     env?: NodeJS.ProcessEnv;
+    jobId?: string;
 }
 
 type EngineJobKind = "analysis" | "lyrics" | "vocals" | "pitch-shift";
@@ -103,6 +105,8 @@ const database = new DatabaseSync(path.join(dataDir, "guitar-chord-detection.sql
 initializeDatabase(database);
 markInterruptedJobs(database);
 const engineJobs = new Map<string, EngineJob>();
+const activeEngineProcesses = new Map<string, ChildProcessWithoutNullStreams>();
+const cancelledEngineJobs = new Set<string>();
 
 const server = http.createServer((request, response) => {
     void handleRequest(request, response).catch((error) => {
@@ -144,6 +148,17 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     const jobMatch = /^\/jobs\/([^/]+)$/.exec(url.pathname);
     if (jobMatch && method === "GET") {
         const job = getEngineJob(decodeURIComponent(jobMatch[1]));
+        if (!job) {
+            sendJson(response, 404, { message: "Job not found" });
+            return;
+        }
+        sendJson(response, 200, toEngineJobSnapshot(job));
+        return;
+    }
+
+    const cancelJobMatch = /^\/jobs\/([^/]+)\/cancel$/.exec(url.pathname);
+    if (cancelJobMatch && method === "POST") {
+        const job = cancelEngineJob(decodeURIComponent(cancelJobMatch[1]));
         if (!job) {
             sendJson(response, 404, { message: "Job not found" });
             return;
@@ -467,10 +482,11 @@ function createEngineJob(request: EngineJobRequest): EngineJob {
 }
 
 async function runEngineJob(job: EngineJob, payload: unknown): Promise<void> {
-    updateEngineJob(job, { status: "running", progress: 10 });
+    updateEngineJob(job, { status: "running", progress: 5 });
+    const progressTimer = startEstimatedProgress(job);
 
     try {
-        const result = await executeEngineJob(job.kind, payload);
+        const result = await executeEngineJob(job, payload);
         if (result && typeof result === "object" && "error" in result) {
             const error = (result as { error: { code?: unknown; message?: unknown } }).error;
             updateEngineJob(job, {
@@ -501,23 +517,86 @@ async function runEngineJob(job: EngineJob, payload: unknown): Promise<void> {
                 message: error instanceof Error ? error.message : "Engine job failed"
             }
         });
+    } finally {
+        clearInterval(progressTimer);
+        activeEngineProcesses.delete(job.id);
+        cancelledEngineJobs.delete(job.id);
     }
 }
 
-async function executeEngineJob(kind: EngineJobKind, payload: unknown): Promise<unknown> {
-    if (kind === "analysis") {
-        return await analyzeAudio(payload as AnalyzeAudioRequest);
+async function executeEngineJob(job: EngineJob, payload: unknown): Promise<unknown> {
+    if (job.kind === "analysis") {
+        return await analyzeAudio(payload as AnalyzeAudioRequest, job.id);
     }
-    if (kind === "lyrics") {
-        return await transcribeLyrics(payload as GenerateLyricsRequest);
+    if (job.kind === "lyrics") {
+        return await transcribeLyrics(payload as GenerateLyricsRequest, job.id);
     }
-    if (kind === "vocals") {
-        return await removeVocals(payload as RemoveVocalsRequest);
+    if (job.kind === "vocals") {
+        return await removeVocals(payload as RemoveVocalsRequest, job.id);
     }
-    if (kind === "pitch-shift") {
-        return await pitchShiftAudio(payload as PitchShiftAudioRequest);
+    if (job.kind === "pitch-shift") {
+        return await pitchShiftAudio(payload as PitchShiftAudioRequest, job.id);
     }
     return enginePlaceholder("ENGINE_JOB_UNKNOWN_KIND", "Unknown engine job kind");
+}
+
+function cancelEngineJob(id: string): EngineJob | null {
+    const job = getEngineJob(id);
+    if (!job) {
+        return null;
+    }
+    if (job.status !== "queued" && job.status !== "running") {
+        return job;
+    }
+
+    cancelledEngineJobs.add(id);
+    const child = activeEngineProcesses.get(id);
+    if (child) {
+        child.kill("SIGTERM");
+        setTimeout(() => {
+            if (child.exitCode === null && child.signalCode === null) {
+                child.kill("SIGKILL");
+            }
+        }, 1200);
+    }
+    updateEngineJob(job, {
+        status: "failed",
+        progress: 100,
+        error: {
+            code: "ENGINE_JOB_CANCELLED",
+            message: "Engine job cancelled"
+        }
+    });
+    engineJobs.set(job.id, job);
+    return job;
+}
+
+function startEstimatedProgress(job: EngineJob): NodeJS.Timeout {
+    const startedAt = Date.now();
+    const expectedMs = getExpectedJobDurationMs(job.kind);
+    return setInterval(() => {
+        if (job.status !== "running") {
+            return;
+        }
+        const elapsed = Date.now() - startedAt;
+        const estimated = 5 + Math.min(90, Math.round((elapsed / expectedMs) * 90));
+        if (estimated > job.progress && estimated < 96) {
+            updateEngineJob(job, { progress: estimated });
+        }
+    }, 1000);
+}
+
+function getExpectedJobDurationMs(kind: EngineJobKind): number {
+    if (kind === "lyrics") {
+        return 120_000;
+    }
+    if (kind === "vocals") {
+        return 240_000;
+    }
+    if (kind === "pitch-shift") {
+        return 45_000;
+    }
+    return 90_000;
 }
 
 function updateEngineJob(job: EngineJob, patch: Partial<EngineJob>): void {
@@ -576,7 +655,7 @@ function rowToEngineJob(row: EngineJobRow): EngineJob {
     };
 }
 
-async function analyzeAudio(request: AnalyzeAudioRequest): Promise<ChordAnalysisResult> {
+async function analyzeAudio(request: AnalyzeAudioRequest, jobId?: string): Promise<ChordAnalysisResult> {
     if (!request.audioPath) {
         return enginePlaceholder("ENGINE_INVALID_INPUT", "Audio path is required") satisfies ChordAnalysisResult;
     }
@@ -584,11 +663,11 @@ async function analyzeAudio(request: AnalyzeAudioRequest): Promise<ChordAnalysis
     return await runEngineJson<ChordAnalysisResult>(
         ["-m", "chord_engine.cli", "analyze", request.audioPath],
         "ENGINE",
-        { timeoutMs: 5 * 60_000 }
+        { timeoutMs: 5 * 60_000, jobId }
     );
 }
 
-async function transcribeLyrics(request: GenerateLyricsRequest): Promise<LyricsTranscriptionResult> {
+async function transcribeLyrics(request: GenerateLyricsRequest, jobId?: string): Promise<LyricsTranscriptionResult> {
     if (!request.audioPath) {
         return enginePlaceholder("LYRICS_INVALID_INPUT", "Audio path is required") satisfies LyricsTranscriptionResult;
     }
@@ -596,11 +675,11 @@ async function transcribeLyrics(request: GenerateLyricsRequest): Promise<LyricsT
     return await runEngineJson<LyricsTranscriptionResult>(
         ["-m", "chord_engine.cli", "transcribe-lyrics", request.audioPath, "--model", normalizeLyricsModel(request.model)],
         "LYRICS",
-        { timeoutMs: 10 * 60_000 }
+        { timeoutMs: 10 * 60_000, jobId }
     );
 }
 
-async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalResult> {
+async function removeVocals(request: RemoveVocalsRequest, jobId?: string): Promise<VocalRemovalResult> {
     if (!request.audioPath) {
         return enginePlaceholder("VOCAL_REMOVAL_INVALID_INPUT", "Audio path is required") satisfies VocalRemovalResult;
     }
@@ -610,6 +689,7 @@ async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalR
         "VOCAL_REMOVAL",
         {
             timeoutMs: 20 * 60_000,
+            jobId,
             env: {
                 ...process.env,
                 DEMUCS_CACHE: path.join(engineOutputDir, "vocal-removal", "model-cache", "demucs"),
@@ -621,7 +701,7 @@ async function removeVocals(request: RemoveVocalsRequest): Promise<VocalRemovalR
     return await withStreamableAudioResult(result);
 }
 
-async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchShiftResult> {
+async function pitchShiftAudio(request: PitchShiftAudioRequest, jobId?: string): Promise<PitchShiftResult> {
     if (!request.audioPath) {
         return enginePlaceholder("PITCH_SHIFT_INVALID_INPUT", "Audio path is required") satisfies PitchShiftResult;
     }
@@ -638,7 +718,7 @@ async function pitchShiftAudio(request: PitchShiftAudioRequest): Promise<PitchSh
             String(normalizeTransposeSemitones(request.semitones))
         ],
         "PITCH_SHIFT",
-        { timeoutMs: 5 * 60_000 }
+        { timeoutMs: 5 * 60_000, jobId }
     );
     return await withStreamableAudioResult(result);
 }
@@ -691,6 +771,9 @@ async function runEngineJson<T extends { version: string; error?: { code: string
             cwd: engineCwd,
             env: options.env ?? process.env
         });
+        if (options.jobId) {
+            activeEngineProcesses.set(options.jobId, child);
+        }
 
         const finish = (result: T): void => {
             if (settled) {
@@ -698,6 +781,9 @@ async function runEngineJson<T extends { version: string; error?: { code: string
             }
             settled = true;
             clearTimeout(timeoutId);
+            if (options.jobId) {
+                activeEngineProcesses.delete(options.jobId);
+            }
             if (stderr.trim()) {
                 console.error(`[api engine stderr] ${stderr.trim()}`);
             }
@@ -722,6 +808,10 @@ async function runEngineJson<T extends { version: string; error?: { code: string
         });
 
         child.on("close", (code) => {
+            if (options.jobId && cancelledEngineJobs.has(options.jobId)) {
+                finish(enginePlaceholder(`${errorPrefix}_CANCELLED`, "Engine job cancelled") as T);
+                return;
+            }
             const parsed = parseEngineJson<T>(stdout);
             if (!parsed) {
                 finish(enginePlaceholder(`${errorPrefix}_INVALID_JSON`, "Engine returned invalid JSON output") as T);

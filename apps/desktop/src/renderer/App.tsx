@@ -22,6 +22,12 @@ export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
     const [isApiMode, setIsApiMode] = useState<boolean>(false);
     const [apiHealthState, setApiHealthState] = useState<ApiHealthState>("checking");
+    const [apiBaseUrl, setApiBaseUrl] = useState<string>("");
+    const [draftApiBaseUrl, setDraftApiBaseUrl] = useState<string>("");
+    const [isApiSettingsOpen, setIsApiSettingsOpen] = useState<boolean>(false);
+    const [apiSettingsStatus, setApiSettingsStatus] = useState<string>("");
+    const [isTestingApiConfig, setIsTestingApiConfig] = useState<boolean>(false);
+    const [isSavingApiConfig, setIsSavingApiConfig] = useState<boolean>(false);
     const [state, setState] = useState<ShellState>("idle");
     const [selectedFileName, setSelectedFileName] = useState<string>("No file selected");
     const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -68,6 +74,8 @@ export function App() {
     const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
     const audioFadeTimerRef = useRef<number | null>(null);
     const pendingSeekTimeRef = useRef<number | null>(null);
+    const latestApiJobProgressRef = useRef<ApiJobProgressEvent | null>(null);
+    const cancelledApiJobIdsRef = useRef<Set<string>>(new Set());
     const bridge = window.gcd;
 
     useEffect(() => {
@@ -163,10 +171,12 @@ export function App() {
         if (bridge.getApiStatus) {
             void bridge.getApiStatus()
                 .then((status) => {
-                    setIsApiMode(status.mode === "api");
-                    setApiHealthState(status.mode === "local" ? "local" : status.healthy ? "connected" : "offline");
-                })
-                .catch(() => setApiHealthState("offline"));
+                setIsApiMode(status.mode === "api");
+                setApiHealthState(status.mode === "local" ? "local" : status.healthy ? "connected" : "offline");
+                setApiBaseUrl(status.baseUrl ?? "");
+                setDraftApiBaseUrl(status.baseUrl ?? "");
+            })
+            .catch(() => setApiHealthState("offline"));
         } else if (!bridge.isApiMode) {
             setApiHealthState("local");
         }
@@ -178,9 +188,14 @@ export function App() {
         }
 
         return bridge.onApiJobProgress((event) => {
+            latestApiJobProgressRef.current = event;
             setApiJobProgress(event);
             if (event.status === "queued" || event.status === "running") {
                 setAnalysisStatus(`${formatApiJobKind(event.kind)} ${event.status}: ${Math.round(event.progress)}%`);
+            } else if (event.status === "failed") {
+                const wasCancelled = cancelledApiJobIdsRef.current.has(event.id);
+                setAnalysisStatus(wasCancelled ? `${formatApiJobKind(event.kind)} cancelled.` : `${formatApiJobKind(event.kind)} stopped.`);
+                cancelledApiJobIdsRef.current.delete(event.id);
             }
         });
     }, [bridge]);
@@ -356,6 +371,52 @@ export function App() {
         await runAnalysis(nextPath);
     };
 
+    const handleTestApiConfig = async (): Promise<void> => {
+        if (!bridge?.testApiConfig) {
+            setApiSettingsStatus("API settings belum tersedia. Restart aplikasi lalu coba lagi.");
+            return;
+        }
+        setIsTestingApiConfig(true);
+        try {
+            const status = await bridge.testApiConfig({ baseUrl: draftApiBaseUrl.trim() || null });
+            setApiSettingsStatus(status.mode === "local"
+                ? "Local mode selected."
+                : status.healthy
+                    ? "API connected."
+                    : "API offline.");
+        } catch {
+            setApiSettingsStatus("Tidak bisa test API URL.");
+        } finally {
+            setIsTestingApiConfig(false);
+        }
+    };
+
+    const handleSaveApiConfig = async (): Promise<void> => {
+        if (!bridge?.saveApiConfig) {
+            setApiSettingsStatus("API settings belum tersedia. Restart aplikasi lalu coba lagi.");
+            return;
+        }
+        setIsSavingApiConfig(true);
+        try {
+            const status = await bridge.saveApiConfig({ baseUrl: draftApiBaseUrl.trim() || null });
+            setIsApiMode(status.mode === "api");
+            setApiHealthState(status.mode === "local" ? "local" : status.healthy ? "connected" : "offline");
+            setApiBaseUrl(status.baseUrl ?? "");
+            setDraftApiBaseUrl(status.baseUrl ?? "");
+            setApiSettingsStatus(status.mode === "local"
+                ? "Saved: Local mode."
+                : status.healthy
+                    ? "Saved: API connected."
+                    : "Saved, but API offline.");
+            void refreshLibrary(libraryQuery, 1, libraryPageSize);
+            setLibraryPage(1);
+        } catch {
+            setApiSettingsStatus("Gagal menyimpan API setting.");
+        } finally {
+            setIsSavingApiConfig(false);
+        }
+    };
+
     const handleAddSong = (): void => {
         resetPlaybackState();
         setState("idle");
@@ -497,6 +558,10 @@ export function App() {
         try {
             result = await bridge.generateLyricsFromAudio(selectedFilePath, { model: lyricsModel });
         } catch {
+            const latestJob = latestApiJobProgressRef.current;
+            if (latestJob && cancelledApiJobIdsRef.current.has(latestJob.id)) {
+                return;
+            }
             setIsGeneratingLyrics(false);
             setAnalysisStatus("Gagal generate lyrics dari audio.");
             return;
@@ -565,6 +630,39 @@ export function App() {
             `${safeDownloadName(songArtist)}-${safeDownloadName(songTitle)}.${format}`
         );
         setAnalysisStatus(`Export ${format.toUpperCase()} ready.`);
+    };
+
+    const handleCancelApiJob = async (): Promise<void> => {
+        if (!apiJobProgress || !bridge?.cancelApiJob) {
+            return;
+        }
+        try {
+            cancelledApiJobIdsRef.current.add(apiJobProgress.id);
+            await bridge.cancelApiJob(apiJobProgress.id);
+            setAnalysisStatus(`${formatApiJobKind(apiJobProgress.kind)} cancelled.`);
+            setApiJobProgress({
+                ...apiJobProgress,
+                status: "failed",
+                progress: 100
+            });
+            if (apiJobProgress.kind === "lyrics") {
+                setIsGeneratingLyrics(false);
+            }
+            if (apiJobProgress.kind === "vocals") {
+                setIsRemovingVocals(false);
+            }
+            if (apiJobProgress.kind === "pitch-shift") {
+                activePitchShiftRequestIdRef.current += 1;
+                setIsPitchShiftingAudio(false);
+            }
+            if (apiJobProgress.kind === "analysis") {
+                activeRequestIdRef.current += 1;
+                setState("ready");
+            }
+        } catch {
+            cancelledApiJobIdsRef.current.delete(apiJobProgress.id);
+            setAnalysisStatus("Gagal cancel job API.");
+        }
     };
 
     const triggerDownload = (url: string, fileName?: string): void => {
@@ -685,6 +783,10 @@ export function App() {
             try {
                 result = await bridge.pitchShiftAudio(baseAudioPath, { semitones });
             } catch {
+                const latestJob = latestApiJobProgressRef.current;
+                if (latestJob && cancelledApiJobIdsRef.current.has(latestJob.id)) {
+                    return;
+                }
                 setIsPitchShiftingAudio(false);
                 setAnalysisStatus("Gagal menyesuaikan transpose audio.");
                 return;
@@ -744,6 +846,10 @@ export function App() {
         try {
             result = await bridge.removeVocals(selectedFilePath);
         } catch {
+            const latestJob = latestApiJobProgressRef.current;
+            if (latestJob && cancelledApiJobIdsRef.current.has(latestJob.id)) {
+                return;
+            }
             setIsRemovingVocals(false);
             setAnalysisStatus("Vocal Off gagal dibuat.");
             return;
@@ -886,6 +992,7 @@ export function App() {
     const isPlaying = state === "playing";
     const canReanalyze = Boolean(selectedFilePath) && Boolean(bridge?.analyzeAudio);
     const canSaveAnalysis = Boolean(selectedFilePath) && Boolean(latestAnalysis);
+    const canCancelApiJob = Boolean(apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running"));
     const activeChord = findActiveChord(timelineSegments, currentTimeSeconds);
     const activeChordLabel = activeChord ? transposeChordLabel(activeChord, transposeSemitones) : "None";
 
@@ -895,9 +1002,37 @@ export function App() {
                 <div className="shell-title-row">
                     <h1>Guitar Chord Detector</h1>
                     <span className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</span>
+                    <button
+                        type="button"
+                        className="api-settings-toggle"
+                        onClick={() => setIsApiSettingsOpen((current) => !current)}
+                        aria-expanded={isApiSettingsOpen}
+                    >
+                        ⚙ API
+                    </button>
                 </div>
                 <p className="shell-meta">Desktop Shell v{version}</p>
             </header>
+            {isApiSettingsOpen ? (
+                <section className="api-settings-panel" aria-label="API settings">
+                    <label>
+                        <span>API URL</span>
+                        <input
+                            type="url"
+                            value={draftApiBaseUrl}
+                            onChange={(event) => setDraftApiBaseUrl(event.currentTarget.value)}
+                            placeholder="Kosongkan untuk Local Mode"
+                        />
+                    </label>
+                    <button type="button" onClick={() => void handleTestApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
+                        {isTestingApiConfig ? "Testing..." : "Test"}
+                    </button>
+                    <button type="button" onClick={() => void handleSaveApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
+                        {isSavingApiConfig ? "Saving..." : "Save"}
+                    </button>
+                    <small>{apiSettingsStatus || (apiBaseUrl ? `Current: ${apiBaseUrl}` : "Current: Local Mode")}</small>
+                </section>
+            ) : null}
 
             <div className="workspace-panels" ref={workspaceRef}>
                 <section
@@ -1150,6 +1285,9 @@ export function App() {
                                                 <span style={{ width: `${Math.max(5, Math.min(100, apiJobProgress.progress))}%` }} />
                                             </div>
                                             <strong>{Math.round(apiJobProgress.progress)}%</strong>
+                                            <button type="button" onClick={() => void handleCancelApiJob()} disabled={!canCancelApiJob}>
+                                                Cancel
+                                            </button>
                                         </div>
                                     ) : null}
                                 </div>
