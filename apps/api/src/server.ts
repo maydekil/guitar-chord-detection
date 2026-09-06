@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createReadStream, readFileSync } from "node:fs";
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,12 +97,20 @@ interface EngineJobRow {
     updated_at: string;
 }
 
+interface AssetCleanupResult {
+    deletedAudioFiles: number;
+    deletedEngineOutputFiles: number;
+    skippedReferencedFiles: number;
+    reclaimedBytes: number;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const port = Number.parseInt(process.env.PORT ?? "8787", 10);
 const dataDir = process.env.GCD_API_DATA_DIR ?? path.resolve(__dirname, "..", ".data");
 const audioDir = path.join(dataDir, "audio");
 const engineOutputDir = path.join(dataDir, "engine-output");
+const assetCleanupMaxAgeMs = normalizeAssetCleanupMaxAgeMs(process.env.GCD_ASSET_CLEANUP_MAX_AGE_HOURS);
 const repositoryRoot = process.env.GCD_REPOSITORY_ROOT ?? path.resolve(__dirname, "../../..");
 const engineCwd = path.join(repositoryRoot, "engine");
 const pythonExecutable = process.env.GCD_PYTHON ?? path.join(repositoryRoot, ".venv", "bin", "python");
@@ -128,6 +136,10 @@ const server = http.createServer((request, response) => {
 server.listen(port, () => {
     console.log(`[api] listening on http://localhost:${port}`);
 });
+void cleanupApiAssets().catch((error: unknown) => console.error("[api] asset cleanup failed", error));
+setInterval(() => {
+    void cleanupApiAssets().catch((error: unknown) => console.error("[api] asset cleanup failed", error));
+}, 60 * 60_000).unref();
 
 async function handleRequest(request: http.IncomingMessage, response: http.ServerResponse): Promise<void> {
     const url = new URL(request.url ?? "/", publicBaseUrl);
@@ -146,6 +158,11 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     if (method === "POST" && url.pathname === "/audio/upload") {
         const upload = await saveUploadedAudio(request, url);
         sendJson(response, 201, upload);
+        return;
+    }
+
+    if (method === "POST" && url.pathname === "/assets/cleanup") {
+        sendJson(response, 200, await cleanupApiAssets());
         return;
     }
 
@@ -905,6 +922,111 @@ async function materializeAudioAsset(sourcePath: string): Promise<{ audioPath: s
     };
 }
 
+async function cleanupApiAssets(): Promise<AssetCleanupResult> {
+    const referencedAudioPaths = collectReferencedAudioPaths();
+    const result: AssetCleanupResult = {
+        deletedAudioFiles: 0,
+        deletedEngineOutputFiles: 0,
+        skippedReferencedFiles: 0,
+        reclaimedBytes: 0
+    };
+
+    for (const filePath of await listFiles(audioDir)) {
+        if (referencedAudioPaths.has(path.resolve(filePath))) {
+            result.skippedReferencedFiles += 1;
+            continue;
+        }
+        const deletedBytes = await removeFileIfOlderThan(filePath, assetCleanupMaxAgeMs);
+        if (deletedBytes > 0) {
+            result.deletedAudioFiles += 1;
+            result.reclaimedBytes += deletedBytes;
+        }
+    }
+
+    for (const filePath of await listFiles(engineOutputDir)) {
+        if (isModelCachePath(filePath)) {
+            continue;
+        }
+        const deletedBytes = await removeFileIfOlderThan(filePath, assetCleanupMaxAgeMs);
+        if (deletedBytes > 0) {
+            result.deletedEngineOutputFiles += 1;
+            result.reclaimedBytes += deletedBytes;
+        }
+    }
+
+    return result;
+}
+
+function collectReferencedAudioPaths(): Set<string> {
+    const referenced = new Set<string>();
+    const rows = database.prepare("SELECT audio_path, instrumental_audio_path FROM songs").all() as unknown as Array<{
+        audio_path?: string | null;
+        instrumental_audio_path?: string | null;
+    }>;
+    for (const row of rows) {
+        addManagedAudioReference(referenced, row.audio_path);
+        addManagedAudioReference(referenced, row.instrumental_audio_path);
+    }
+    return referenced;
+}
+
+function addManagedAudioReference(referenced: Set<string>, audioPath: string | null | undefined): void {
+    if (!audioPath) {
+        return;
+    }
+    const resolved = path.resolve(audioPath);
+    if (resolved.startsWith(`${path.resolve(audioDir)}${path.sep}`)) {
+        referenced.add(resolved);
+    }
+}
+
+async function listFiles(root: string): Promise<string[]> {
+    try {
+        const entries = await readdir(root, { withFileTypes: true });
+        const files: string[] = [];
+        for (const entry of entries) {
+            const entryPath = path.join(root, entry.name);
+            if (entry.isDirectory()) {
+                files.push(...await listFiles(entryPath));
+            } else if (entry.isFile()) {
+                files.push(entryPath);
+            }
+        }
+        return files;
+    } catch (error) {
+        if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
+            return [];
+        }
+        throw error;
+    }
+}
+
+async function removeFileIfOlderThan(filePath: string, maxAgeMs: number): Promise<number> {
+    const fileStat = await stat(filePath).catch(() => null);
+    if (!fileStat?.isFile()) {
+        return 0;
+    }
+    if (Date.now() - fileStat.mtimeMs < maxAgeMs) {
+        return 0;
+    }
+    await unlink(filePath);
+    await removeEmptyParents(path.dirname(filePath), filePath.startsWith(engineOutputDir) ? engineOutputDir : audioDir);
+    return fileStat.size;
+}
+
+async function removeEmptyParents(directoryPath: string, stopAt: string): Promise<void> {
+    const resolvedStop = path.resolve(stopAt);
+    let current = path.resolve(directoryPath);
+    while (current.startsWith(`${resolvedStop}${path.sep}`)) {
+        await rm(current, { recursive: false }).catch(() => undefined);
+        current = path.dirname(current);
+    }
+}
+
+function isModelCachePath(filePath: string): boolean {
+    return path.resolve(filePath).split(path.sep).includes("model-cache");
+}
+
 async function runEngineJson<T extends { version: string; error?: { code: string; message: string } }>(
     args: string[],
     errorPrefix: string,
@@ -1117,6 +1239,14 @@ function normalizeTransposeSemitones(semitones: number): number {
         return 0;
     }
     return Math.max(-11, Math.min(11, Math.trunc(semitones)));
+}
+
+function normalizeAssetCleanupMaxAgeMs(rawHours: string | undefined): number {
+    const hours = rawHours ? Number.parseFloat(rawHours) : 24;
+    if (!Number.isFinite(hours) || hours <= 0) {
+        return 24 * 60 * 60_000;
+    }
+    return Math.max(1, hours) * 60 * 60_000;
 }
 
 const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
