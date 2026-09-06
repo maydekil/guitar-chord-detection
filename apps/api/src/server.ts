@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
@@ -241,14 +241,76 @@ function listSongs(url: URL): SongLibraryListResult {
     const pageSize = normalizePageSize(Number.parseInt(url.searchParams.get("pageSize") ?? "10", 10));
     const offset = (page - 1) * pageSize;
     const countStatement = query
-        ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
-        : database.prepare("SELECT COUNT(*) AS total FROM songs");
+        ? database.prepare(`
+            WITH latest_songs AS (
+                SELECT *
+                FROM songs
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM songs newer
+                    WHERE newer.file_hash = songs.file_hash
+                        AND (
+                            newer.updated_at > songs.updated_at
+                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                        )
+                )
+            )
+            SELECT COUNT(*) AS total
+            FROM latest_songs
+            WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+        `)
+        : database.prepare(`
+            SELECT COUNT(*) AS total
+            FROM songs
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM songs newer
+                WHERE newer.file_hash = songs.file_hash
+                    AND (
+                        newer.updated_at > songs.updated_at
+                        OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                    )
+            )
+        `);
     const total = query
         ? (countStatement.get(`%${query}%`) as { total: number }).total
         : (countStatement.get() as { total: number }).total;
     const rows = query
-        ? database.prepare("SELECT * FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ? ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
-        : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(pageSize, offset) as unknown as SongRow[];
+        ? database.prepare(`
+            WITH latest_songs AS (
+                SELECT *
+                FROM songs
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM songs newer
+                    WHERE newer.file_hash = songs.file_hash
+                        AND (
+                            newer.updated_at > songs.updated_at
+                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                        )
+                )
+            )
+            SELECT *
+            FROM latest_songs
+            WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        `).all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
+        : database.prepare(`
+            SELECT *
+            FROM songs
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM songs newer
+                WHERE newer.file_hash = songs.file_hash
+                    AND (
+                        newer.updated_at > songs.updated_at
+                        OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                    )
+            )
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        `).all(pageSize, offset) as unknown as SongRow[];
 
     return {
         records: rows.map(rowToRecord),
@@ -266,8 +328,8 @@ function getSong(id: string): SongLibraryRecord | null {
 
 function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
     const now = new Date().toISOString();
-    const fileHash = request.analysis.source.path || request.audioPath;
-    const id = `${fileHash}:${request.analysis.analysis.algorithm}:${request.analysis.version}`;
+    const fileHash = buildStableFileHash(request.audioPath, request.analysis.source.path);
+    const id = buildSongId(fileHash);
     const existing = getSong(id);
     const record: SongLibraryRecord = {
         id,
@@ -920,6 +982,18 @@ function parseEngineJson<T>(stdout: string): T | null {
     } catch {
         return null;
     }
+}
+
+function buildStableFileHash(audioPath: string, fallback: string): string {
+    try {
+        return createHash("sha256").update(readFileSync(audioPath)).digest("hex");
+    } catch {
+        return fallback || audioPath;
+    }
+}
+
+function buildSongId(fileHash: string): string {
+    return `song:${fileHash}`;
 }
 
 function normalizeLyricsModel(model: string | undefined): string {

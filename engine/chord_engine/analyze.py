@@ -29,43 +29,43 @@ from chord_engine.smoothing import smooth_frame_predictions
 from chord_engine.templates import generate_chord_templates
 
 CONTRACT_VERSION = "1"
-ALGORITHM_ID = "chroma-template-v1"
+ALGORITHM_ID = "chroma-template-v10"
 END_TOLERANCE_SECONDS = 1e-6
 SHORT_SEGMENT_SECONDS = 0.25
 SUSPICIOUS_SHORT_NON_DIATONIC_SECONDS = 1.0
 IMPROVED_MIN_SEGMENT_DURATION_MS = 350
 
-NOVELTY_MIN_PEAK = 0.06
-NOVELTY_MAD_SCALE = 1.6
-NOVELTY_MIN_PROMINENCE = 0.02
-NOVELTY_PERSISTENCE_DISTANCE = 0.03
+NOVELTY_MIN_PEAK = 0.045
+NOVELTY_MAD_SCALE = 1.25
+NOVELTY_MIN_PROMINENCE = 0.014
+NOVELTY_PERSISTENCE_DISTANCE = 0.022
 
 MULTIRES_SHORT_CONTEXT_TARGET_SECONDS = 0.85
 MULTIRES_SHORT_CONTEXT_MIN_BEATS = 1
 MULTIRES_SHORT_CONTEXT_MAX_BEATS = 3
-MULTIRES_MEDIUM_CONTEXT_TARGET_SECONDS = 2.40
+MULTIRES_MEDIUM_CONTEXT_TARGET_SECONDS = 2.10
 MULTIRES_MEDIUM_CONTEXT_MIN_BEATS = 2
 MULTIRES_MEDIUM_CONTEXT_MAX_BEATS = 7
-MULTIRES_SHORT_DISTANCE_MIN = 0.12
-MULTIRES_MEDIUM_DISTANCE_MIN = 0.10
-MULTIRES_MEDIUM_DISTANCE_FLOOR = 0.065
-MULTIRES_CONTEXT_AGREEMENT_MIN = 0.86
-MULTIRES_PERSISTENCE_MIN = 0.52
-MULTIRES_FINAL_CONFIDENCE_MIN = 0.55
-MULTIRES_PROGRESSIVE_SHORT_MIN = 0.30
-MULTIRES_PROGRESSIVE_MEDIUM_MIN = 0.24
-MULTIRES_PROGRESSIVE_PERSISTENCE_MIN = 0.54
-MULTIRES_SAME_CONTEXT_MEDIUM_MIN = 0.24
-MULTIRES_SAME_CONTEXT_CONFIDENCE_MIN = 0.82
-MULTIRES_SAME_LOCAL_SHORT_MIN = 0.34
-MULTIRES_SAME_LOCAL_MEDIUM_MIN = 0.30
-MULTIRES_SAME_LOCAL_CONFIDENCE_MIN = 0.92
-MULTIRES_DISAGREE_MEDIUM_MIN = 0.20
-MULTIRES_DISAGREE_PERSISTENCE_MIN = 0.58
-MULTIRES_WEAK_MEDIUM_CONFIDENCE_MIN = 0.78
-MULTIRES_LOW_PERSISTENCE_CONFIDENCE_MIN = 0.82
-MULTIRES_MEDIUM_DOMINANT_DISTANCE_MIN = 0.40
-MULTIRES_MEDIUM_DOMINANT_SHORT_MIN = 0.22
+MULTIRES_SHORT_DISTANCE_MIN = 0.10
+MULTIRES_MEDIUM_DISTANCE_MIN = 0.082
+MULTIRES_MEDIUM_DISTANCE_FLOOR = 0.052
+MULTIRES_CONTEXT_AGREEMENT_MIN = 0.78
+MULTIRES_PERSISTENCE_MIN = 0.44
+MULTIRES_FINAL_CONFIDENCE_MIN = 0.48
+MULTIRES_PROGRESSIVE_SHORT_MIN = 0.24
+MULTIRES_PROGRESSIVE_MEDIUM_MIN = 0.18
+MULTIRES_PROGRESSIVE_PERSISTENCE_MIN = 0.45
+MULTIRES_SAME_CONTEXT_MEDIUM_MIN = 0.18
+MULTIRES_SAME_CONTEXT_CONFIDENCE_MIN = 0.74
+MULTIRES_SAME_LOCAL_SHORT_MIN = 0.27
+MULTIRES_SAME_LOCAL_MEDIUM_MIN = 0.24
+MULTIRES_SAME_LOCAL_CONFIDENCE_MIN = 0.84
+MULTIRES_DISAGREE_MEDIUM_MIN = 0.16
+MULTIRES_DISAGREE_PERSISTENCE_MIN = 0.50
+MULTIRES_WEAK_MEDIUM_CONFIDENCE_MIN = 0.70
+MULTIRES_LOW_PERSISTENCE_CONFIDENCE_MIN = 0.74
+MULTIRES_MEDIUM_DOMINANT_DISTANCE_MIN = 0.32
+MULTIRES_MEDIUM_DOMINANT_SHORT_MIN = 0.18
 MULTIRES_MEDIUM_DOMINANT_NOVELTY_SCALE = 0.92
 MULTIRES_CONSENSUS_SHIFT_RATIO_MIN = 0.67
 MULTIRES_CONSENSUS_SHIFT_MEDIUM_MIN = 0.22
@@ -99,7 +99,7 @@ BOUNDARY_CONSOLIDATION_CONTRAST_MIN = 0.08
 GLOBAL_DECODE_TOP_K = 6
 GLOBAL_DECODE_EVIDENCE_MARGIN_WEIGHT = 0.24
 GLOBAL_DECODE_SELF_STABILITY_BONUS = 0.05
-GLOBAL_DECODE_CHANGE_BASE_COST = 0.09
+GLOBAL_DECODE_CHANGE_BASE_COST = 0.065
 GLOBAL_DECODE_RELATIONSHIP_WEIGHT = 0.22
 GLOBAL_DECODE_LOCAL_CONFIDENCE_WEIGHT = 0.10
 GLOBAL_DECODE_STRONG_SWITCH_ADVANTAGE = 0.16
@@ -119,24 +119,52 @@ CONTEXT_SUPPORT_GAP_MIN = 0.00
 CONTEXT_CORRECTION_SCORE_MIN = 0.24
 CONTEXT_SAME_CHORD_STABILITY_BONUS = 0.12
 CONTEXT_NON_DIATONIC_SHORT_BONUS = 0.18
-WEAK_DIMINISHED_MAX_SECONDS = 1.05
-WEAK_DIMINISHED_MAX_CONFIDENCE = 0.22
+WEAK_DIMINISHED_MAX_SECONDS = 1.40
+WEAK_DIMINISHED_MAX_CONFIDENCE = 0.26
 WEAK_MICRO_SEGMENT_MAX_SECONDS = 0.60
 WEAK_MICRO_SEGMENT_MAX_CONFIDENCE = 0.21
 WEAK_EDGE_SEGMENT_MAX_SECONDS = 1.25
 WEAK_EDGE_SEGMENT_MAX_CONFIDENCE = 0.18
-LONG_SEGMENT_REFINE_MIN_SECONDS = 4.80
-LONG_SEGMENT_REFINE_WINDOW_SECONDS = 0.70
-LONG_SEGMENT_REFINE_MIN_CHILD_SECONDS = 0.65
-LONG_SEGMENT_REFINE_SCORE_MARGIN = 0.006
-LONG_SEGMENT_REFINE_MIN_SCORE = 0.135
+LONG_SEGMENT_REFINE_MIN_SECONDS = 3.20
+LONG_SEGMENT_REFINE_WINDOW_SECONDS = 0.55
+LONG_SEGMENT_REFINE_MIN_CHILD_SECONDS = 0.50
+LONG_SEGMENT_REFINE_SCORE_MARGIN = 0.003
+LONG_SEGMENT_REFINE_MIN_SCORE = 0.112
+HARMONIC_DRIFT_REFINE_MIN_SECONDS = 2.60
+HARMONIC_DRIFT_WINDOW_SECONDS = 0.35
+HARMONIC_DRIFT_MIN_BEAT_RATIO = 0.85
+HARMONIC_DRIFT_MIN_CHILD_SECONDS = 0.58
+HARMONIC_DRIFT_MIN_SCORE = 0.125
+HARMONIC_DRIFT_MIN_ADVANTAGE = 0.010
+HARMONIC_DRIFT_MAX_PLAUSIBILITY_DROP = 0.28
+HARMONIC_DRIFT_NON_DIATONIC_SCORE_BONUS = 0.055
+HARMONIC_DRIFT_NON_DIATONIC_ADVANTAGE_BONUS = 0.045
+TARGETED_LONG_HOLD_MIN_SECONDS = 3.40
+TARGETED_LONG_HOLD_MAX_CONFIDENCE = 0.205
+TARGETED_LONG_HOLD_WINDOW_SECONDS = 0.46
+TARGETED_LONG_HOLD_MIN_CHILD_SECONDS = 0.82
+TARGETED_LONG_HOLD_MIN_SCORE = 0.128
+TARGETED_LONG_HOLD_MIN_ADVANTAGE = 0.008
+TARGETED_LONG_HOLD_MIN_ALTERNATE_RUN_SECONDS = 1.05
+TARGETED_LONG_HOLD_GRID_BEATS = 2
+TARGETED_LONG_HOLD_GRID_SCORE_RELAX = 0.010
+TARGETED_LONG_HOLD_GRID_ADVANTAGE_RELAX = 0.004
+MINI_SEQUENCE_DECODER_MIN_SECONDS = 3.40
+MINI_SEQUENCE_DECODER_MAX_CONFIDENCE = 0.205
+MINI_SEQUENCE_DECODER_GRID_BEATS = 1
+MINI_SEQUENCE_DECODER_TOP_K = 4
+MINI_SEQUENCE_DECODER_CHANGE_COST = 0.030
+MINI_SEQUENCE_DECODER_RELATIONSHIP_WEIGHT = 0.055
+MINI_SEQUENCE_DECODER_PARENT_BIAS = 0.010
+MINI_SEQUENCE_DECODER_MIN_ALTERNATE_SECONDS = 0.72
+MINI_SEQUENCE_DECODER_MIN_TOTAL_ALTERNATE_SECONDS = 1.20
 
 HARMONIC_PLAUSIBILITY_DIATONIC = 1.0
 HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED = 0.60
 HARMONIC_PLAUSIBILITY_NON_DIATONIC = 0.20
 HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR = 0.92
-BEAT_PROFILE_HARMONIC_WEIGHT = 0.96
-BEAT_PROFILE_LOW_WEIGHT = 0.04
+BEAT_PROFILE_HARMONIC_WEIGHT = 0.985
+BEAT_PROFILE_LOW_WEIGHT = 0.015
 
 MUSICAL_KEEP_STREAK_REFERENCE_BEATS = 3
 MUSICAL_SWITCH_REFERENCE_SECONDS = 0.75
@@ -162,8 +190,8 @@ ROOT_AWARE_KEY_CONTEXT_WEIGHT = 0.18
 
 ROOT_AWARE_ROOT_ENERGY_WEIGHT = 0.64
 ROOT_AWARE_FIFTH_ENERGY_WEIGHT = 0.22
-ROOT_AWARE_BASS_ROOT_WEIGHT = 0.06
-ROOT_AWARE_BASS_FIFTH_WEIGHT = 0.03
+ROOT_AWARE_BASS_ROOT_WEIGHT = 0.025
+ROOT_AWARE_BASS_FIFTH_WEIGHT = 0.010
 
 ROOT_AWARE_QUALITY_THIRD_WEIGHT = 0.62
 ROOT_AWARE_QUALITY_SUPPORT_WEIGHT = 0.38
@@ -653,6 +681,26 @@ def _run_pipeline(
 				detected_key=detected_key,
 			)
 			correction_events.extend(diminished_events)
+			segments, targeted_events = _refine_low_confidence_long_holds_with_key_candidates(
+				segments,
+				chroma=features.chroma,
+				low_chroma=low_chroma,
+				boundaries=beat_timing.boundaries,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+				detected_key=detected_key,
+			)
+			correction_events.extend(targeted_events)
+			segments, sequence_events = _refine_long_holds_with_mini_harmonic_sequence_decoder(
+				segments,
+				chroma=features.chroma,
+				low_chroma=low_chroma,
+				boundaries=beat_timing.boundaries,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+				detected_key=detected_key,
+			)
+			correction_events.extend(sequence_events)
 			segments, cleanup_events = _suppress_weak_timeline_fragments(
 				segments,
 				detected_key=detected_key,
@@ -668,6 +716,21 @@ def _run_pipeline(
 				detected_key=detected_key,
 			)
 			correction_events.extend(refinement_events)
+			segments, drift_events = _refine_long_segments_with_sustained_harmonic_drift(
+				segments,
+				chroma=features.chroma,
+				low_chroma=low_chroma,
+				boundaries=beat_timing.boundaries,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+				detected_key=detected_key,
+			)
+			correction_events.extend(drift_events)
+			segments, diminished_events = _suppress_weak_diminished_passing_segments(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(diminished_events)
 			segments, cleanup_events = _suppress_weak_timeline_fragments(
 				segments,
 				detected_key=detected_key,
@@ -3241,6 +3304,683 @@ def _long_segment_candidate_subsegments(
 		return _merge_adjacent_same_chord_segments(cleaned)
 
 	return [segment]
+
+
+def _refine_long_segments_with_sustained_harmonic_drift(
+	segments: list[ChordSegment],
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Split long holds only when an alternate chord persists for about one beat."""
+	if len(segments) == 0:
+		return segments, []
+
+	refined: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	for segment_idx, segment in enumerate(segments):
+		if segment.chord == "N" or _segment_duration(segment) < HARMONIC_DRIFT_REFINE_MIN_SECONDS:
+			refined.append(segment)
+			continue
+
+		subsegments = _sustained_harmonic_drift_subsegments(
+			segment,
+			chroma=chroma,
+			low_chroma=low_chroma,
+			boundaries=boundaries,
+			hop_length=hop_length,
+			sample_rate=sample_rate,
+			detected_key=detected_key,
+		)
+		if len(subsegments) <= 1:
+			refined.append(segment)
+			continue
+
+		refined.extend(subsegments)
+		for sub in subsegments:
+			if sub.chord == segment.chord:
+				continue
+			events.append(
+				CorrectionEvent(
+					index=segment_idx,
+					replaced_chord=segment.chord,
+					new_chord=sub.chord,
+					start=float(sub.start),
+					end=float(sub.end),
+					duration=float(_segment_duration(sub)),
+					original_confidence=float(segment.confidence),
+					new_confidence=float(sub.confidence),
+					score=float(sub.confidence),
+					harmonic_plausibility_before=float(_harmonic_plausibility(segment.chord, detected_key)),
+					harmonic_plausibility_after=float(_harmonic_plausibility(sub.chord, detected_key)),
+				)
+			)
+
+	return _merge_adjacent_same_chord_segments(refined), events
+
+
+def _sustained_harmonic_drift_subsegments(
+	segment: ChordSegment,
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> list[ChordSegment]:
+	start_frame = int(max(0, round(segment.start * sample_rate / hop_length)))
+	end_frame = int(min(chroma.shape[1], round(segment.end * sample_rate / hop_length)))
+	if end_frame <= start_frame:
+		return [segment]
+
+	frame_edges = [start_frame]
+	for boundary in boundaries.tolist():
+		frame = int(boundary)
+		if start_frame < frame < end_frame:
+			frame_edges.append(frame)
+	step_frames = max(1, int(round(HARMONIC_DRIFT_WINDOW_SECONDS * sample_rate / hop_length)))
+	for frame in range(start_frame + step_frames, end_frame, step_frames):
+		frame_edges.append(int(frame))
+	frame_edges.append(end_frame)
+	frame_edges = sorted(set(frame_edges))
+	if len(frame_edges) < 3:
+		return [segment]
+
+	parent_plausibility = _harmonic_plausibility(segment.chord, detected_key)
+	raw: list[ChordSegment] = []
+	for left, right in zip(frame_edges[:-1], frame_edges[1:], strict=False):
+		if right <= left:
+			continue
+		region_chroma = np.asarray(chroma[:, left:right], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, left:right], dtype=np.float32)
+		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=detected_key)
+		scores = dict(root_aware["combined_scores"])
+		winner = str(root_aware["winner_label"])
+		winner_score = float(scores.get(winner, 0.0))
+		parent_score = float(scores.get(segment.chord, 0.0))
+		winner_plausibility = _harmonic_plausibility(winner, detected_key)
+		required_score = HARMONIC_DRIFT_MIN_SCORE
+		required_advantage = HARMONIC_DRIFT_MIN_ADVANTAGE
+		if not _is_harmonic_drift_candidate_allowed(segment.chord, winner, detected_key):
+			required_score += HARMONIC_DRIFT_NON_DIATONIC_SCORE_BONUS
+			required_advantage += HARMONIC_DRIFT_NON_DIATONIC_ADVANTAGE_BONUS
+		if (
+			winner != segment.chord
+			and winner_score >= required_score
+			and (winner_score - parent_score) >= required_advantage
+			and winner_plausibility >= parent_plausibility - HARMONIC_DRIFT_MAX_PLAUSIBILITY_DROP
+		):
+			label = winner
+			confidence = winner_score
+		else:
+			label = segment.chord
+			confidence = max(float(segment.confidence), parent_score)
+
+		raw.append(
+			ChordSegment(
+				start=float(left * hop_length / sample_rate),
+				end=float(right * hop_length / sample_rate),
+				chord=label,
+				confidence=float(np.clip(confidence, 0.0, 1.0)),
+			)
+		)
+
+	collapsed = _merge_adjacent_same_chord_segments(raw)
+	min_sustained_seconds = _sustained_harmonic_drift_min_seconds(
+		boundaries,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+	)
+	cleaned: list[ChordSegment] = []
+	for child in collapsed:
+		child_duration = _segment_duration(child)
+		if child.chord == segment.chord or child_duration >= min_sustained_seconds:
+			cleaned.append(child)
+			continue
+		if cleaned:
+			prev = cleaned[-1]
+			cleaned[-1] = ChordSegment(
+				start=prev.start,
+				end=child.end,
+				chord=prev.chord,
+				confidence=_weighted_confidence(prev, child),
+			)
+		else:
+			cleaned.append(
+				ChordSegment(
+					start=child.start,
+					end=child.end,
+					chord=segment.chord,
+					confidence=segment.confidence,
+				)
+			)
+
+	cleaned = _merge_adjacent_same_chord_segments(cleaned)
+	if len(cleaned) <= 1:
+		return [segment]
+
+	first = cleaned[0]
+	last = cleaned[-1]
+	cleaned[0] = ChordSegment(start=segment.start, end=first.end, chord=first.chord, confidence=first.confidence)
+	cleaned[-1] = ChordSegment(start=last.start, end=segment.end, chord=last.chord, confidence=last.confidence)
+	return _merge_adjacent_same_chord_segments(cleaned)
+
+
+def _is_harmonic_drift_candidate_allowed(
+	parent_chord: str,
+	candidate_chord: str,
+	detected_key: KeyEstimate | None,
+) -> bool:
+	if candidate_chord == parent_chord:
+		return True
+	if candidate_chord == "N":
+		return False
+	if _is_root_preserving_quality_switch(parent_chord, candidate_chord):
+		return True
+	if detected_key is None:
+		return True
+	if _is_diatonic_chord(candidate_chord, detected_key):
+		return True
+	return False
+
+
+def _sustained_harmonic_drift_min_seconds(
+	boundaries: np.ndarray,
+	*,
+	hop_length: int,
+	sample_rate: int,
+) -> float:
+	if boundaries.size < 2:
+		return HARMONIC_DRIFT_MIN_CHILD_SECONDS
+	durations = [
+		float(max(1, int(right) - int(left)) * hop_length / sample_rate)
+		for left, right in zip(boundaries[:-1], boundaries[1:], strict=False)
+		if int(right) > int(left)
+	]
+	if not durations:
+		return HARMONIC_DRIFT_MIN_CHILD_SECONDS
+	one_beat = float(median(durations) * HARMONIC_DRIFT_MIN_BEAT_RATIO)
+	return float(np.clip(one_beat, HARMONIC_DRIFT_MIN_CHILD_SECONDS, 1.10))
+
+
+def _weighted_confidence(left: ChordSegment, right: ChordSegment) -> float:
+	left_duration = _segment_duration(left)
+	right_duration = _segment_duration(right)
+	total = left_duration + right_duration
+	if total <= 0.0:
+		return float(np.clip(max(left.confidence, right.confidence), 0.0, 1.0))
+	return float(np.clip(((left.confidence * left_duration) + (right.confidence * right_duration)) / total, 0.0, 1.0))
+
+
+def _refine_low_confidence_long_holds_with_key_candidates(
+	segments: list[ChordSegment],
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Target only suspicious long, low-confidence holds using chords from the active key."""
+	if len(segments) == 0 or detected_key is None:
+		return segments, []
+
+	refined: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	key_candidates = _diatonic_chord_labels_for_key(detected_key)
+	if not key_candidates:
+		return segments, []
+
+	for segment_idx, segment in enumerate(segments):
+		duration = _segment_duration(segment)
+		if (
+			segment.chord == "N"
+			or duration < TARGETED_LONG_HOLD_MIN_SECONDS
+			or segment.confidence > TARGETED_LONG_HOLD_MAX_CONFIDENCE
+		):
+			refined.append(segment)
+			continue
+
+		subsegments = _targeted_key_candidate_subsegments(
+			segment,
+			chroma=chroma,
+			low_chroma=low_chroma,
+			boundaries=boundaries,
+			hop_length=hop_length,
+			sample_rate=sample_rate,
+			detected_key=detected_key,
+			key_candidates=key_candidates,
+		)
+		if len(subsegments) <= 1:
+			refined.append(segment)
+			continue
+
+		refined.extend(subsegments)
+		for sub in subsegments:
+			if sub.chord == segment.chord:
+				continue
+			events.append(
+				CorrectionEvent(
+					index=segment_idx,
+					replaced_chord=segment.chord,
+					new_chord=sub.chord,
+					start=float(sub.start),
+					end=float(sub.end),
+					duration=float(_segment_duration(sub)),
+					original_confidence=float(segment.confidence),
+					new_confidence=float(sub.confidence),
+					score=float(sub.confidence),
+					harmonic_plausibility_before=float(_harmonic_plausibility(segment.chord, detected_key)),
+					harmonic_plausibility_after=float(_harmonic_plausibility(sub.chord, detected_key)),
+				)
+			)
+
+	return _merge_adjacent_same_chord_segments(refined), events
+
+
+def _targeted_key_candidate_subsegments(
+	segment: ChordSegment,
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate,
+	key_candidates: set[str],
+) -> list[ChordSegment]:
+	start_frame = int(max(0, round(segment.start * sample_rate / hop_length)))
+	end_frame = int(min(chroma.shape[1], round(segment.end * sample_rate / hop_length)))
+	if end_frame <= start_frame:
+		return [segment]
+
+	frame_edges = _targeted_long_hold_grid_edges(
+		start_frame,
+		end_frame,
+		boundaries,
+		sample_rate=sample_rate,
+		hop_length=hop_length,
+	)
+	if len(frame_edges) < 3:
+		return [segment]
+
+	raw: list[ChordSegment] = []
+	for left, right in zip(frame_edges[:-1], frame_edges[1:], strict=False):
+		if right <= left:
+			continue
+		region_chroma = np.asarray(chroma[:, left:right], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, left:right], dtype=np.float32)
+		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=detected_key)
+		scores = {
+			label: float(score)
+			for label, score in dict(root_aware["combined_scores"]).items()
+			if label in key_candidates
+		}
+		if segment.chord in dict(root_aware["combined_scores"]):
+			scores[segment.chord] = max(scores.get(segment.chord, 0.0), float(dict(root_aware["combined_scores"])[segment.chord]))
+		if not scores:
+			label = segment.chord
+			confidence = segment.confidence
+		else:
+			ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+			winner, winner_score = ranked[0]
+			parent_score = float(scores.get(segment.chord, 0.0))
+			if (
+				winner != segment.chord
+				and winner_score >= TARGETED_LONG_HOLD_MIN_SCORE - TARGETED_LONG_HOLD_GRID_SCORE_RELAX
+				and (winner_score - parent_score) >= TARGETED_LONG_HOLD_MIN_ADVANTAGE - TARGETED_LONG_HOLD_GRID_ADVANTAGE_RELAX
+			):
+				label = winner
+				confidence = winner_score
+			else:
+				label = segment.chord
+				confidence = max(segment.confidence, parent_score)
+
+		raw.append(
+			ChordSegment(
+				start=float(left * hop_length / sample_rate),
+				end=float(right * hop_length / sample_rate),
+				chord=label,
+				confidence=float(np.clip(confidence, 0.0, 1.0)),
+			)
+		)
+
+	collapsed = _merge_adjacent_same_chord_segments(raw)
+	cleaned = _keep_only_sustained_targeted_alternates(collapsed, parent=segment)
+	if len(cleaned) <= 1:
+		return [segment]
+
+	first = cleaned[0]
+	last = cleaned[-1]
+	cleaned[0] = ChordSegment(start=segment.start, end=first.end, chord=first.chord, confidence=first.confidence)
+	cleaned[-1] = ChordSegment(start=last.start, end=segment.end, chord=last.chord, confidence=last.confidence)
+	return _merge_adjacent_same_chord_segments(cleaned)
+
+
+def _keep_only_sustained_targeted_alternates(
+	segments: list[ChordSegment],
+	*,
+	parent: ChordSegment,
+) -> list[ChordSegment]:
+	cleaned: list[ChordSegment] = []
+	min_child_seconds = max(TARGETED_LONG_HOLD_MIN_CHILD_SECONDS, TARGETED_LONG_HOLD_MIN_ALTERNATE_RUN_SECONDS)
+	for child in segments:
+		child_duration = _segment_duration(child)
+		if child.chord == parent.chord or child_duration >= min_child_seconds:
+			cleaned.append(child)
+			continue
+		if cleaned:
+			prev = cleaned[-1]
+			cleaned[-1] = ChordSegment(
+				start=prev.start,
+				end=child.end,
+				chord=prev.chord,
+				confidence=_weighted_confidence(prev, child),
+			)
+		else:
+			cleaned.append(
+				ChordSegment(
+					start=child.start,
+					end=child.end,
+					chord=parent.chord,
+					confidence=parent.confidence,
+				)
+			)
+	return _merge_adjacent_same_chord_segments(cleaned)
+
+
+def _targeted_long_hold_grid_edges(
+	start_frame: int,
+	end_frame: int,
+	boundaries: np.ndarray,
+	*,
+	sample_rate: int,
+	hop_length: int,
+) -> list[int]:
+	inside = [
+		int(frame)
+		for frame in boundaries.tolist()
+		if start_frame < int(frame) < end_frame
+	]
+	if len(inside) >= TARGETED_LONG_HOLD_GRID_BEATS:
+		grid_edges = [start_frame]
+		for idx in range(TARGETED_LONG_HOLD_GRID_BEATS - 1, len(inside), TARGETED_LONG_HOLD_GRID_BEATS):
+			grid_edges.append(inside[idx])
+		grid_edges.append(end_frame)
+		grid_edges = sorted(set(grid_edges))
+		if len(grid_edges) >= 3:
+			return grid_edges
+
+	step_frames = max(1, int(round(TARGETED_LONG_HOLD_WINDOW_SECONDS * sample_rate / hop_length)))
+	frame_edges = list(range(start_frame, end_frame, step_frames))
+	if not frame_edges or frame_edges[0] != start_frame:
+		frame_edges.insert(0, start_frame)
+	if frame_edges[-1] != end_frame:
+		frame_edges.append(end_frame)
+	return sorted(set(frame_edges))
+
+
+def _diatonic_chord_labels_for_key(key_estimate: KeyEstimate) -> set[str]:
+	if key_estimate.mode == "major":
+		qualities = {
+			0: "",
+			2: "m",
+			4: "m",
+			5: "",
+			7: "",
+			9: "m",
+		}
+	else:
+		qualities = {
+			0: "m",
+			3: "",
+			5: "m",
+			7: "m",
+			8: "",
+			10: "",
+		}
+	return {
+		f"{_root_name_from_pc((key_estimate.tonic_pc + interval) % 12)}{suffix}"
+		for interval, suffix in qualities.items()
+	}
+
+
+def _refine_long_holds_with_mini_harmonic_sequence_decoder(
+	segments: list[ChordSegment],
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	"""Decode a small diatonic chord sequence inside suspicious long holds."""
+	if len(segments) == 0 or detected_key is None:
+		return segments, []
+
+	key_candidates = _diatonic_chord_labels_for_key(detected_key)
+	if not key_candidates:
+		return segments, []
+
+	refined: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	for segment_idx, segment in enumerate(segments):
+		if (
+			segment.chord == "N"
+			or _segment_duration(segment) < MINI_SEQUENCE_DECODER_MIN_SECONDS
+			or segment.confidence > MINI_SEQUENCE_DECODER_MAX_CONFIDENCE
+		):
+			refined.append(segment)
+			continue
+
+		subsegments = _mini_sequence_decode_long_hold(
+			segment,
+			chroma=chroma,
+			low_chroma=low_chroma,
+			boundaries=boundaries,
+			hop_length=hop_length,
+			sample_rate=sample_rate,
+			detected_key=detected_key,
+			key_candidates=key_candidates,
+		)
+		if len(subsegments) <= 1:
+			refined.append(segment)
+			continue
+
+		refined.extend(subsegments)
+		for sub in subsegments:
+			if sub.chord == segment.chord:
+				continue
+			events.append(
+				CorrectionEvent(
+					index=segment_idx,
+					replaced_chord=segment.chord,
+					new_chord=sub.chord,
+					start=float(sub.start),
+					end=float(sub.end),
+					duration=float(_segment_duration(sub)),
+					original_confidence=float(segment.confidence),
+					new_confidence=float(sub.confidence),
+					score=float(sub.confidence),
+					harmonic_plausibility_before=float(_harmonic_plausibility(segment.chord, detected_key)),
+					harmonic_plausibility_after=float(_harmonic_plausibility(sub.chord, detected_key)),
+				)
+			)
+
+	return _merge_adjacent_same_chord_segments(refined), events
+
+
+def _mini_sequence_decode_long_hold(
+	segment: ChordSegment,
+	*,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	boundaries: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	detected_key: KeyEstimate,
+	key_candidates: set[str],
+) -> list[ChordSegment]:
+	start_frame = int(max(0, round(segment.start * sample_rate / hop_length)))
+	end_frame = int(min(chroma.shape[1], round(segment.end * sample_rate / hop_length)))
+	if end_frame <= start_frame:
+		return [segment]
+
+	frame_edges = _mini_sequence_grid_edges(start_frame, end_frame, boundaries)
+	if len(frame_edges) < 4:
+		return [segment]
+
+	candidate_grid: list[list[tuple[str, float]]] = []
+	for left, right in zip(frame_edges[:-1], frame_edges[1:], strict=False):
+		region_chroma = np.asarray(chroma[:, left:right], dtype=np.float32)
+		region_low = np.asarray(low_chroma[:, left:right], dtype=np.float32)
+		root_aware = _estimate_region_root_aware_identity(region_chroma, region_low, key_estimate=detected_key)
+		all_scores = dict(root_aware["combined_scores"])
+		filtered = {
+			label: float(score)
+			for label, score in all_scores.items()
+			if label in key_candidates or label == segment.chord
+		}
+		if segment.chord in all_scores:
+			filtered[segment.chord] = max(filtered.get(segment.chord, 0.0), float(all_scores[segment.chord]) + MINI_SEQUENCE_DECODER_PARENT_BIAS)
+		if not filtered:
+			filtered = {segment.chord: segment.confidence}
+		ranked = sorted(filtered.items(), key=lambda item: (-item[1], item[0]))[:MINI_SEQUENCE_DECODER_TOP_K]
+		if segment.chord not in {label for label, _ in ranked}:
+			ranked.append((segment.chord, float(filtered.get(segment.chord, segment.confidence))))
+		candidate_grid.append(ranked)
+
+	path = _decode_mini_sequence_path(candidate_grid, detected_key)
+	if len(path) != len(candidate_grid):
+		return [segment]
+
+	raw: list[ChordSegment] = []
+	for (left, right), (label, score) in zip(zip(frame_edges[:-1], frame_edges[1:], strict=False), path, strict=True):
+		raw.append(
+			ChordSegment(
+				start=float(left * hop_length / sample_rate),
+				end=float(right * hop_length / sample_rate),
+				chord=label,
+				confidence=float(np.clip(score, 0.0, 1.0)),
+			)
+		)
+
+	collapsed = _merge_adjacent_same_chord_segments(raw)
+	cleaned = _keep_only_sustained_mini_sequence_alternates(collapsed, parent=segment)
+	if len(cleaned) <= 1:
+		return [segment]
+
+	total_alternate = sum(_segment_duration(child) for child in cleaned if child.chord != segment.chord)
+	if total_alternate < MINI_SEQUENCE_DECODER_MIN_TOTAL_ALTERNATE_SECONDS:
+		return [segment]
+
+	first = cleaned[0]
+	last = cleaned[-1]
+	cleaned[0] = ChordSegment(start=segment.start, end=first.end, chord=first.chord, confidence=first.confidence)
+	cleaned[-1] = ChordSegment(start=last.start, end=segment.end, chord=last.chord, confidence=last.confidence)
+	return _merge_adjacent_same_chord_segments(cleaned)
+
+
+def _decode_mini_sequence_path(
+	candidate_grid: list[list[tuple[str, float]]],
+	detected_key: KeyEstimate,
+) -> list[tuple[str, float]]:
+	if not candidate_grid:
+		return []
+
+	dp: list[dict[str, tuple[float, str | None, float]]] = []
+	first_state: dict[str, tuple[float, str | None, float]] = {}
+	for chord, score in candidate_grid[0]:
+		first_state[chord] = (float(score), None, float(score))
+	dp.append(first_state)
+
+	for idx in range(1, len(candidate_grid)):
+		state: dict[str, tuple[float, str | None, float]] = {}
+		for chord, score in candidate_grid[idx]:
+			best_score: float | None = None
+			best_prev: str | None = None
+			for prev_chord, (prev_score, _, _) in dp[idx - 1].items():
+				transition = _mini_sequence_transition_score(prev_chord, chord, detected_key)
+				candidate_score = prev_score + float(score) + transition
+				if best_score is None or candidate_score > best_score:
+					best_score = candidate_score
+					best_prev = prev_chord
+			if best_score is not None:
+				state[chord] = (float(best_score), best_prev, float(score))
+		dp.append(state)
+
+	if not dp[-1]:
+		return []
+	best_last = sorted(dp[-1].items(), key=lambda item: (-item[1][0], item[0]))[0][0]
+	labels = [best_last]
+	for idx in range(len(dp) - 1, 0, -1):
+		prev = dp[idx][labels[-1]][1]
+		if prev is None:
+			break
+		labels.append(prev)
+	labels.reverse()
+	if len(labels) != len(candidate_grid):
+		return []
+	return [(label, dp[idx][label][2]) for idx, label in enumerate(labels)]
+
+
+def _mini_sequence_transition_score(prev_chord: str, curr_chord: str, detected_key: KeyEstimate) -> float:
+	if prev_chord == curr_chord:
+		return 0.018
+	relationship = _harmonic_relationship_strength(prev_chord, curr_chord, detected_key)
+	return float((MINI_SEQUENCE_DECODER_RELATIONSHIP_WEIGHT * relationship) - MINI_SEQUENCE_DECODER_CHANGE_COST)
+
+
+def _mini_sequence_grid_edges(start_frame: int, end_frame: int, boundaries: np.ndarray) -> list[int]:
+	inside = [
+		int(frame)
+		for frame in boundaries.tolist()
+		if start_frame < int(frame) < end_frame
+	]
+	if len(inside) >= MINI_SEQUENCE_DECODER_GRID_BEATS:
+		edges = [start_frame]
+		for idx in range(MINI_SEQUENCE_DECODER_GRID_BEATS - 1, len(inside), MINI_SEQUENCE_DECODER_GRID_BEATS):
+			edges.append(inside[idx])
+		edges.append(end_frame)
+		return sorted(set(edges))
+	return [start_frame, end_frame]
+
+
+def _keep_only_sustained_mini_sequence_alternates(
+	segments: list[ChordSegment],
+	*,
+	parent: ChordSegment,
+) -> list[ChordSegment]:
+	cleaned: list[ChordSegment] = []
+	for child in segments:
+		if child.chord == parent.chord or _segment_duration(child) >= MINI_SEQUENCE_DECODER_MIN_ALTERNATE_SECONDS:
+			cleaned.append(child)
+			continue
+		if cleaned:
+			prev = cleaned[-1]
+			cleaned[-1] = ChordSegment(
+				start=prev.start,
+				end=child.end,
+				chord=prev.chord,
+				confidence=_weighted_confidence(prev, child),
+			)
+		else:
+			cleaned.append(
+				ChordSegment(
+					start=child.start,
+					end=child.end,
+					chord=parent.chord,
+					confidence=parent.confidence,
+				)
+			)
+	return _merge_adjacent_same_chord_segments(cleaned)
 
 
 def _resolve_relative_key_context(

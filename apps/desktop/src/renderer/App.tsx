@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordSegment } from "@gcd/shared/analysis";
+import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
 import type { SongLibraryListResult, SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -37,6 +37,8 @@ export function App() {
     const [currentTimeSeconds, setCurrentTimeSeconds] = useState<number>(0);
     const [analysisSegmentCount, setAnalysisSegmentCount] = useState<number | null>(null);
     const [timelineSegments, setTimelineSegments] = useState<ChordSegment[]>([]);
+    const [selectedSegmentIndex, setSelectedSegmentIndex] = useState<number | null>(null);
+    const [editingChord, setEditingChord] = useState<string>("");
     const [timelineWidthPx, setTimelineWidthPx] = useState<number>(0);
     const [analysisStatus, setAnalysisStatus] = useState<string>("No analysis yet");
     const [librarySongs, setLibrarySongs] = useState<SongLibraryRecord[]>([]);
@@ -69,6 +71,7 @@ export function App() {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const activeBlobUrlRef = useRef<string | null>(null);
     const timelineRef = useRef<HTMLElement | null>(null);
+    const chordEditorRef = useRef<HTMLDivElement | null>(null);
     const lyricsPreviewRef = useRef<HTMLDivElement | null>(null);
     const workspaceRef = useRef<HTMLDivElement | null>(null);
     const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
@@ -120,6 +123,38 @@ export function App() {
             });
         }
     }, [currentTimeSeconds, timelineSegments, viewMode]);
+
+    useEffect(() => {
+        if (selectedSegmentIndex === null) {
+            return;
+        }
+
+        const handlePointerDown = (event: PointerEvent): void => {
+            const target = event.target;
+            if (!(target instanceof Node)) {
+                return;
+            }
+            if (chordEditorRef.current?.contains(target)) {
+                return;
+            }
+            if (timelineRef.current?.contains(target)) {
+                const segment = target instanceof Element
+                    ? target.closest('[data-testid="timeline-segment"]')
+                    : null;
+                if (segment) {
+                    return;
+                }
+            }
+
+            setSelectedSegmentIndex(null);
+            setEditingChord("");
+        };
+
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown);
+        };
+    }, [selectedSegmentIndex]);
 
     useEffect(() => {
         const lyricsPreview = lyricsPreviewRef.current;
@@ -226,6 +261,21 @@ export function App() {
         }
     };
 
+    const commitTimelineSegments = (segments: ChordSegment[]): void => {
+        const normalized = normalizeTimelineSegments(segments, durationSeconds);
+        setTimelineSegments(normalized);
+        setAnalysisSegmentCount(normalized.length);
+        setLatestAnalysis((current) => current
+            ? {
+                ...current,
+                analysis: {
+                    ...current.analysis,
+                    chords: normalized
+                }
+            }
+            : current);
+    };
+
     const runAnalysis = async (audioPath: string, options?: { forceRefresh?: boolean }): Promise<void> => {
         if (!bridge?.analyzeAudio) {
             setState("error");
@@ -286,6 +336,8 @@ export function App() {
         setLatestAnalysis(analysis);
         setAnalysisSegmentCount(segmentCount);
         setTimelineSegments(normalizedTimelineSegments);
+        setSelectedSegmentIndex(null);
+        setEditingChord("");
         setDurationSeconds(analysisDuration);
         setCurrentTimeSeconds(0);
         setAnalysisStatus(`Analysis ready: ${segmentCount} segment(s)`);
@@ -485,6 +537,8 @@ export function App() {
         setDurationSeconds(song.duration);
         setCurrentTimeSeconds(0);
         setTimelineSegments(normalizedTimelineSegments);
+        setSelectedSegmentIndex(null);
+        setEditingChord("");
         setAnalysisSegmentCount(normalizedTimelineSegments.length);
         setAnalysisStatus(`Analysis ready: ${normalizedTimelineSegments.length} segment(s)`);
         setState("ready");
@@ -750,6 +804,89 @@ export function App() {
         setCurrentTimeSeconds(safeValue);
     };
 
+    const handleSelectTimelineSegment = (segmentIndex: number): void => {
+        const segment = timelineSegments[segmentIndex];
+        if (!segment) {
+            return;
+        }
+        setSelectedSegmentIndex(segmentIndex);
+        setEditingChord(segment.chord);
+    };
+
+    const handleApplyEditedChord = (): void => {
+        if (selectedSegmentIndex === null) {
+            return;
+        }
+        const normalizedChord = normalizeEditableChord(editingChord);
+        if (!normalizedChord) {
+            setAnalysisStatus("Chord tidak valid. Contoh: A, Bm, C#m, Ddim, atau N.");
+            return;
+        }
+        const nextSegments = timelineSegments.map((segment, index) => index === selectedSegmentIndex
+            ? { ...segment, chord: normalizedChord, confidence: Math.max(segment.confidence, 0.96) }
+            : segment);
+        commitTimelineSegments(nextSegments);
+        setEditingChord(normalizedChord);
+        setAnalysisStatus(`Chord corrected to ${normalizedChord}.`);
+    };
+
+    const handleSplitSelectedSegment = (): void => {
+        if (selectedSegmentIndex === null) {
+            return;
+        }
+        const segment = timelineSegments[selectedSegmentIndex];
+        if (!segment) {
+            return;
+        }
+        const splitTime = currentTimeSeconds > segment.start + 0.2 && currentTimeSeconds < segment.end - 0.2
+            ? currentTimeSeconds
+            : segment.start + ((segment.end - segment.start) / 2);
+        if (splitTime <= segment.start || splitTime >= segment.end) {
+            return;
+        }
+        const nextSegments = [
+            ...timelineSegments.slice(0, selectedSegmentIndex),
+            { ...segment, end: splitTime },
+            { ...segment, start: splitTime },
+            ...timelineSegments.slice(selectedSegmentIndex + 1)
+        ];
+        commitTimelineSegments(nextSegments);
+        setSelectedSegmentIndex(selectedSegmentIndex + 1);
+        setEditingChord(segment.chord);
+        setAnalysisStatus(`Segment split at ${formatTime(splitTime)}.`);
+    };
+
+    const handleMergeSelectedSegment = (direction: "left" | "right"): void => {
+        if (selectedSegmentIndex === null) {
+            return;
+        }
+        const neighborIndex = direction === "left" ? selectedSegmentIndex - 1 : selectedSegmentIndex + 1;
+        const segment = timelineSegments[selectedSegmentIndex];
+        const neighbor = timelineSegments[neighborIndex];
+        if (!segment || !neighbor) {
+            return;
+        }
+        const start = Math.min(segment.start, neighbor.start);
+        const end = Math.max(segment.end, neighbor.end);
+        const merged: ChordSegment = {
+            start,
+            end,
+            chord: segment.chord,
+            confidence: Math.max(segment.confidence, neighbor.confidence, 0.96)
+        };
+        const leftIndex = Math.min(selectedSegmentIndex, neighborIndex);
+        const rightIndex = Math.max(selectedSegmentIndex, neighborIndex);
+        const nextSegments = [
+            ...timelineSegments.slice(0, leftIndex),
+            merged,
+            ...timelineSegments.slice(rightIndex + 1)
+        ];
+        commitTimelineSegments(nextSegments);
+        setSelectedSegmentIndex(leftIndex);
+        setEditingChord(merged.chord);
+        setAnalysisStatus(`Merged segment ${direction}.`);
+    };
+
     const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
         const safeSemitones = Math.max(-11, Math.min(11, Math.trunc(nextSemitones)));
         setTransposeSemitones(safeSemitones);
@@ -993,6 +1130,7 @@ export function App() {
     const canReanalyze = Boolean(selectedFilePath) && Boolean(bridge?.analyzeAudio);
     const canSaveAnalysis = Boolean(selectedFilePath) && Boolean(latestAnalysis);
     const canCancelApiJob = Boolean(apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running"));
+    const selectedTimelineSegment = selectedSegmentIndex === null ? null : timelineSegments[selectedSegmentIndex] ?? null;
     const activeChord = findActiveChord(timelineSegments, currentTimeSeconds);
     const activeChordLabel = activeChord ? transposeChordLabel(activeChord, transposeSemitones) : "None";
 
@@ -1374,6 +1512,45 @@ export function App() {
                             </div>
                             {detectorTab === "timeline" ? (
                                 <section className="timeline-frame" aria-label="Chord timeline frame">
+                                    <div className="chord-editor" ref={chordEditorRef} aria-label="Chord correction editor">
+                                        {selectedTimelineSegment ? (
+                                            <>
+                                                <span>
+                                                    {formatTime(selectedTimelineSegment.start)} - {formatTime(selectedTimelineSegment.end)}
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    value={editingChord}
+                                                    onChange={(event) => setEditingChord(event.currentTarget.value)}
+                                                    aria-label="Edit selected chord"
+                                                    list="chord-editor-options"
+                                                />
+                                                <datalist id="chord-editor-options">
+                                                    {EDITABLE_CHORD_OPTIONS.map((chord) => (
+                                                        <option key={chord} value={chord} />
+                                                    ))}
+                                                </datalist>
+                                                <button type="button" onClick={handleApplyEditedChord}>Apply</button>
+                                                <button type="button" onClick={handleSplitSelectedSegment}>Split</button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleMergeSelectedSegment("left")}
+                                                    disabled={selectedSegmentIndex === 0}
+                                                >
+                                                    Merge ‹
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleMergeSelectedSegment("right")}
+                                                    disabled={selectedSegmentIndex === timelineSegments.length - 1}
+                                                >
+                                                    Merge ›
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <span>Click chord segment untuk edit, split, atau merge.</span>
+                                        )}
+                                    </div>
                                     <section ref={timelineRef} className="timeline" aria-label="Chord timeline">
                                         {renderTimeline(
                                             timelineSegments,
@@ -1381,7 +1558,9 @@ export function App() {
                                             timelineWidthPx,
                                             currentTimeSeconds,
                                             transposeSemitones,
-                                            handleSeek
+                                            handleSeek,
+                                            selectedSegmentIndex,
+                                            handleSelectTimelineSegment
                                         )}
                                     </section>
                                 </section>
@@ -1810,6 +1989,7 @@ function formatLrcTime(seconds: number): string {
 }
 
 const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+const EDITABLE_CHORD_OPTIONS = ["N", ...SHARP_ROOTS.flatMap((root) => [root, `${root}m`, `${root}dim`])];
 
 function formatTranspose(semitones: number): string {
     if (semitones === 0) {
@@ -1841,7 +2021,23 @@ function modulo(value: number, divisor: number): number {
     return ((value % divisor) + divisor) % divisor;
 }
 
+function normalizeEditableChord(value: string): ChordLabel | null {
+    const trimmed = value.trim();
+    if (trimmed.toUpperCase() === "N") {
+        return "N";
+    }
+    const match = /^(c#|d#|f#|g#|a#|c|d|e|f|g|a|b)(m|dim)?$/i.exec(trimmed);
+    if (!match) {
+        return null;
+    }
+    const root = `${match[1][0].toUpperCase()}${match[1].slice(1)}`;
+    const suffix = match[2]?.toLowerCase() ?? "";
+    const normalized = `${root}${suffix}`;
+    return EDITABLE_CHORD_OPTIONS.includes(normalized as ChordLabel) ? normalized as ChordLabel : null;
+}
+
 type TimelineSegmentLayout = {
+    segmentIndex: number;
     segment: ChordSegment;
     fragmentStart: number;
     fragmentEnd: number;
@@ -1867,7 +2063,9 @@ function renderTimeline(
     timelineWidthPx: number,
     currentTimeSeconds: number,
     transposeSemitones: number,
-    onSeek: (value: number) => void
+    onSeek: (value: number) => void,
+    selectedSegmentIndex: number | null,
+    onSelectSegment: (segmentIndex: number) => void
 ) {
     const safeDuration = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
     const safeCurrentTime = Number.isFinite(currentTimeSeconds) ? Math.max(0, currentTimeSeconds) : 0;
@@ -1899,7 +2097,7 @@ function renderTimeline(
                             onSeek(timelineClickTime(event, row.rowStart, row.rowDuration, safeDuration));
                         }}
                     >
-                        {row.fragments.map(({ segment, fragmentStart, fragmentEnd, leftPercent, widthPercent, showLabel, labelText }, index) => {
+                        {row.fragments.map(({ segmentIndex, segment, fragmentStart, fragmentEnd, leftPercent, widthPercent, showLabel, labelText }, index) => {
                             const displayedChord = transposeChordLabel(segment.chord, transposeSemitones);
                             const displayedLabel = transposeChordLabel(labelText, transposeSemitones);
                             return (
@@ -1912,12 +2110,14 @@ function renderTimeline(
                                     data-show-label={showLabel ? "true" : "false"}
                                     data-fragment-start={fragmentStart}
                                     data-fragment-end={fragmentEnd}
+                                    data-selected={selectedSegmentIndex === segmentIndex ? "true" : "false"}
                                     data-active={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
                                     aria-current={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
                                     aria-label={`${displayedChord} from ${formatTime(fragmentStart)} to ${formatTime(fragmentEnd)}`}
                                     title={`${displayedChord} (${Math.round(segment.confidence * 100)}%)`}
                                     onClick={(event) => {
                                         event.stopPropagation();
+                                        onSelectSegment(segmentIndex);
                                         onSeek(timelineClickTime(event, row.rowStart, row.rowDuration, safeDuration));
                                     }}
                                     style={{
@@ -1990,7 +2190,7 @@ function buildRowSegmentLayout(
     }
 
     const baseLayout = segments
-        .map((segment) => {
+        .map((segment, segmentIndex) => {
             const fragmentStart = Math.max(segment.start, rowStart);
             const fragmentEnd = Math.min(segment.end, rowEnd);
             if (fragmentEnd <= fragmentStart) {
@@ -2003,6 +2203,7 @@ function buildRowSegmentLayout(
             const widthPercent = Math.max(0, Math.min(widthPercentRaw, 100 - leftPercent));
             return {
                 segment,
+                segmentIndex,
                 fragmentStart,
                 fragmentEnd,
                 leftPercent,

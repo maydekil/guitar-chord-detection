@@ -69,19 +69,75 @@ export class SongLibraryStore {
         const page = normalizePage(options?.page);
         const offset = (page - 1) * pageSize;
         const countStatement = query
-            ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
-            : database.prepare("SELECT COUNT(*) AS total FROM songs");
+            ? database.prepare(`
+                WITH latest_songs AS (
+                    SELECT *
+                    FROM songs
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM songs newer
+                        WHERE newer.file_hash = songs.file_hash
+                            AND (
+                                newer.updated_at > songs.updated_at
+                                OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                            )
+                    )
+                )
+                SELECT COUNT(*) AS total
+                FROM latest_songs
+                WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+            `)
+            : database.prepare(`
+                SELECT COUNT(*) AS total
+                FROM songs
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM songs newer
+                    WHERE newer.file_hash = songs.file_hash
+                        AND (
+                            newer.updated_at > songs.updated_at
+                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                        )
+                )
+            `);
         const total = query
             ? (countStatement.get(`%${query}%`) as { total: number }).total
             : (countStatement.get() as { total: number }).total;
         const statement = query
             ? database.prepare(`
-                SELECT * FROM songs
+                WITH latest_songs AS (
+                    SELECT *
+                    FROM songs
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM songs newer
+                        WHERE newer.file_hash = songs.file_hash
+                            AND (
+                                newer.updated_at > songs.updated_at
+                                OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                            )
+                    )
+                )
+                SELECT * FROM latest_songs
                 WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
                 ORDER BY updated_at DESC
                 LIMIT ? OFFSET ?
             `)
-            : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+            : database.prepare(`
+                SELECT *
+                FROM songs
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM songs newer
+                    WHERE newer.file_hash = songs.file_hash
+                        AND (
+                            newer.updated_at > songs.updated_at
+                            OR (newer.updated_at = songs.updated_at AND newer.id > songs.id)
+                        )
+                )
+                ORDER BY updated_at DESC
+                LIMIT ? OFFSET ?
+            `);
         const rows = query
             ? statement.all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
             : statement.all(pageSize, offset) as unknown as SongRow[];
@@ -103,7 +159,7 @@ export class SongLibraryStore {
     async upsertAnalysis(options: UpsertSongAnalysisOptions): Promise<SongLibraryRecord> {
         const database = await this.getDatabase();
         const fileHash = buildFileHash(await this.deps.readFile(options.audioPath));
-        const id = `${fileHash}:${options.algorithm}:${options.contractVersion}`;
+        const id = buildSongId(fileHash);
         const existing = await this.getSong(id);
         const timestamp = this.deps.now().toISOString();
         const title = options.metadata.title.trim();
@@ -306,6 +362,10 @@ function rowToRecord(row: SongRow): SongLibraryRecord {
 
 function buildFileHash(content: Buffer): string {
     return createHash("sha256").update(content).digest("hex");
+}
+
+function buildSongId(fileHash: string): string {
+    return `song:${fileHash}`;
 }
 
 function normalizeSearch(value: string): string {
