@@ -1,6 +1,7 @@
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it } from "vitest";
 import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
@@ -77,10 +78,11 @@ describe("SongLibraryStore", () => {
             }
         });
 
-        const stored = JSON.parse(await readFile(libraryPath, "utf-8")) as { records: Record<string, { title: string; artist: string }> };
-        stored.records[first.id].title = "Edited Title";
-        stored.records[first.id].artist = "Edited Artist";
-        await writeFile(libraryPath, JSON.stringify(stored), "utf-8");
+        const database = new DatabaseSync(libraryPath);
+        database
+            .prepare("UPDATE songs SET title = ?, artist = ? WHERE id = ?")
+            .run("Edited Title", "Edited Artist", first.id);
+        database.close();
 
         const updatedLibrary = new SongLibraryStore(libraryPath, {
             now: () => new Date("2026-01-02T00:00:00.000Z")

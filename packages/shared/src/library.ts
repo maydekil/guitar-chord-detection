@@ -5,8 +5,10 @@ export interface SongLibraryRecord {
     title: string;
     artist: string;
     audioPath: string;
+    audioStreamUrl?: string;
     lyrics?: string;
     instrumentalAudioPath?: string;
+    instrumentalAudioStreamUrl?: string;
     fileHash: string;
     algorithm: string;
     contractVersion: string;
@@ -18,6 +20,16 @@ export interface SongLibraryRecord {
 
 export interface SongLibrarySearchOptions {
     query?: string;
+    page?: number;
+    pageSize?: number;
+}
+
+export interface SongLibraryListResult {
+    records: SongLibraryRecord[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
 }
 
 export interface SongMetadataInput {

@@ -255,6 +255,71 @@ body {
     color: #5f6564;
 }
 
+.library-pagination {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.28rem;
+    margin-top: 0.8rem;
+    color: #5f6564;
+    font-size: 0.72rem;
+}
+
+.library-pagination button,
+.library-pagination select {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.18rem 0.32rem;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.library-pagination button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.library-pagination span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    min-width: 0;
+    color: #6b7374;
+    font-weight: 400;
+}
+
+.library-pagination span i {
+    padding: 0 0.12rem;
+    color: #8d9392;
+    font-style: normal;
+}
+
+.library-pagination label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.26rem;
+    font-weight: 400;
+}
+
+.library-pagination select {
+    max-width: 3.4rem;
+}
+
+.library-pagination .library-page-number {
+    min-width: 1.35rem;
+    padding-inline: 0.28rem;
+}
+
+.library-pagination .library-page-number[data-active="true"] {
+    background: #263238;
+    border-color: #263238;
+    color: #fffaf1;
+    opacity: 1;
+}
+
 .song-metadata-form {
     display: grid;
     grid-template-columns: repeat(2, minmax(180px, 1fr));

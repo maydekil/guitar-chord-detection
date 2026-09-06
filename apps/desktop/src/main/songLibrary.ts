@@ -1,12 +1,29 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
-import type { DeleteSongResult, SongLibraryRecord, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
+import type { DeleteSongResult, SongLibraryListResult, SongLibraryRecord, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
 
 interface SongLibraryStoreFile {
     records: Record<string, SongLibraryRecord>;
+}
+
+interface SongRow {
+    id: string;
+    title: string;
+    artist: string;
+    audio_path: string;
+    lyrics: string | null;
+    instrumental_audio_path: string | null;
+    file_hash: string;
+    algorithm: string;
+    contract_version: string;
+    duration: number;
+    analysis_json: string;
+    created_at: string;
+    updated_at: string;
 }
 
 interface UpsertSongAnalysisOptions {
@@ -21,7 +38,6 @@ interface UpsertSongAnalysisOptions {
 
 interface SongLibraryDependencies {
     readFile: typeof readFile;
-    writeFile: typeof writeFile;
     mkdir: typeof mkdir;
     copyFile: typeof copyFile;
     unlink: typeof unlink;
@@ -31,12 +47,13 @@ interface SongLibraryDependencies {
 export class SongLibraryStore {
     private readonly storeFilePath: string;
     private readonly deps: SongLibraryDependencies;
+    private database: DatabaseSync | null = null;
+    private initialized = false;
 
     constructor(storeFilePath: string, deps?: Partial<SongLibraryDependencies>) {
         this.storeFilePath = storeFilePath;
         this.deps = {
             readFile,
-            writeFile,
             mkdir,
             copyFile,
             unlink,
@@ -45,31 +62,49 @@ export class SongLibraryStore {
         };
     }
 
-    async listSongs(options?: SongLibrarySearchOptions): Promise<SongLibraryRecord[]> {
-        const store = await this.loadStore();
+    async listSongs(options?: SongLibrarySearchOptions): Promise<SongLibraryListResult> {
+        const database = await this.getDatabase();
         const query = normalizeSearch(options?.query ?? "");
-        const records = Object.values(store.records).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-
-        if (!query) {
-            return records;
-        }
-
-        return records.filter((record) => {
-            const haystack = normalizeSearch(`${record.title} ${record.artist} ${record.audioPath}`);
-            return haystack.includes(query);
-        });
+        const pageSize = normalizePageSize(options?.pageSize);
+        const page = normalizePage(options?.page);
+        const offset = (page - 1) * pageSize;
+        const countStatement = query
+            ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
+            : database.prepare("SELECT COUNT(*) AS total FROM songs");
+        const total = query
+            ? (countStatement.get(`%${query}%`) as { total: number }).total
+            : (countStatement.get() as { total: number }).total;
+        const statement = query
+            ? database.prepare(`
+                SELECT * FROM songs
+                WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+                ORDER BY updated_at DESC
+                LIMIT ? OFFSET ?
+            `)
+            : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+        const rows = query
+            ? statement.all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
+            : statement.all(pageSize, offset) as unknown as SongRow[];
+        return {
+            records: rows.map(rowToRecord),
+            total,
+            page,
+            pageSize,
+            totalPages: Math.max(1, Math.ceil(total / pageSize))
+        };
     }
 
     async getSong(id: string): Promise<SongLibraryRecord | null> {
-        const store = await this.loadStore();
-        return store.records[id] ?? null;
+        const database = await this.getDatabase();
+        const row = database.prepare("SELECT * FROM songs WHERE id = ?").get(id) as SongRow | undefined;
+        return row ? rowToRecord(row) : null;
     }
 
     async upsertAnalysis(options: UpsertSongAnalysisOptions): Promise<SongLibraryRecord> {
-        const store = await this.loadStore();
+        const database = await this.getDatabase();
         const fileHash = buildFileHash(await this.deps.readFile(options.audioPath));
         const id = `${fileHash}:${options.algorithm}:${options.contractVersion}`;
-        const existing = store.records[id];
+        const existing = await this.getSong(id);
         const timestamp = this.deps.now().toISOString();
         const title = options.metadata.title.trim();
         const artist = options.metadata.artist.trim();
@@ -96,20 +131,18 @@ export class SongLibraryStore {
             updatedAt: timestamp
         };
 
-        store.records[id] = record;
-        await this.saveStore(store);
+        this.upsertRecord(database, record);
         return record;
     }
 
     async deleteSong(id: string): Promise<DeleteSongResult> {
-        const store = await this.loadStore();
-        const existing = store.records[id];
+        const database = await this.getDatabase();
+        const existing = await this.getSong(id);
         if (!existing) {
             return { deleted: false };
         }
 
-        delete store.records[id];
-        await this.saveStore(store);
+        database.prepare("DELETE FROM songs WHERE id = ?").run(id);
 
         try {
             await this.deps.unlink(existing.audioPath);
@@ -132,30 +165,109 @@ export class SongLibraryStore {
         return { deleted: true };
     }
 
-    private async loadStore(): Promise<SongLibraryStoreFile> {
+    private async getDatabase(): Promise<DatabaseSync> {
+        if (!this.database) {
+            await this.deps.mkdir(path.dirname(this.storeFilePath), { recursive: true });
+            this.database = new DatabaseSync(this.storeFilePath);
+        }
+        if (!this.initialized) {
+            this.initializeDatabase(this.database);
+            await this.migrateLegacyJsonIfNeeded(this.database);
+            this.initialized = true;
+        }
+        return this.database;
+    }
+
+    private initializeDatabase(database: DatabaseSync): void {
+        database.exec(`
+            CREATE TABLE IF NOT EXISTS songs (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                audio_path TEXT NOT NULL,
+                lyrics TEXT NOT NULL DEFAULT '',
+                instrumental_audio_path TEXT,
+                file_hash TEXT NOT NULL,
+                algorithm TEXT NOT NULL,
+                contract_version TEXT NOT NULL,
+                duration REAL NOT NULL,
+                analysis_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_songs_updated_at ON songs(updated_at);
+            CREATE INDEX IF NOT EXISTS idx_songs_title_artist ON songs(title, artist);
+        `);
+    }
+
+    private async migrateLegacyJsonIfNeeded(database: DatabaseSync): Promise<void> {
+        const count = database.prepare("SELECT COUNT(*) AS count FROM songs").get() as { count: number };
+        if (count.count > 0) {
+            return;
+        }
+
         try {
-            const content = await this.deps.readFile(this.storeFilePath, "utf-8");
+            const content = await this.deps.readFile(resolveLegacySongLibraryPath(path.dirname(this.storeFilePath)), "utf-8");
             const parsed = JSON.parse(content) as SongLibraryStoreFile;
             if (!parsed || typeof parsed !== "object" || !parsed.records || typeof parsed.records !== "object") {
-                return { records: {} };
+                return;
             }
-            return parsed;
+
+            for (const record of Object.values(parsed.records)) {
+                this.upsertRecord(database, record);
+            }
         } catch (error) {
-            if (isMissingFileError(error)) {
-                return { records: {} };
+            if (!isMissingFileError(error)) {
+                console.error("[library] failed to migrate legacy JSON song library", error);
             }
-            console.error("[library] failed to load song library, treating as empty", error);
-            return { records: {} };
         }
     }
 
-    private async saveStore(store: SongLibraryStoreFile): Promise<void> {
-        try {
-            await this.deps.mkdir(path.dirname(this.storeFilePath), { recursive: true });
-            await this.deps.writeFile(this.storeFilePath, JSON.stringify(store), "utf-8");
-        } catch (error) {
-            console.error("[library] failed to persist song library", error);
-        }
+    private upsertRecord(database: DatabaseSync, record: SongLibraryRecord): void {
+        database.prepare(`
+            INSERT INTO songs (
+                id,
+                title,
+                artist,
+                audio_path,
+                lyrics,
+                instrumental_audio_path,
+                file_hash,
+                algorithm,
+                contract_version,
+                duration,
+                analysis_json,
+                created_at,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title,
+                artist = excluded.artist,
+                audio_path = excluded.audio_path,
+                lyrics = excluded.lyrics,
+                instrumental_audio_path = excluded.instrumental_audio_path,
+                file_hash = excluded.file_hash,
+                algorithm = excluded.algorithm,
+                contract_version = excluded.contract_version,
+                duration = excluded.duration,
+                analysis_json = excluded.analysis_json,
+                updated_at = excluded.updated_at
+        `).run(
+            record.id,
+            record.title,
+            record.artist,
+            record.audioPath,
+            record.lyrics ?? "",
+            record.instrumentalAudioPath ?? null,
+            record.fileHash,
+            record.algorithm,
+            record.contractVersion,
+            record.duration,
+            JSON.stringify(record.analysis),
+            record.createdAt,
+            record.updatedAt
+        );
     }
 
     private resolveManagedAudioPath(fileHash: string, algorithm: string, contractVersion: string, sourceAudioPath: string): string {
@@ -167,7 +279,29 @@ export class SongLibraryStore {
 }
 
 export function resolveSongLibraryPath(userDataPath: string): string {
+    return path.join(userDataPath, "song-library-v1.sqlite");
+}
+
+function resolveLegacySongLibraryPath(userDataPath: string): string {
     return path.join(userDataPath, "song-library-v1.json");
+}
+
+function rowToRecord(row: SongRow): SongLibraryRecord {
+    return {
+        id: row.id,
+        title: row.title,
+        artist: row.artist,
+        audioPath: row.audio_path,
+        lyrics: row.lyrics ?? "",
+        instrumentalAudioPath: row.instrumental_audio_path ?? undefined,
+        fileHash: row.file_hash,
+        algorithm: row.algorithm,
+        contractVersion: row.contract_version,
+        duration: row.duration,
+        analysis: JSON.parse(row.analysis_json) as ChordAnalysisSuccess,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
 }
 
 function buildFileHash(content: Buffer): string {
@@ -176,6 +310,20 @@ function buildFileHash(content: Buffer): string {
 
 function normalizeSearch(value: string): string {
     return value.trim().toLocaleLowerCase();
+}
+
+function normalizePage(value: number | undefined): number {
+    if (!value || !Number.isFinite(value)) {
+        return 1;
+    }
+    return Math.max(1, Math.trunc(value));
+}
+
+function normalizePageSize(value: number | undefined): number {
+    if (!value || !Number.isFinite(value)) {
+        return 10;
+    }
+    return Math.max(5, Math.min(100, Math.trunc(value)));
 }
 
 function isMissingFileError(error: unknown): boolean {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { ChordAnalysisSuccess, ChordSegment } from "@gcd/shared/analysis";
-import type { SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
+import type { SongLibraryListResult, SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
@@ -26,6 +26,10 @@ export function App() {
     const [analysisStatus, setAnalysisStatus] = useState<string>("No analysis yet");
     const [librarySongs, setLibrarySongs] = useState<SongLibraryRecord[]>([]);
     const [libraryQuery, setLibraryQuery] = useState<string>("");
+    const [libraryPage, setLibraryPage] = useState<number>(1);
+    const [libraryPageSize, setLibraryPageSize] = useState<number>(10);
+    const [libraryTotal, setLibraryTotal] = useState<number>(0);
+    const [libraryTotalPages, setLibraryTotalPages] = useState<number>(1);
     const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<ViewMode>("library");
     const [libraryPanelWidthPx, setLibraryPanelWidthPx] = useState<number>(320);
@@ -136,17 +140,29 @@ export function App() {
     }, [bridge]);
 
     useEffect(() => {
-        void refreshLibrary(libraryQuery);
-    }, [bridge, libraryQuery]);
+        void refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
+    }, [bridge, libraryQuery, libraryPage, libraryPageSize]);
 
-    const refreshLibrary = async (query = libraryQuery): Promise<void> => {
+    const refreshLibrary = async (
+        query = libraryQuery,
+        page = libraryPage,
+        pageSize = libraryPageSize
+    ): Promise<void> => {
         if (!bridge?.listSongs) {
             setLibrarySongs([]);
+            setLibraryTotal(0);
+            setLibraryTotalPages(1);
             return;
         }
 
-        const songs = await bridge.listSongs({ query });
-        setLibrarySongs(songs);
+        const result = await bridge.listSongs({ query, page, pageSize });
+        const normalized = normalizeSongLibraryListResult(result, page, pageSize);
+        setLibrarySongs(normalized.records);
+        setLibraryTotal(normalized.total);
+        setLibraryTotalPages(normalized.totalPages);
+        if (normalized.page !== page) {
+            setLibraryPage(normalized.page);
+        }
     };
 
     const runAnalysis = async (audioPath: string, options?: { forceRefresh?: boolean }): Promise<void> => {
@@ -246,7 +262,7 @@ export function App() {
         if (bridge.getAudioPlaybackSource) {
             try {
                 const playbackSource = await bridge.getAudioPlaybackSource(nextPath);
-                playbackSourceUrl = createObjectUrl(playbackSource.bytes);
+                playbackSourceUrl = toAudioSourceUrl(playbackSource);
             } catch {
                 resetPlaybackState();
                 setState("error");
@@ -305,26 +321,26 @@ export function App() {
         setSelectedSongId(song.id);
         setViewMode("detail");
         setSelectedFileName(displaySongTitle(song));
-        setSelectedFilePath(song.audioPath);
+        setSelectedFilePath(song.audioStreamUrl ?? song.audioPath);
         setSongTitle(song.title);
         setSongArtist(song.artist);
         setTransposeSemitones(0);
         setDetectorTab("timeline");
         setLyricsText(song.lyrics ?? "");
-        setInstrumentalAudioPath(song.instrumentalAudioPath ?? null);
+        setInstrumentalAudioPath(song.instrumentalAudioStreamUrl ?? song.instrumentalAudioPath ?? null);
 
         let playbackSourceUrl: string;
         if (bridge?.getAudioPlaybackSource) {
             try {
-                const playbackSource = await bridge.getAudioPlaybackSource(song.audioPath);
-                playbackSourceUrl = createObjectUrl(playbackSource.bytes);
+                const playbackSource = await bridge.getAudioPlaybackSource(song.audioStreamUrl ?? song.audioPath);
+                playbackSourceUrl = toAudioSourceUrl(playbackSource);
             } catch {
                 setState("error");
                 setAnalysisStatus("Could not play this audio file.");
                 return;
             }
         } else {
-            playbackSourceUrl = toFileUrl(song.audioPath);
+            playbackSourceUrl = toFileUrl(song.audioStreamUrl ?? song.audioPath);
         }
 
         if (activeBlobUrlRef.current) {
@@ -385,7 +401,7 @@ export function App() {
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
         setAnalysisStatus("Saved to Song Library.");
-        await refreshLibrary();
+        await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
     };
 
     const handleAutoSyncLyrics = (): void => {
@@ -456,7 +472,7 @@ export function App() {
             setState("idle");
             setViewMode("library");
         }
-        await refreshLibrary();
+        await refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
     };
 
     const resetPlaybackState = (): void => {
@@ -580,7 +596,7 @@ export function App() {
             const audio = audioRef.current;
             const previousTime = audio?.currentTime ?? currentTimeSeconds;
             const wasPlaying = state === "playing";
-            await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+            await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
             setAnalysisStatus(semitones === 0 ? "Transpose reset." : `Audio transposed ${formatTranspose(semitones)}.`);
         } catch {
             setAnalysisStatus("Gagal memuat audio transpose.");
@@ -647,7 +663,7 @@ export function App() {
             }
         }
         const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
-        await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
         setIsUsingInstrumentalAudio(true);
         setIsVocalHidden(true);
         setAnalysisStatus(statusMessage);
@@ -669,7 +685,7 @@ export function App() {
             }
         }
         const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
-        await replaceAudioSource(createObjectUrl(playbackSource.bytes), previousTime, wasPlaying);
+        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
         setIsUsingInstrumentalAudio(false);
         setIsVocalHidden(false);
         setAnalysisStatus("Original audio restored.");
@@ -775,7 +791,7 @@ export function App() {
                     <div className="library-toolbar">
                         <div>
                             <h2>Song Library</h2>
-                            <p>{librarySongs.length} analyzed song(s)</p>
+                            <p>{libraryTotal} analyzed song(s)</p>
                         </div>
                         <button type="button" className="add-song-btn" onClick={handleAddSong} disabled={!bridge}>
                             Add Song
@@ -783,7 +799,10 @@ export function App() {
                         <input
                             type="search"
                             value={libraryQuery}
-                            onChange={(event) => setLibraryQuery(event.currentTarget.value)}
+                            onChange={(event) => {
+                                setLibraryQuery(event.currentTarget.value);
+                                setLibraryPage(1);
+                            }}
                             placeholder="Search title, artist, path"
                             aria-label="Search library"
                         />
@@ -820,6 +839,44 @@ export function App() {
                     ) : (
                         <p className="library-empty">No analyzed songs yet.</p>
                     )}
+                    <div className="library-pagination" aria-label="Song library pagination">
+                        <small>{libraryTotal} song(s)</small>
+                        <label>
+                            Page Rows
+                            <select
+                                aria-label="Songs per page"
+                                value={libraryPageSize}
+                                onChange={(event) => {
+                                    setLibraryPageSize(Number(event.currentTarget.value));
+                                    setLibraryPage(1);
+                                }}
+                            >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                            </select>
+                        </label>
+                        <button
+                            type="button"
+                            aria-label="Previous page"
+                            onClick={() => setLibraryPage((current) => Math.max(1, current - 1))}
+                            disabled={libraryPage <= 1}
+                        >
+                            ‹
+                        </button>
+                        <span>
+                            {renderLibraryPageNumbers(libraryPage, libraryTotalPages, setLibraryPage)}
+                        </span>
+                        <button
+                            type="button"
+                            aria-label="Next page"
+                            onClick={() => setLibraryPage((current) => Math.min(libraryTotalPages, current + 1))}
+                            disabled={libraryPage >= libraryTotalPages}
+                        >
+                            ›
+                        </button>
+                    </div>
                 </section>
 
                 <div
@@ -1110,6 +1167,10 @@ export function App() {
 }
 
 function toFileUrl(localPath: string): string {
+    if (/^https?:\/\//i.test(localPath)) {
+        return localPath;
+    }
+
     const normalized = localPath.replace(/\\/g, "/");
     const url = new URL("file://");
 
@@ -1122,10 +1183,20 @@ function toFileUrl(localPath: string): string {
     return url.href;
 }
 
-function createObjectUrl(bytes: Uint8Array): string {
+function toAudioSourceUrl(source: { kind?: string; url?: string; bytes?: Uint8Array; mimeType?: string }): string {
+    if (source.kind === "url" && source.url) {
+        return source.url;
+    }
+    if (source.bytes) {
+        return createObjectUrl(source.bytes, source.mimeType);
+    }
+    throw new Error("Unsupported audio playback source");
+}
+
+function createObjectUrl(bytes: Uint8Array, mimeType?: string): string {
     const stableBytes = new Uint8Array(bytes.length);
     stableBytes.set(bytes);
-    const blob = new Blob([stableBytes]);
+    const blob = new Blob([stableBytes], mimeType ? { type: mimeType } : undefined);
     return URL.createObjectURL(blob);
 }
 
@@ -1169,6 +1240,76 @@ function buildSongMetadata(title: string, artist: string): SongMetadataInput | n
         title: normalizedTitle,
         artist: normalizedArtist
     };
+}
+
+function normalizeSongLibraryListResult(
+    result: SongLibraryListResult | SongLibraryRecord[],
+    fallbackPage: number,
+    fallbackPageSize: number
+): SongLibraryListResult {
+    if (Array.isArray(result)) {
+        return {
+            records: result,
+            total: result.length,
+            page: fallbackPage,
+            pageSize: fallbackPageSize,
+            totalPages: Math.max(1, Math.ceil(result.length / fallbackPageSize))
+        };
+    }
+
+    return {
+        records: result.records,
+        total: result.total,
+        page: result.page,
+        pageSize: result.pageSize,
+        totalPages: result.totalPages
+    };
+}
+
+function renderLibraryPageNumbers(
+    currentPage: number,
+    totalPages: number,
+    onSelectPage: (page: number) => void
+) {
+    const pages = buildCompactPageNumbers(currentPage, totalPages);
+    return pages.map((page, index) => {
+        if (page === "ellipsis") {
+            return <i key={`ellipsis-${index}`}>...</i>;
+        }
+
+        return (
+            <button
+                key={page}
+                type="button"
+                className="library-page-number"
+                data-active={page === currentPage ? "true" : "false"}
+                onClick={() => onSelectPage(page)}
+                disabled={page === currentPage}
+            >
+                {page}
+            </button>
+        );
+    });
+}
+
+function buildCompactPageNumbers(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+    if (totalPages <= 5) {
+        return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+    const sortedPages = [...pages]
+        .filter((page) => page >= 1 && page <= totalPages)
+        .sort((a, b) => a - b);
+    const result: Array<number | "ellipsis"> = [];
+    for (const page of sortedPages) {
+        const previous = result[result.length - 1];
+        if (typeof previous === "number" && page - previous > 1) {
+            result.push("ellipsis");
+        }
+        result.push(page);
+    }
+    return result;
 }
 
 interface LyricLine {
