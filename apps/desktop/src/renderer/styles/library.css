@@ -7,13 +7,16 @@
 }
 
 .library-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0.8rem;
     flex: 0 0 auto;
     min-width: 260px;
     border: 1px solid var(--line);
     border-radius: 16px;
     padding: 1rem;
     background: rgba(255, 250, 241, 0.78);
-    overflow: auto;
+    overflow: hidden;
     min-height: 0;
 }
 
@@ -108,8 +111,11 @@
 
 .library-list {
     display: grid;
+    align-content: start;
     gap: 0.45rem;
-    margin-top: 0.85rem;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
 }
 
 .library-song {
@@ -167,7 +173,9 @@
 }
 
 .library-empty {
-    margin: 0.85rem 0 0;
+    min-height: 0;
+    margin: 0;
+    overflow: auto;
     color: #5f6564;
 }
 
@@ -176,7 +184,7 @@
     flex-wrap: nowrap;
     align-items: center;
     gap: 0.28rem;
-    margin-top: 0.8rem;
+    margin-top: 0;
     color: #5f6564;
     font-size: 0.72rem;
 }
