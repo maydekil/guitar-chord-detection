@@ -2,28 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 from pathlib import Path
 from typing import Any
 
+from chord_engine.command_errors import ENGINE_COMMAND_CONTRACT_VERSION, EngineCommandError
 
-CONTRACT_VERSION = "1"
 
-
-@dataclass(frozen=True)
-class LyricsError(Exception):
-	code: str
-	message: str
-
-	def to_dict(self) -> dict[str, object]:
-		return {
-			"version": CONTRACT_VERSION,
-			"error": {
-				"code": self.code,
-				"message": self.message,
-			},
-		}
+class LyricsError(EngineCommandError):
+	pass
 
 
 def transcribe_lyrics(audio_path: str, *, model_name: str = "base") -> dict[str, object]:
@@ -61,7 +48,7 @@ def transcribe_lyrics(audio_path: str, *, model_name: str = "base") -> dict[str,
 		)
 
 	return {
-		"version": CONTRACT_VERSION,
+		"version": ENGINE_COMMAND_CONTRACT_VERSION,
 		"source": {
 			"path": audio_path,
 		},

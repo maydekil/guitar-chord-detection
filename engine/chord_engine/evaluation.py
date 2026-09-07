@@ -8,6 +8,7 @@ from pathlib import Path
 from statistics import mean
 
 from chord_engine.analyze import AnalysisError, analyze_audio
+from chord_engine.numeric import _safe_pct
 from chord_engine.segmentation import ChordSegment
 
 TRANSITION_MATCH_TOLERANCE_SECONDS = 0.35
@@ -369,8 +370,3 @@ def _parse_root_quality(chord: str) -> tuple[str | None, str | None]:
 		return label[:-1], "minor"
 	return label, "major"
 
-
-def _safe_pct(numerator: float, denominator: float) -> float:
-	if denominator <= 0:
-		return 0.0
-	return float((numerator / denominator) * 100.0)

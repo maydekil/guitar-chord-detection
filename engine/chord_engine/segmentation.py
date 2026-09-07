@@ -10,7 +10,7 @@ import numpy as np
 
 from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import FrameChordPrediction
-from chord_engine.features import DEFAULT_HOP_LENGTH
+from chord_engine.timebase import DEFAULT_HOP_LENGTH, frame_duration_seconds
 
 MIN_SEGMENT_DURATION_MS = 250
 
@@ -35,16 +35,6 @@ class _FrameSegment:
 	@property
 	def frame_count(self) -> int:
 		return self.end_frame - self.start_frame
-
-
-def frame_duration_seconds(
-	*,
-	hop_length: int = DEFAULT_HOP_LENGTH,
-	sample_rate: int = TARGET_SAMPLE_RATE,
-) -> float:
-	if hop_length <= 0 or sample_rate <= 0:
-		raise ValueError("hop_length and sample_rate must be positive")
-	return float(hop_length / sample_rate)
 
 
 def minimum_segment_frames(

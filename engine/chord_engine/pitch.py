@@ -2,44 +2,37 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-import hashlib
+from chord_engine.asset_cache import _source_file_digest
+from chord_engine.command_errors import EngineCommandError
+from chord_engine.generated_audio_asset import (
+	_ensure_output_dir,
+	_generated_audio_payload,
+	_is_cached_audio_ready,
+	_require_existing_audio_source,
+)
 
 
-CONTRACT_VERSION = "1"
-
-
-@dataclass(frozen=True)
-class PitchShiftError(Exception):
-	code: str
-	message: str
-
-	def to_dict(self) -> dict[str, object]:
-		return {
-			"version": CONTRACT_VERSION,
-			"error": {
-				"code": self.code,
-				"message": self.message,
-			},
-		}
+class PitchShiftError(EngineCommandError):
+	pass
 
 
 def pitch_shift_audio(audio_path: str, *, output_root: str, semitones: int) -> dict[str, object]:
-	source_path = Path(audio_path)
-	if not source_path.exists():
-		raise PitchShiftError("PITCH_SHIFT_INPUT_MISSING", "Audio file tidak ditemukan.")
+	source_path = _require_existing_audio_source(
+		audio_path,
+		error_factory=PitchShiftError,
+		missing_code="PITCH_SHIFT_INPUT_MISSING",
+		missing_message="Audio file tidak ditemukan.",
+	)
 	if semitones < -11 or semitones > 11:
 		raise PitchShiftError("PITCH_SHIFT_INVALID_STEPS", "Transpose audio harus di antara -11 sampai +11 semitone.")
 
 	if semitones == 0:
-		return _success_payload(source_path, source_path, semitones)
+		return _generated_audio_payload(source_path, source_path, source_extra={"semitones": semitones}, audio_extra={"format": "wav"})
 
-	output_dir = Path(output_root).expanduser()
-	output_dir.mkdir(parents=True, exist_ok=True)
-	output_path = output_dir / f"{_build_cache_name(source_path, semitones)}.wav"
-	if output_path.exists() and output_path.stat().st_size > 0:
-		return _success_payload(source_path, output_path, semitones)
+	output_dir = _ensure_output_dir(output_root)
+	output_path = output_dir / f"{_source_file_digest(source_path, semitones)}-{semitones:+d}.wav"
+	if _is_cached_audio_ready(output_path):
+		return _generated_audio_payload(source_path, output_path, source_extra={"semitones": semitones}, audio_extra={"format": "wav"})
 
 	try:
 		import librosa
@@ -64,28 +57,4 @@ def pitch_shift_audio(audio_path: str, *, output_root: str, semitones: int) -> d
 	except Exception as exc:
 		raise PitchShiftError("PITCH_SHIFT_FAILED", "Gagal menyesuaikan transpose audio.") from exc
 
-	return _success_payload(source_path, output_path, semitones)
-
-
-def _success_payload(source_path: Path, output_path: Path, semitones: int) -> dict[str, object]:
-	return {
-		"version": CONTRACT_VERSION,
-		"source": {
-			"path": str(source_path),
-			"semitones": semitones,
-		},
-		"audio": {
-			"path": str(output_path),
-			"format": "wav",
-		},
-	}
-
-
-def _build_cache_name(source_path: Path, semitones: int) -> str:
-	digest = hashlib.sha256()
-	stat = source_path.stat()
-	digest.update(str(source_path.resolve()).encode("utf-8"))
-	digest.update(str(stat.st_size).encode("utf-8"))
-	digest.update(str(int(stat.st_mtime)).encode("utf-8"))
-	digest.update(str(semitones).encode("utf-8"))
-	return f"{digest.hexdigest()[:24]}-{semitones:+d}"
+	return _generated_audio_payload(source_path, output_path, source_extra={"semitones": semitones}, audio_extra={"format": "wav"})

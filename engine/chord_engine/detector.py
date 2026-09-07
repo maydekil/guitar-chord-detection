@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from chord_engine.music_theory import _key_prior_bonus
+from chord_engine.numeric import _cosine_similarity
 from chord_engine.templates import generate_chord_templates
 
 NO_CHORD_LABEL = "N"
@@ -14,8 +16,6 @@ FRAME_BINS = 12
 # Centralized detector thresholds for MVP baseline.
 MIN_FRAME_ENERGY = 1e-6
 MIN_TEMPLATE_SIMILARITY = 0.38
-KEY_PRIOR_WEIGHT = 0.08
-
 MAJOR_SCALE_INTERVALS = (0, 2, 4, 5, 7, 9, 11)
 MINOR_SCALE_INTERVALS = (0, 2, 3, 5, 7, 8, 10)
 
@@ -96,8 +96,8 @@ def estimate_global_key(chroma: np.ndarray) -> KeyEstimate | None:
 	for tonic in range(FRAME_BINS):
 		major_profile = _scale_membership_profile(tonic, "major")
 		minor_profile = _scale_membership_profile(tonic, "minor")
-		scored.append((_cosine_similarity(agg, major_profile), tonic, "major"))
-		scored.append((_cosine_similarity(agg, minor_profile), tonic, "minor"))
+		scored.append((_cosine_similarity(agg, major_profile, min_norm=MIN_FRAME_ENERGY), tonic, "major"))
+		scored.append((_cosine_similarity(agg, minor_profile, min_norm=MIN_FRAME_ENERGY), tonic, "minor"))
 
 	scored.sort(key=lambda item: (-item[0], item[1], item[2]))
 	best_score, tonic_pc, mode = scored[0]
@@ -124,20 +124,6 @@ def _validate_frame(frame: np.ndarray) -> np.ndarray:
 	return vec
 
 
-def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-	a_norm = float(np.linalg.norm(a, ord=2))
-	b_norm = float(np.linalg.norm(b, ord=2))
-
-	if a_norm < MIN_FRAME_ENERGY or b_norm < MIN_FRAME_ENERGY:
-		return 0.0
-
-	value = float(np.dot(a, b) / (a_norm * b_norm))
-	if not np.isfinite(value):
-		return 0.0
-
-	return float(np.clip(value, -1.0, 1.0))
-
-
 def _score_chord_candidates(
 	frame_vec: np.ndarray,
 	templates: dict[str, np.ndarray],
@@ -146,58 +132,10 @@ def _score_chord_candidates(
 ) -> list[tuple[float, str]]:
 	scored: list[tuple[float, str]] = []
 	for name, template in templates.items():
-		raw = _cosine_similarity(frame_vec, template)
+		raw = _cosine_similarity(frame_vec, template, min_norm=MIN_FRAME_ENERGY)
 		bonus = _key_prior_bonus(name, key_estimate) if key_estimate else 0.0
 		scored.append((raw + bonus, name))
 	return scored
-
-
-def _key_prior_bonus(chord_name: str, key_estimate: KeyEstimate) -> float:
-	"""Return a bounded additive bonus; non-diatonic chords remain possible."""
-
-	root_pc = _chord_root_pc(chord_name)
-	if root_pc is None:
-		return 0.0
-
-	_, quality = _parse_chord_quality(chord_name)
-	match = _diatonic_match_score(root_pc, quality, key_estimate)
-	return KEY_PRIOR_WEIGHT * key_estimate.confidence * match
-
-
-def _diatonic_match_score(root_pc: int, quality: str | None, key_estimate: KeyEstimate) -> float:
-	if key_estimate.mode == "major":
-		diatonic_chords = {
-			0: "major",
-			2: "minor",
-			4: "minor",
-			5: "major",
-			7: "major",
-			9: "minor",
-			11: "diminished",
-		}
-		scale_intervals = MAJOR_SCALE_INTERVALS
-	else:
-		diatonic_chords = {
-			0: "minor",
-			2: "diminished",
-			3: "major",
-			5: "minor",
-			7: "minor",
-			8: "major",
-			10: "major",
-		}
-		scale_intervals = MINOR_SCALE_INTERVALS
-
-	interval = (root_pc - key_estimate.tonic_pc) % FRAME_BINS
-	if interval not in scale_intervals:
-		return 0.0
-
-	expected_quality = diatonic_chords.get(interval)
-	if expected_quality is None:
-		return 0.0
-	if expected_quality == quality:
-		return 1.0
-	return 0.30
 
 
 def _scale_membership_profile(tonic_pc: int, mode: str) -> np.ndarray:
@@ -206,40 +144,6 @@ def _scale_membership_profile(tonic_pc: int, mode: str) -> np.ndarray:
 	for interval in intervals:
 		profile[(tonic_pc + interval) % FRAME_BINS] = 1.0
 	return profile
-
-
-def _chord_root_pc(chord_name: str) -> int | None:
-	if chord_name.endswith("dim"):
-		name = chord_name[:-3]
-	elif chord_name.endswith("m"):
-		name = chord_name[:-1]
-	else:
-		name = chord_name
-	lookup = {
-		"C": 0,
-		"C#": 1,
-		"D": 2,
-		"D#": 3,
-		"E": 4,
-		"F": 5,
-		"F#": 6,
-		"G": 7,
-		"G#": 8,
-		"A": 9,
-		"A#": 10,
-		"B": 11,
-	}
-	return lookup.get(name)
-
-
-def _parse_chord_quality(label: str) -> tuple[str | None, str | None]:
-	if label == "N":
-		return None, None
-	if label.endswith("dim"):
-		return label[:-3], "diminished"
-	if label.endswith("m"):
-		return label[:-1], "minor"
-	return label, "major"
 
 
 def _match_confidence(best_score: float, second_score: float) -> float:

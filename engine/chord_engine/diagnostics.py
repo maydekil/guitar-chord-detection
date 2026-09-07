@@ -7,16 +7,11 @@ from statistics import mean, median
 from chord_engine.analysis_models import AnalysisResult
 from chord_engine.detector import KeyEstimate
 from chord_engine.features import BeatTiming
+from chord_engine.music_theory import _is_diatonic_chord, _parse_chord_quality
 from chord_engine.segmentation import ChordSegment
 
 SHORT_SEGMENT_SECONDS = 0.25
 SUSPICIOUS_SHORT_NON_DIATONIC_SECONDS = 1.0
-HARMONIC_PLAUSIBILITY_DIATONIC = 1.0
-HARMONIC_PLAUSIBILITY_MODAL_OR_BORROWED = 0.60
-HARMONIC_PLAUSIBILITY_NON_DIATONIC = 0.20
-HARMONIC_PLAUSIBILITY_DOMINANT_MAJOR_IN_MINOR = 0.92
-
-
 def summarize_analysis(
     result: AnalysisResult,
     detected_key: KeyEstimate | None,
@@ -241,68 +236,3 @@ def _suspicious_short_non_diatonic_segments(
 
     return suspicious
 
-
-def _is_diatonic_chord(chord_name: str, detected_key: KeyEstimate | None) -> bool:
-    if detected_key is None or chord_name == "N":
-        return False
-
-    root_name, quality = _parse_chord_quality(chord_name)
-    root_pc = _root_to_pc(root_name)
-    if root_pc is None:
-        return False
-
-    interval = (root_pc - detected_key.tonic_pc) % 12
-    if detected_key.mode == "major":
-        diatonic_chords = {
-            0: "major",
-            2: "minor",
-            4: "minor",
-            5: "major",
-            7: "major",
-            9: "minor",
-            11: "diminished",
-        }
-    else:
-        diatonic_chords = {
-            0: "minor",
-            2: "diminished",
-            3: "major",
-            5: "minor",
-            7: "minor",
-            8: "major",
-            10: "major",
-        }
-
-    expected_quality = diatonic_chords.get(interval)
-    if expected_quality is None:
-        return False
-    return expected_quality == quality
-
-
-def _parse_chord_quality(label: str) -> tuple[str | None, str | None]:
-    if label == "N":
-        return None, None
-    if label.endswith("dim"):
-        return label[:-3], "diminished"
-    if label.endswith("m"):
-        return label[:-1], "minor"
-    return label, "major"
-
-
-def _root_to_pc(root_name: str | None) -> int | None:
-    if root_name is None:
-        return None
-    return {
-        "C": 0,
-        "C#": 1,
-        "D": 2,
-        "D#": 3,
-        "E": 4,
-        "F": 5,
-        "F#": 6,
-        "G": 7,
-        "G#": 8,
-        "A": 9,
-        "A#": 10,
-        "B": 11,
-    }.get(root_name)

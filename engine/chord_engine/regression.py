@@ -11,6 +11,7 @@ from statistics import mean
 from typing import Any
 
 from chord_engine.analyze import AnalysisError, analyze_audio
+from chord_engine.numeric import _safe_pct
 from chord_engine.segmentation import ChordSegment
 
 
@@ -313,6 +314,3 @@ def _numeric_delta(current: object, baseline: object) -> float | None:
 		return None
 	return round(float(current) - float(baseline), 3)
 
-
-def _safe_pct(value: float, total: float) -> float:
-	return 0.0 if total <= 0 else (value / total) * 100.0

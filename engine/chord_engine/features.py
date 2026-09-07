@@ -12,8 +12,8 @@ except Exception:  # pragma: no cover - fallback when scipy is unavailable
 	median_filter = None
 
 from chord_engine.audio import AudioBuffer, TARGET_SAMPLE_RATE
+from chord_engine.timebase import DEFAULT_HOP_LENGTH, frame_duration_seconds
 
-DEFAULT_HOP_LENGTH = 512
 DEFAULT_N_CHROMA = 12
 MIN_SIGNAL_ENERGY = 1e-7
 HPSS_MARGIN = 2.2
@@ -59,7 +59,7 @@ class ChromaFeatures:
 
 	@property
 	def frame_duration_seconds(self) -> float:
-		return float(self.hop_length / self.sample_rate)
+		return frame_duration_seconds(hop_length=self.hop_length, sample_rate=self.sample_rate)
 
 	def frame_times(self) -> np.ndarray:
 		return librosa.frames_to_time(np.arange(self.n_frames), sr=self.sample_rate, hop_length=self.hop_length)
