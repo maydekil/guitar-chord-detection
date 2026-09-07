@@ -42,6 +42,7 @@ from chord_engine.post_refinement import (
 	_suppress_weak_diminished_passing_segments,
 	_suppress_weak_timeline_fragments,
 )
+from chord_engine.playable_progression import _apply_playable_progression_refinement
 from chord_engine.music_theory import (
 	_chord_root_pc,
 	_diatonic_chord_labels_for_key,
@@ -462,6 +463,11 @@ def _run_pipeline(
 				detected_key=detected_key,
 			)
 			correction_events.extend(cleanup_events)
+			segments, playable_events = _apply_playable_progression_refinement(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(playable_events)
 		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 		segments = _calibrate_output_confidence(segments)
 
