@@ -828,16 +828,24 @@ body {
     gap: 0.3rem;
     border: 1px solid var(--line);
     border-radius: 7px;
-    padding: 0.22rem 0.45rem;
+    padding: 0.16rem 0.42rem;
     background: #fffdf8;
     color: var(--ink);
-    font-weight: 800;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.transpose-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
 }
 
 .transpose-controls strong {
-    min-width: 2.1rem;
+    min-width: 1.35rem;
     text-align: center;
     color: #172229;
+    font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
 }
 
@@ -846,6 +854,25 @@ body {
     font-size: 0.76rem;
     font-weight: 700;
     white-space: nowrap;
+}
+
+.transpose-key-only {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    border: 1px solid rgba(92, 76, 45, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 253, 248, 0.72);
+    color: #4b575a;
+    font-size: 0.74rem;
+    font-weight: 600;
+    padding: 0.16rem 0.42rem;
+}
+
+.transpose-key-only input {
+    width: 0.86rem;
+    height: 0.86rem;
+    accent-color: var(--accent);
 }
 
 audio[data-testid="audio-player"] {
@@ -866,15 +893,16 @@ audio[data-testid="audio-player"] {
     border: 1px solid var(--line);
     background: #fffdf8;
     border-radius: 8px;
-    padding: 0.28rem 0.58rem;
+    padding: 0.16rem 0.42rem;
     font-weight: 600;
-    font-size: 0.86rem;
+    font-size: 0.74rem;
 }
 
 .playback-row button span {
-    min-width: 0.9rem;
+    min-width: 0.72rem;
     text-align: center;
-    font-size: 0.82rem;
+    font-size: 0.72rem;
+    font-weight: 500;
     line-height: 1;
 }
 
@@ -886,6 +914,8 @@ audio[data-testid="audio-player"] {
 .time-label {
     margin: 0;
     color: #4b575a;
+    font-size: 0.74rem;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 

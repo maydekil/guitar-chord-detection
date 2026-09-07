@@ -68,6 +68,7 @@ export function App() {
     const [exportPreviewFormat, setExportPreviewFormat] = useState<ExportFormat | null>(null);
     const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
     const [transposeSemitones, setTransposeSemitones] = useState<number>(0);
+    const [isTransposeKeyOnly, setIsTransposeKeyOnly] = useState<boolean>(true);
     const [detectorTab, setDetectorTab] = useState<DetectorTab>("timeline");
     const [lyricsText, setLyricsText] = useState<string>("");
     const [isGeneratingLyrics, setIsGeneratingLyrics] = useState<boolean>(false);
@@ -1066,6 +1067,12 @@ export function App() {
     const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
         const safeSemitones = Math.max(-11, Math.min(11, Math.trunc(nextSemitones)));
         setTransposeSemitones(safeSemitones);
+        if (isTransposeKeyOnly) {
+            setAnalysisStatus(safeSemitones === 0
+                ? "Transpose reset."
+                : `Key transposed ${formatTranspose(safeSemitones)}. Audio unchanged.`);
+            return;
+        }
         await applyTransposeAudio(safeSemitones);
     };
 
@@ -1134,6 +1141,22 @@ export function App() {
         }
     };
 
+    const handleSetTransposeKeyOnly = async (nextKeyOnly: boolean): Promise<void> => {
+        setIsTransposeKeyOnly(nextKeyOnly);
+        if (nextKeyOnly) {
+            await applyTransposeAudio(0);
+            setAnalysisStatus(transposeSemitones === 0
+                ? "Only Key enabled. Audio unchanged."
+                : `Only Key enabled. Key remains ${formatTranspose(transposeSemitones)}, audio restored.`);
+            return;
+        }
+        if (transposeSemitones !== 0) {
+            await applyTransposeAudio(transposeSemitones);
+        } else {
+            setAnalysisStatus("Only Key disabled. Next transpose will also render audio.");
+        }
+    };
+
     const handleToggleVocalHide = async (): Promise<void> => {
         if (isUsingInstrumentalAudio) {
             await handleUseOriginalAudio();
@@ -1188,13 +1211,13 @@ export function App() {
         const previousTime = audio?.currentTime ?? currentTimeSeconds;
         const wasPlaying = state === "playing";
         let playbackPath = audioPath;
-        if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
+        if (!isTransposeKeyOnly && transposeSemitones !== 0 && bridge.pitchShiftAudio) {
             const shifted = await bridge.pitchShiftAudio(audioPath, { semitones: transposeSemitones });
             if (!("error" in shifted)) {
                 playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
             }
         }
-        const playbackSource = await bridge.getAudioPlaybackSource(transposeSemitones === 0 ? audioStreamUrl ?? playbackPath : playbackPath);
+        const playbackSource = await bridge.getAudioPlaybackSource(isTransposeKeyOnly || transposeSemitones === 0 ? audioStreamUrl ?? playbackPath : playbackPath);
         await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
         setIsUsingInstrumentalAudio(true);
         setIsVocalHidden(true);
@@ -1210,7 +1233,7 @@ export function App() {
         const previousTime = audio?.currentTime ?? currentTimeSeconds;
         const wasPlaying = state === "playing";
         let playbackPath = selectedFilePath;
-        if (transposeSemitones !== 0 && bridge.pitchShiftAudio) {
+        if (!isTransposeKeyOnly && transposeSemitones !== 0 && bridge.pitchShiftAudio) {
             const shifted = await bridge.pitchShiftAudio(selectedFilePath, { semitones: transposeSemitones });
             if (!("error" in shifted)) {
                 playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
@@ -1654,24 +1677,34 @@ export function App() {
                                     </p>
                                 </div>
                                 <div className="transpose-controls" aria-label="transpose controls">
-                                    <span>Transpose</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleSetTranspose(transposeSemitones - 1)}
-                                        disabled={isPitchShiftingAudio}
-                                        aria-label="Transpose down"
-                                    >
-                                        -
-                                    </button>
-                                    <strong>{formatTranspose(transposeSemitones)}</strong>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleSetTranspose(transposeSemitones + 1)}
-                                        disabled={isPitchShiftingAudio}
-                                        aria-label="Transpose up"
-                                    >
-                                        +
-                                    </button>
+                                    <label className="transpose-key-only">
+                                        <input
+                                            type="checkbox"
+                                            checked={isTransposeKeyOnly}
+                                            onChange={(event) => void handleSetTransposeKeyOnly(event.currentTarget.checked)}
+                                            disabled={isPitchShiftingAudio}
+                                        />
+                                        Only Key
+                                    </label>
+                                    <span className="transpose-stepper">
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleSetTranspose(transposeSemitones - 1)}
+                                            disabled={isPitchShiftingAudio}
+                                            aria-label="Transpose down"
+                                        >
+                                            -
+                                        </button>
+                                        <strong>{formatTranspose(transposeSemitones)}</strong>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleSetTranspose(transposeSemitones + 1)}
+                                            disabled={isPitchShiftingAudio}
+                                            aria-label="Transpose up"
+                                        >
+                                            +
+                                        </button>
+                                    </span>
                                     <button
                                         type="button"
                                         onClick={() => void handleSetTranspose(0)}

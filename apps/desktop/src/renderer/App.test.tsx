@@ -607,6 +607,8 @@ describe("App", () => {
             target: { value: "Demo Title" }
         });
         fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
+        expect(await screen.findByText("Save chord analysis?")).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: "Confirm Save" }));
         expect(saveSongAnalysis).toHaveBeenCalledWith({
             audioPath: "/tmp/demo.wav",
             analysis: analysisResult,
