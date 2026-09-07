@@ -2548,10 +2548,10 @@ function chordConfidenceLevel(confidence: number): "high" | "medium" | "low" {
     if (!Number.isFinite(confidence)) {
         return "low";
     }
-    if (confidence >= 0.22) {
+    if (confidence >= 0.78) {
         return "high";
     }
-    if (confidence >= 0.17) {
+    if (confidence >= 0.58) {
         return "medium";
     }
     return "low";

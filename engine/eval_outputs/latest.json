@@ -4,14 +4,14 @@
   "sampleCount": 2,
   "samples": [
     {
-      "algorithm": "chroma-template-v10",
+      "algorithm": "chroma-template-v11",
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
-      "averageConfidence": 0.189,
+      "averageConfidence": 0.68,
       "duration": 282.68,
       "failures": [],
       "keyEstimate": "A",
       "longSegments": [],
-      "lowConfidencePercent": 100.0,
+      "lowConfidencePercent": 0.0,
       "name": "Album Lama",
       "segmentCount": 154,
       "status": "pass",
@@ -50,29 +50,29 @@
       "transitionsPerMinute": 32.47
     },
     {
-      "algorithm": "chroma-template-v10",
+      "algorithm": "chroma-template-v11",
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
-      "averageConfidence": 0.2,
+      "averageConfidence": 0.702,
       "duration": 289.12,
       "failures": [],
       "keyEstimate": "C",
       "longSegments": [
         {
           "chord": "C",
-          "confidence": 0.206,
+          "confidence": 0.792,
           "duration": 9.08,
           "end": 145.5,
           "start": 136.42
         },
         {
           "chord": "C",
-          "confidence": 0.202,
+          "confidence": 0.784,
           "duration": 8.2,
           "end": 245.83,
           "start": 237.63
         }
       ],
-      "lowConfidencePercent": 100.0,
+      "lowConfidencePercent": 0.65,
       "name": "Foto Kita Berdua",
       "segmentCount": 153,
       "status": "pass",

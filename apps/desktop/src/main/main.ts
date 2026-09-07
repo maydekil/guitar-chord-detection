@@ -88,7 +88,7 @@ interface ApiJobProgressEvent {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ANALYSIS_CONTRACT_VERSION = "1";
-const ANALYSIS_ALGORITHM = "chroma-template-v10";
+const ANALYSIS_ALGORITHM = "chroma-template-v11";
 const WINDOW_ICON_PATH = path.resolve(app.getAppPath(), "assets", "otehdekil.ico");
 const DOCK_ICON_PATH = path.resolve(app.getAppPath(), "assets", "otehdekil.png");
 

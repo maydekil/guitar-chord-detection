@@ -8,8 +8,8 @@
       "allowedChords": ["A", "Bm", "C#m", "D", "E", "F#m", "G#dim", "N"],
       "minSegments": 100,
       "maxSegments": 210,
-      "minAverageConfidence": 0.16,
-      "maxLowConfidencePercent": 100,
+      "minAverageConfidence": 0.6,
+      "maxLowConfidencePercent": 45,
       "maxTransitionsPerMinute": 42
     },
     {
@@ -19,8 +19,8 @@
       "allowedChords": ["C", "Dm", "Em", "F", "G", "Am", "Bdim", "N"],
       "minSegments": 100,
       "maxSegments": 210,
-      "minAverageConfidence": 0.16,
-      "maxLowConfidencePercent": 100,
+      "minAverageConfidence": 0.6,
+      "maxLowConfidencePercent": 45,
       "maxTransitionsPerMinute": 42
     }
   ]
