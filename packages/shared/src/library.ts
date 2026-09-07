@@ -1,6 +1,6 @@
 import type { ChordAnalysisSuccess } from "./analysis.js";
 
-export interface SongLibraryRecord {
+export interface SongLibrarySummary {
     id: string;
     title: string;
     artist: string;
@@ -13,9 +13,15 @@ export interface SongLibraryRecord {
     algorithm: string;
     contractVersion: string;
     duration: number;
-    analysis: ChordAnalysisSuccess;
+    chordCount: number;
+    keyEstimate?: string;
+    averageConfidence?: number;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface SongLibraryRecord extends SongLibrarySummary {
+    analysis: ChordAnalysisSuccess;
 }
 
 export interface SongLibrarySearchOptions {
@@ -25,7 +31,7 @@ export interface SongLibrarySearchOptions {
 }
 
 export interface SongLibraryListResult {
-    records: SongLibraryRecord[];
+    records: SongLibrarySummary[];
     total: number;
     page: number;
     pageSize: number;

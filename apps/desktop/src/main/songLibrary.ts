@@ -5,7 +5,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type { ChordAnalysisSuccess } from "@gcd/shared/analysis";
-import type { DeleteSongResult, SongLibraryListResult, SongLibraryRecord, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
+import type { DeleteSongResult, SongLibraryListResult, SongLibraryRecord, SongLibrarySearchOptions, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 
 interface SongLibraryStoreFile {
     records: Record<string, SongLibraryRecord>;
@@ -22,6 +22,10 @@ interface SongRow {
     algorithm: string;
     contract_version: string;
     duration: number;
+    chord_count: number | null;
+    key_estimate: string | null;
+    average_confidence: number | null;
+    search_index: string | null;
     analysis_json: string;
     created_at: string;
     updated_at: string;
@@ -70,24 +74,34 @@ export class SongLibraryStore {
         const page = normalizePage(options?.page);
         const offset = (page - 1) * pageSize;
         const countStatement = query
-            ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
+            ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE search_index LIKE ?")
             : database.prepare("SELECT COUNT(*) AS total FROM songs");
         const total = query
             ? (countStatement.get(`%${query}%`) as { total: number }).total
             : (countStatement.get() as { total: number }).total;
         const statement = query
             ? database.prepare(`
-                SELECT * FROM songs
-                WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+                SELECT id, title, artist, audio_path, lyrics, instrumental_audio_path, file_hash,
+                    algorithm, contract_version, duration, chord_count, key_estimate,
+                    average_confidence, created_at, updated_at
+                FROM songs
+                WHERE search_index LIKE ?
                 ORDER BY updated_at DESC
                 LIMIT ? OFFSET ?
             `)
-            : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+            : database.prepare(`
+                SELECT id, title, artist, audio_path, lyrics, instrumental_audio_path, file_hash,
+                    algorithm, contract_version, duration, chord_count, key_estimate,
+                    average_confidence, created_at, updated_at
+                FROM songs
+                ORDER BY updated_at DESC
+                LIMIT ? OFFSET ?
+            `);
         const rows = query
             ? statement.all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
             : statement.all(pageSize, offset) as unknown as SongRow[];
         return {
-            records: rows.map(rowToRecord),
+            records: rows.map(rowToSummary),
             total,
             page,
             pageSize,
@@ -116,6 +130,7 @@ export class SongLibraryStore {
             await this.deps.copyFile(options.audioPath, managedAudioPath);
         }
 
+        const summary = summarizeAnalysis(options.analysis);
         const record: SongLibraryRecord = {
             id,
             title,
@@ -127,6 +142,9 @@ export class SongLibraryStore {
             algorithm: options.algorithm,
             contractVersion: options.contractVersion,
             duration: options.analysis.source.duration,
+            chordCount: summary.chordCount,
+            keyEstimate: summary.keyEstimate,
+            averageConfidence: summary.averageConfidence,
             analysis: options.analysis,
             createdAt: existing?.createdAt ?? timestamp,
             updatedAt: timestamp
@@ -192,6 +210,10 @@ export class SongLibraryStore {
                 algorithm TEXT NOT NULL,
                 contract_version TEXT NOT NULL,
                 duration REAL NOT NULL,
+                chord_count INTEGER NOT NULL DEFAULT 0,
+                key_estimate TEXT,
+                average_confidence REAL,
+                search_index TEXT NOT NULL DEFAULT '',
                 analysis_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -199,8 +221,53 @@ export class SongLibraryStore {
             CREATE INDEX IF NOT EXISTS idx_songs_updated_at ON songs(updated_at);
             CREATE INDEX IF NOT EXISTS idx_songs_title_artist ON songs(title, artist);
         `);
+        this.ensureColumn(database, "chord_count", "INTEGER NOT NULL DEFAULT 0");
+        this.ensureColumn(database, "key_estimate", "TEXT");
+        this.ensureColumn(database, "average_confidence", "REAL");
+        this.ensureColumn(database, "search_index", "TEXT NOT NULL DEFAULT ''");
+        database.exec("CREATE INDEX IF NOT EXISTS idx_songs_search_index ON songs(search_index);");
+        this.backfillSongSummaries(database);
         this.cleanupDuplicateRows(database);
         database.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_file_hash_unique ON songs(file_hash);");
+    }
+
+    private ensureColumn(database: DatabaseSync, columnName: string, definition: string): void {
+        const columns = database.prepare("PRAGMA table_info(songs)").all() as unknown as Array<{ name: string }>;
+        if (columns.some((column) => column.name === columnName)) {
+            return;
+        }
+        database.exec(`ALTER TABLE songs ADD COLUMN ${columnName} ${definition};`);
+    }
+
+    private backfillSongSummaries(database: DatabaseSync): void {
+        const rows = database.prepare(`
+            SELECT id, title, artist, audio_path, analysis_json
+            FROM songs
+            WHERE search_index = ''
+                OR chord_count = 0
+                OR average_confidence IS NULL
+        `).all() as unknown as Array<{ id: string; title: string; artist: string; audio_path: string; analysis_json: string }>;
+
+        const statement = database.prepare(`
+            UPDATE songs
+            SET chord_count = ?, key_estimate = ?, average_confidence = ?, search_index = ?
+            WHERE id = ?
+        `);
+        for (const row of rows) {
+            try {
+                const analysis = JSON.parse(row.analysis_json) as ChordAnalysisSuccess;
+                const summary = summarizeAnalysis(analysis);
+                statement.run(
+                    summary.chordCount,
+                    summary.keyEstimate ?? null,
+                    summary.averageConfidence ?? null,
+                    buildSearchIndex(row.title, row.artist, row.audio_path),
+                    row.id
+                );
+            } catch {
+                statement.run(0, null, null, buildSearchIndex(row.title, row.artist, row.audio_path), row.id);
+            }
+        }
     }
 
     private cleanupDuplicateRows(database: DatabaseSync): void {
@@ -282,7 +349,7 @@ export class SongLibraryStore {
     }
 
     private upsertRecord(database: DatabaseSync, record: SongLibraryRecord): void {
-        database.prepare(`
+        const statement = database.prepare(`
             INSERT INTO songs (
                 id,
                 title,
@@ -294,11 +361,15 @@ export class SongLibraryStore {
                 algorithm,
                 contract_version,
                 duration,
+                chord_count,
+                key_estimate,
+                average_confidence,
+                search_index,
                 analysis_json,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 artist = excluded.artist,
@@ -309,9 +380,15 @@ export class SongLibraryStore {
                 algorithm = excluded.algorithm,
                 contract_version = excluded.contract_version,
                 duration = excluded.duration,
+                chord_count = excluded.chord_count,
+                key_estimate = excluded.key_estimate,
+                average_confidence = excluded.average_confidence,
+                search_index = excluded.search_index,
                 analysis_json = excluded.analysis_json,
                 updated_at = excluded.updated_at
-        `).run(
+        `);
+        const summary = summarizeAnalysis(record.analysis);
+        statement.run(
             record.id,
             record.title,
             record.artist,
@@ -322,6 +399,10 @@ export class SongLibraryStore {
             record.algorithm,
             record.contractVersion,
             record.duration,
+            summary.chordCount,
+            summary.keyEstimate ?? null,
+            summary.averageConfidence ?? null,
+            buildSearchIndex(record.title, record.artist, record.audioPath),
             JSON.stringify(record.analysis),
             record.createdAt,
             record.updatedAt
@@ -346,6 +427,13 @@ function resolveLegacySongLibraryPath(userDataPath: string): string {
 
 function rowToRecord(row: SongRow): SongLibraryRecord {
     return {
+        ...rowToSummary(row),
+        analysis: JSON.parse(row.analysis_json) as ChordAnalysisSuccess
+    };
+}
+
+function rowToSummary(row: SongRow): SongLibrarySummary {
+    return {
         id: row.id,
         title: row.title,
         artist: row.artist,
@@ -356,7 +444,9 @@ function rowToRecord(row: SongRow): SongLibraryRecord {
         algorithm: row.algorithm,
         contractVersion: row.contract_version,
         duration: row.duration,
-        analysis: JSON.parse(row.analysis_json) as ChordAnalysisSuccess,
+        chordCount: row.chord_count ?? 0,
+        keyEstimate: row.key_estimate ?? undefined,
+        averageConfidence: row.average_confidence ?? undefined,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
@@ -372,6 +462,28 @@ function buildSongId(fileHash: string): string {
 
 function normalizeSearch(value: string): string {
     return value.trim().toLocaleLowerCase();
+}
+
+function buildSearchIndex(title: string, artist: string, audioPath: string): string {
+    return normalizeSearch(`${title} ${artist} ${audioPath}`);
+}
+
+function summarizeAnalysis(analysis: ChordAnalysisSuccess): Pick<SongLibrarySummary, "averageConfidence" | "chordCount" | "keyEstimate"> {
+    const segments = analysis.analysis.chords;
+    const chordCount = segments.length;
+    const averageConfidence = chordCount > 0
+        ? segments.reduce((total, segment) => total + segment.confidence, 0) / chordCount
+        : undefined;
+    const durations = new Map<string, number>();
+    for (const segment of segments) {
+        if (segment.chord === "N") {
+            continue;
+        }
+        const root = segment.chord.endsWith("m") ? segment.chord.slice(0, -1) : segment.chord;
+        durations.set(root, (durations.get(root) ?? 0) + Math.max(0, segment.end - segment.start));
+    }
+    const keyEstimate = [...durations.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+    return { averageConfidence, chordCount, keyEstimate };
 }
 
 function normalizePage(value: number | undefined): number {

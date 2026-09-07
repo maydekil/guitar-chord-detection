@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -67,7 +67,7 @@ describe("App", () => {
 
         fireEvent.change(screen.getByRole("searchbox", { name: "Search library" }), { target: { value: "sr" } });
         expect(await screen.findByDisplayValue("sr")).toBeInTheDocument();
-        expect(listSongs).toHaveBeenLastCalledWith({ query: "sr", page: 1, pageSize: 10 });
+        await waitFor(() => expect(listSongs).toHaveBeenLastCalledWith({ query: "sr", page: 1, pageSize: 10 }));
     });
 
     it("keeps playback controls disabled when no audio is selected", async () => {

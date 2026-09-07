@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
-import type { SongLibraryListResult, SongLibraryRecord, SongMetadataInput } from "@gcd/shared/library";
+import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
@@ -14,7 +14,7 @@ type ApiHealthState = "local" | "checking" | "connected" | "offline";
 type ExportFormat = "txt" | "lrc";
 type PendingConfirmation =
     | { kind: "save"; metadata: SongMetadataInput }
-    | { kind: "delete"; song: SongLibraryRecord };
+    | { kind: "delete"; song: SongLibrarySummary };
 type ApiJobProgressEvent = {
     id: string;
     kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
@@ -51,8 +51,9 @@ export function App() {
     const [timelineRedoStack, setTimelineRedoStack] = useState<TimelineEditSnapshot[]>([]);
     const [timelineWidthPx, setTimelineWidthPx] = useState<number>(0);
     const [analysisStatus, setAnalysisStatus] = useState<string>("No analysis yet");
-    const [librarySongs, setLibrarySongs] = useState<SongLibraryRecord[]>([]);
+    const [librarySongs, setLibrarySongs] = useState<SongLibrarySummary[]>([]);
     const [libraryQuery, setLibraryQuery] = useState<string>("");
+    const [debouncedLibraryQuery, setDebouncedLibraryQuery] = useState<string>("");
     const [libraryPage, setLibraryPage] = useState<number>(1);
     const [libraryPageSize, setLibraryPageSize] = useState<number>(10);
     const [libraryTotal, setLibraryTotal] = useState<number>(0);
@@ -275,8 +276,15 @@ export function App() {
     }, [bridge]);
 
     useEffect(() => {
-        void refreshLibrary(libraryQuery, libraryPage, libraryPageSize);
-    }, [bridge, libraryQuery, libraryPage, libraryPageSize]);
+        const timeoutId = window.setTimeout(() => {
+            setDebouncedLibraryQuery(libraryQuery);
+        }, 180);
+        return () => window.clearTimeout(timeoutId);
+    }, [libraryQuery]);
+
+    useEffect(() => {
+        void refreshLibrary(debouncedLibraryQuery, libraryPage, libraryPageSize);
+    }, [bridge, debouncedLibraryQuery, libraryPage, libraryPageSize]);
 
     const refreshLibrary = async (
         query = libraryQuery,
@@ -585,8 +593,14 @@ export function App() {
         setViewMode("detail");
     };
 
-    const handleOpenLibrarySong = async (song: SongLibraryRecord): Promise<void> => {
+    const handleOpenLibrarySong = async (summary: SongLibrarySummary): Promise<void> => {
         resetPlaybackState();
+        const song = bridge?.getSong ? await bridge.getSong(summary.id) : null;
+        if (!song) {
+            setState("error");
+            setAnalysisStatus("Could not load this song detail.");
+            return;
+        }
         setSelectedSongId(song.id);
         setViewMode("detail");
         setSelectedFileName(displaySongTitle(song));
@@ -742,7 +756,7 @@ export function App() {
         setAnalysisStatus(`Lyrics generated${result.lyrics.language ? ` (${result.lyrics.language})` : ""}.`);
     };
 
-    const handleDeleteLibrarySong = async (song: SongLibraryRecord): Promise<void> => {
+    const handleDeleteLibrarySong = async (song: SongLibrarySummary): Promise<void> => {
         if (!bridge?.deleteSong) {
             setAnalysisStatus("Delete API belum tersedia. Restart aplikasi lalu coba Delete lagi.");
             return;
@@ -751,7 +765,7 @@ export function App() {
         setPendingConfirmation({ kind: "delete", song });
     };
 
-    const performDeleteLibrarySong = async (song: SongLibraryRecord): Promise<void> => {
+    const performDeleteLibrarySong = async (song: SongLibrarySummary): Promise<void> => {
         if (!bridge?.deleteSong) {
             setPendingConfirmation(null);
             return;
@@ -1422,10 +1436,10 @@ export function App() {
                                     >
                                         <span>{song.title}</span>
                                         <small className="library-song-artist">{song.artist || "Unknown artist"}</small>
-                                        <small>{song.analysis.analysis.chords.length} chords - {formatTime(song.duration)}</small>
+                                        <small>{formatSongChordCount(song)} chords - {formatTime(song.duration)}</small>
                                         <span className="library-song-meta">
-                                            <small>Key {estimateMajorKey(song.analysis.analysis.chords)}</small>
-                                            <small>Conf {formatAverageConfidence(song.analysis.analysis.chords)}</small>
+                                            <small>Key {song.keyEstimate ?? "-"}</small>
+                                            <small>Conf {formatConfidenceValue(song.averageConfidence)}</small>
                                             <small>{formatShortDate(song.updatedAt)}</small>
                                         </span>
                                     </button>
@@ -2021,7 +2035,7 @@ function findActiveChord(segments: ChordSegment[], currentTimeSeconds: number): 
     return segments.find((segment) => segment.start <= currentTimeSeconds && currentTimeSeconds < segment.end)?.chord ?? null;
 }
 
-function displaySongTitle(song: SongLibraryRecord): string {
+function displaySongTitle(song: SongLibrarySummary): string {
     return song.artist.trim().length > 0 ? `${song.artist} - ${song.title}` : song.title;
 }
 
@@ -2126,10 +2140,16 @@ function renderLyricsPreview(
     return (
         <div className="lyrics-lines" data-testid="lyrics-lines">
             {lines.map((line, index) => {
+                const previousTimedLine = [...lines.slice(0, index)].reverse().find((candidate) => candidate.time !== null);
                 const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
                 const isActive = line.time !== null
                     && line.time <= currentTimeSeconds
                     && (nextTimedLine?.time == null || currentTimeSeconds < nextTimedLine.time);
+                const hasSectionBreak = Boolean(
+                    line.time !== null
+                    && previousTimedLine?.time != null
+                    && line.time - previousTimedLine.time >= 10
+                );
                 const chordMarkers = line.time === null
                     ? []
                     : buildLyricChordMarkers(
@@ -2143,8 +2163,12 @@ function renderLyricsPreview(
                         key={`${line.time ?? "plain"}-${index}-${line.text}`}
                         className="lyrics-line"
                         data-active={isActive ? "true" : "false"}
+                        data-section-break={hasSectionBreak ? "true" : "false"}
+                        data-chord-count={chordMarkers.length}
                     >
-                        <time>{line.time === null ? "--:--" : formatTime(line.time)}</time>
+                        <time dateTime={line.time === null ? undefined : `PT${line.time.toFixed(2)}S`}>
+                            {line.time === null ? "--:--" : formatTime(line.time)}
+                        </time>
                         <div className="lyrics-chord-sheet">
                             <div className="lyrics-chords" aria-label="Line chords">
                                 {chordMarkers.length > 0 ? chordMarkers.map((marker) => (
@@ -2394,6 +2418,20 @@ function formatAverageConfidence(segments: ChordSegment[]): string {
     }
     const average = segments.reduce((total, segment) => total + segment.confidence, 0) / segments.length;
     return `${Math.round(average * 100)}%`;
+}
+
+function formatConfidenceValue(confidence: number | undefined): string {
+    if (confidence === undefined || !Number.isFinite(confidence)) {
+        return "-";
+    }
+    return `${Math.round(confidence * 100)}%`;
+}
+
+function formatSongChordCount(song: SongLibrarySummary | SongLibraryRecord): number {
+    if (Number.isFinite(song.chordCount)) {
+        return song.chordCount;
+    }
+    return "analysis" in song ? song.analysis.analysis.chords.length : 0;
 }
 
 function formatShortDate(value: string): string {

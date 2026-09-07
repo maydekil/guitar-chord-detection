@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
-import type { SaveSongAnalysisRequest, SongLibraryListResult, SongLibraryRecord } from "@gcd/shared/library";
+import type { SaveSongAnalysisRequest, SongLibraryListResult, SongLibraryRecord, SongLibrarySummary } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
@@ -27,6 +27,10 @@ interface SongRow {
     algorithm: string;
     contract_version: string;
     duration: number;
+    chord_count: number | null;
+    key_estimate: string | null;
+    average_confidence: number | null;
+    search_index: string | null;
     analysis_json: string;
     created_at: string;
     updated_at: string;
@@ -273,23 +277,34 @@ function listSongs(url: URL): SongLibraryListResult {
     const pageSize = normalizePageSize(Number.parseInt(url.searchParams.get("pageSize") ?? "10", 10));
     const offset = (page - 1) * pageSize;
     const countStatement = query
-        ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?")
+        ? database.prepare("SELECT COUNT(*) AS total FROM songs WHERE search_index LIKE ?")
         : database.prepare("SELECT COUNT(*) AS total FROM songs");
     const total = query
         ? (countStatement.get(`%${query}%`) as { total: number }).total
         : (countStatement.get() as { total: number }).total;
     const rows = query
         ? database.prepare(`
-            SELECT *
+            SELECT id, title, artist, audio_path, audio_stream_url, lyrics,
+                instrumental_audio_path, instrumental_audio_stream_url, file_hash,
+                algorithm, contract_version, duration, chord_count, key_estimate,
+                average_confidence, created_at, updated_at
             FROM songs
-            WHERE lower(title || ' ' || artist || ' ' || audio_path) LIKE ?
+            WHERE search_index LIKE ?
             ORDER BY updated_at DESC
             LIMIT ? OFFSET ?
         `).all(`%${query}%`, pageSize, offset) as unknown as SongRow[]
-        : database.prepare("SELECT * FROM songs ORDER BY updated_at DESC LIMIT ? OFFSET ?").all(pageSize, offset) as unknown as SongRow[];
+        : database.prepare(`
+            SELECT id, title, artist, audio_path, audio_stream_url, lyrics,
+                instrumental_audio_path, instrumental_audio_stream_url, file_hash,
+                algorithm, contract_version, duration, chord_count, key_estimate,
+                average_confidence, created_at, updated_at
+            FROM songs
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+        `).all(pageSize, offset) as unknown as SongRow[];
 
     return {
-        records: rows.map(rowToRecord),
+        records: rows.map(rowToSummary),
         total,
         page,
         pageSize,
@@ -307,6 +322,7 @@ function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
     const fileHash = buildStableFileHash(request.audioPath, request.analysis.source.path);
     const id = buildSongId(fileHash);
     const existing = getSong(id);
+    const analysisSummary = summarizeAnalysis(request.analysis);
     const record: SongLibraryRecord = {
         id,
         title: request.metadata.title.trim(),
@@ -322,17 +338,21 @@ function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
         algorithm: request.analysis.analysis.algorithm,
         contractVersion: request.analysis.version,
         duration: request.analysis.source.duration,
+        chordCount: analysisSummary.chordCount,
+        keyEstimate: analysisSummary.keyEstimate,
+        averageConfidence: analysisSummary.averageConfidence,
         analysis: request.analysis,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now
     };
 
-    database.prepare(`
+    const statement = database.prepare(`
         INSERT INTO songs (
             id, title, artist, audio_path, audio_stream_url, lyrics,
             instrumental_audio_path, instrumental_audio_stream_url, file_hash,
-            algorithm, contract_version, duration, analysis_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            algorithm, contract_version, duration, chord_count, key_estimate,
+            average_confidence, search_index, analysis_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             artist = excluded.artist,
@@ -345,9 +365,14 @@ function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
             algorithm = excluded.algorithm,
             contract_version = excluded.contract_version,
             duration = excluded.duration,
+            chord_count = excluded.chord_count,
+            key_estimate = excluded.key_estimate,
+            average_confidence = excluded.average_confidence,
+            search_index = excluded.search_index,
             analysis_json = excluded.analysis_json,
             updated_at = excluded.updated_at
-    `).run(
+    `);
+    statement.run(
         record.id,
         record.title,
         record.artist,
@@ -360,6 +385,10 @@ function saveSong(request: SaveSongAnalysisRequest): SongLibraryRecord {
         record.algorithm,
         record.contractVersion,
         record.duration,
+        analysisSummary.chordCount,
+        analysisSummary.keyEstimate ?? null,
+        analysisSummary.averageConfidence ?? null,
+        buildSearchIndex(record.title, record.artist, record.audioPath),
         JSON.stringify(record.analysis),
         record.createdAt,
         record.updatedAt
@@ -1110,6 +1139,10 @@ function initializeDatabase(db: DatabaseSync): void {
             algorithm TEXT NOT NULL,
             contract_version TEXT NOT NULL,
             duration REAL NOT NULL,
+            chord_count INTEGER NOT NULL DEFAULT 0,
+            key_estimate TEXT,
+            average_confidence REAL,
+            search_index TEXT NOT NULL DEFAULT '',
             analysis_json TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -1128,6 +1161,12 @@ function initializeDatabase(db: DatabaseSync): void {
         );
         CREATE INDEX IF NOT EXISTS idx_engine_jobs_updated_at ON engine_jobs(updated_at);
     `);
+    ensureSongColumn(db, "chord_count", "INTEGER NOT NULL DEFAULT 0");
+    ensureSongColumn(db, "key_estimate", "TEXT");
+    ensureSongColumn(db, "average_confidence", "REAL");
+    ensureSongColumn(db, "search_index", "TEXT NOT NULL DEFAULT ''");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_songs_search_index ON songs(search_index);");
+    backfillSongSummaries(db);
     cleanupDuplicateSongRows(db);
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_songs_file_hash_unique ON songs(file_hash);");
 }
@@ -1155,6 +1194,45 @@ function cleanupDuplicateSongRows(db: DatabaseSync): void {
                 WHERE existing.id = 'song:' || songs.file_hash
             );
     `);
+}
+
+function ensureSongColumn(db: DatabaseSync, columnName: string, definition: string): void {
+    const columns = db.prepare("PRAGMA table_info(songs)").all() as unknown as Array<{ name: string }>;
+    if (columns.some((column) => column.name === columnName)) {
+        return;
+    }
+    db.exec(`ALTER TABLE songs ADD COLUMN ${columnName} ${definition};`);
+}
+
+function backfillSongSummaries(db: DatabaseSync): void {
+    const rows = db.prepare(`
+        SELECT id, title, artist, audio_path, analysis_json
+        FROM songs
+        WHERE search_index = ''
+            OR chord_count = 0
+            OR average_confidence IS NULL
+    `).all() as unknown as Array<{ id: string; title: string; artist: string; audio_path: string; analysis_json: string }>;
+    const statement = db.prepare(`
+        UPDATE songs
+        SET chord_count = ?, key_estimate = ?, average_confidence = ?, search_index = ?
+        WHERE id = ?
+    `);
+
+    for (const row of rows) {
+        try {
+            const analysis = JSON.parse(row.analysis_json) as SongLibraryRecord["analysis"];
+            const summary = summarizeAnalysis(analysis);
+            statement.run(
+                summary.chordCount,
+                summary.keyEstimate ?? null,
+                summary.averageConfidence ?? null,
+                buildSearchIndex(row.title, row.artist, row.audio_path),
+                row.id
+            );
+        } catch {
+            statement.run(0, null, null, buildSearchIndex(row.title, row.artist, row.audio_path), row.id);
+        }
+    }
 }
 
 function migrateInvalidSongFileHashes(db: DatabaseSync): void {
@@ -1207,6 +1285,13 @@ function markInterruptedJobs(db: DatabaseSync): void {
 
 function rowToRecord(row: SongRow): SongLibraryRecord {
     return {
+        ...rowToSummary(row),
+        analysis: JSON.parse(row.analysis_json) as SongLibraryRecord["analysis"]
+    };
+}
+
+function rowToSummary(row: SongRow): SongLibrarySummary {
+    return {
         id: row.id,
         title: row.title,
         artist: row.artist,
@@ -1219,7 +1304,9 @@ function rowToRecord(row: SongRow): SongLibraryRecord {
         algorithm: row.algorithm,
         contractVersion: row.contract_version,
         duration: row.duration,
-        analysis: JSON.parse(row.analysis_json) as SongLibraryRecord["analysis"],
+        chordCount: row.chord_count ?? 0,
+        keyEstimate: row.key_estimate ?? undefined,
+        averageConfidence: row.average_confidence ?? undefined,
         createdAt: row.created_at,
         updatedAt: row.updated_at
     };
@@ -1258,6 +1345,28 @@ function buildStableFileHash(audioPath: string, fallback: string): string {
 
 function buildSongId(fileHash: string): string {
     return `song:${fileHash}`;
+}
+
+function buildSearchIndex(title: string, artist: string, audioPath: string): string {
+    return normalizeSearch(`${title} ${artist} ${audioPath}`);
+}
+
+function summarizeAnalysis(analysis: SongLibraryRecord["analysis"]): Pick<SongLibrarySummary, "averageConfidence" | "chordCount" | "keyEstimate"> {
+    const segments = analysis.analysis.chords;
+    const chordCount = segments.length;
+    const averageConfidence = chordCount > 0
+        ? segments.reduce((total, segment) => total + segment.confidence, 0) / chordCount
+        : undefined;
+    const durations = new Map<string, number>();
+    for (const segment of segments) {
+        if (segment.chord === "N") {
+            continue;
+        }
+        const root = segment.chord.endsWith("m") ? segment.chord.slice(0, -1) : segment.chord;
+        durations.set(root, (durations.get(root) ?? 0) + Math.max(0, segment.end - segment.start));
+    }
+    const keyEstimate = [...durations.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+    return { averageConfidence, chordCount, keyEstimate };
 }
 
 function normalizeLyricsModel(model: string | undefined): string {
