@@ -14,10 +14,14 @@ from chord_engine.analysis_config import (
 	PLAYABLE_PROGRESSION_KEY_CONFIDENCE_MIN,
 	PLAYABLE_PROGRESSION_NEIGHBOR_MIN_SECONDS,
 	PLAYABLE_PROGRESSION_NEIGHBOR_SCORE_MIN,
+	PLAYABLE_PROGRESSION_PHRASE_FRAGMENT_SECONDS,
+	PLAYABLE_PROGRESSION_PHRASE_SUPPORT_MIN,
 	PLAYABLE_PROGRESSION_SAME_ROOT_CONFIDENCE_MAX,
 	PLAYABLE_PROGRESSION_SAME_ROOT_SECONDS_MAX,
 	PLAYABLE_PROGRESSION_SHORT_DIATONIC_SECONDS,
 	PLAYABLE_PROGRESSION_SHORT_NON_DIATONIC_SECONDS,
+	PLAYABLE_PROGRESSION_SUBSTITUTE_CONFIDENCE_MAX,
+	PLAYABLE_PROGRESSION_SUBSTITUTE_FRAGMENT_SECONDS,
 	PLAYABLE_PROGRESSION_WEAK_CONFIDENCE,
 )
 from chord_engine.analysis_models import CorrectionEvent
@@ -55,8 +59,12 @@ def _apply_playable_progression_refinement(
 	for _ in range(2):
 		working, same_root_events = _prefer_same_root_diatonic_variants(working, detected_key, key_chords)
 		events.extend(same_root_events)
+		working, substitute_events = _absorb_functional_substitute_fragments(working, detected_key)
+		events.extend(substitute_events)
 		working, fragment_events = _absorb_unplayable_fragments(working, detected_key)
 		events.extend(fragment_events)
+		working, phrase_events = _absorb_short_phrase_fragments(working, detected_key)
+		events.extend(phrase_events)
 		working = _merge_adjacent_same_chord_segments(working)
 
 	return _merge_adjacent_same_chord_segments(working), events
@@ -115,6 +123,79 @@ def _absorb_unplayable_fragments(
 	return _merge_adjacent_same_chord_segments(working), events
 
 
+def _absorb_functional_substitute_fragments(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 3:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for idx in range(1, len(working) - 1):
+		current = working[idx]
+		if (
+			current.chord == "N"
+			or _segment_duration(current) > PLAYABLE_PROGRESSION_SUBSTITUTE_FRAGMENT_SECONDS
+			or current.confidence > PLAYABLE_PROGRESSION_SUBSTITUTE_CONFIDENCE_MAX
+		):
+			continue
+		left = working[idx - 1]
+		right = working[idx + 1]
+		if left.chord == "N" or right.chord == "N":
+			continue
+		if not _shares_two_chord_tones(current.chord, left.chord) and not _shares_two_chord_tones(current.chord, right.chord):
+			continue
+		candidate = _best_stable_neighbor(left, current, right, detected_key)
+		if candidate is None:
+			continue
+		if _segment_duration(candidate) < PLAYABLE_PROGRESSION_PHRASE_SUPPORT_MIN:
+			continue
+		working[idx] = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=candidate.chord,
+			confidence=float(np.clip(_weighted_confidence(current, candidate) * 0.97, 0.0, 1.0)),
+		)
+		events.append(_event(idx, current, working[idx], detected_key, score=0.58))
+	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _absorb_short_phrase_fragments(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 4:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for idx in range(1, len(working) - 1):
+		current = working[idx]
+		duration = _segment_duration(current)
+		if current.chord == "N" or duration > PLAYABLE_PROGRESSION_PHRASE_FRAGMENT_SECONDS:
+			continue
+		left = working[idx - 1]
+		right = working[idx + 1]
+		left_duration = _segment_duration(left)
+		right_duration = _segment_duration(right)
+		if max(left_duration, right_duration) < PLAYABLE_PROGRESSION_PHRASE_SUPPORT_MIN:
+			continue
+		if _is_strong_functional_change(left.chord, current.chord, right.chord, detected_key, current):
+			continue
+		candidate = left if left_duration >= right_duration else right
+		if candidate.chord == current.chord or candidate.chord == "N":
+			continue
+		working[idx] = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=candidate.chord,
+			confidence=float(np.clip(_weighted_confidence(current, candidate) * 0.96, 0.0, 1.0)),
+		)
+		events.append(_event(idx, current, working[idx], detected_key, score=0.54))
+	return _merge_adjacent_same_chord_segments(working), events
+
+
 def _is_unplayable_fragment(segment: ChordSegment, detected_key: KeyEstimate) -> bool:
 	duration = _segment_duration(segment)
 	if segment.chord == "N":
@@ -150,6 +231,39 @@ def _best_stable_neighbor(
 	if not scored:
 		return None
 	return sorted(scored, key=lambda item: (-item[0], item[1].chord))[0][1]
+
+
+def _is_strong_functional_change(
+	left_chord: str,
+	current_chord: str,
+	right_chord: str,
+	detected_key: KeyEstimate,
+	current: ChordSegment,
+) -> bool:
+	if current.confidence > PLAYABLE_PROGRESSION_SUBSTITUTE_CONFIDENCE_MAX and _is_diatonic_chord(current_chord, detected_key):
+		return True
+	if left_chord == right_chord:
+		return False
+	left_rel = _harmonic_relationship_strength(left_chord, current_chord, detected_key)
+	right_rel = _harmonic_relationship_strength(current_chord, right_chord, detected_key)
+	return (left_rel + right_rel) >= 1.05 and current.confidence >= PLAYABLE_PROGRESSION_WEAK_CONFIDENCE
+
+
+def _shares_two_chord_tones(left_chord: str, right_chord: str) -> bool:
+	left_tones = _chord_tones(left_chord)
+	right_tones = _chord_tones(right_chord)
+	if left_tones is None or right_tones is None:
+		return False
+	return len(left_tones.intersection(right_tones)) >= 2
+
+
+def _chord_tones(chord: str) -> set[int] | None:
+	root_pc = _chord_root_pc(chord)
+	_, quality = _parse_chord_quality(chord)
+	if root_pc is None or quality is None or quality == "diminished":
+		return None
+	third = 3 if quality == "minor" else 4
+	return {root_pc, (root_pc + third) % 12, (root_pc + 7) % 12}
 
 
 def _same_root_key_chord(chord: str, key_chords: set[str]) -> str | None:
