@@ -7,6 +7,7 @@ import { formatApiJobKind } from "../lib/apiStatus.js";
 import { EDITABLE_CHORD_OPTIONS, formatTranspose } from "../lib/chords.js";
 import { renderLyricsPreview, stripLyricsTiming } from "../lib/lyrics.js";
 import { formatTime } from "../lib/time.js";
+import { useVisibleApiJobProgress } from "../hooks/useVisibleApiJobProgress.js";
 
 type DetectorPanelProps = {
     viewMode: "library" | "detail";
@@ -56,6 +57,7 @@ type DetectorPanelProps = {
     onOpenSaveForm: () => void;
     onOpenExportPreview: (format: "txt" | "lrc") => void;
     onLoadedMetadata: (event: React.SyntheticEvent<HTMLAudioElement>) => void;
+    onCanPlay: (event: React.SyntheticEvent<HTMLAudioElement>) => void;
     onTimeUpdate: (event: React.SyntheticEvent<HTMLAudioElement>) => void;
     onSeeked: (event: React.SyntheticEvent<HTMLAudioElement>) => void;
     onPlay: () => void;
@@ -206,6 +208,7 @@ function AudioElement(props: DetectorPanelProps) {
             src={props.audioSourceUrl ?? undefined}
             data-testid="audio-player"
             onLoadedMetadata={props.onLoadedMetadata}
+            onCanPlay={props.onCanPlay}
             onTimeUpdate={props.onTimeUpdate}
             onSeeked={props.onSeeked}
             onPlay={props.onPlay}
@@ -217,21 +220,29 @@ function AudioElement(props: DetectorPanelProps) {
 }
 
 function DetectorSummary(props: DetectorPanelProps) {
+    const visibleApiJobProgress = useVisibleApiJobProgress(props.apiJobProgress);
+    const activeApiJobProgress = visibleApiJobProgress && (visibleApiJobProgress.status === "queued" || visibleApiJobProgress.status === "running")
+        ? visibleApiJobProgress
+        : null;
+    const analysisStatus = activeApiJobProgress
+        ? `${formatApiJobKind(activeApiJobProgress.kind)} ${activeApiJobProgress.status}: ${Math.round(activeApiJobProgress.progress)}%`
+        : props.analysisStatus;
+
     return (
         <div className="detector-summary">
             <div>
                 <p className="file-name" aria-live="polite">{props.selectedFileName}</p>
                 <p className="analysis-label" aria-live="polite">
-                    {props.analysisStatus}
+                    {analysisStatus}
                     {props.hasUnsavedChordEdits ? <span className="unsaved-edits-badge">Unsaved chord edits</span> : null}
                 </p>
-                {props.apiJobProgress && (props.apiJobProgress.status === "queued" || props.apiJobProgress.status === "running") ? (
+                {activeApiJobProgress ? (
                     <div className="job-progress" aria-label="API job progress">
-                        <span>{formatApiJobKind(props.apiJobProgress.kind)}</span>
+                        <span>{formatApiJobKind(activeApiJobProgress.kind)}</span>
                         <div className="job-progress-track">
-                            <span style={{ width: `${Math.max(5, Math.min(100, props.apiJobProgress.progress))}%` }} />
+                            <span style={{ width: `${Math.max(5, Math.min(100, activeApiJobProgress.progress))}%` }} />
                         </div>
-                        <strong>{Math.round(props.apiJobProgress.progress)}%</strong>
+                        <strong>{Math.round(activeApiJobProgress.progress)}%</strong>
                         <button type="button" onClick={props.onCancelApiJob} disabled={!props.canCancelApiJob}>
                             Cancel
                         </button>
@@ -256,7 +267,7 @@ function TransportStrip(props: DetectorPanelProps) {
                 <button
                     type="button"
                     onClick={props.onToggleVocalHide}
-                    disabled={!props.canUsePlayback || props.isRemovingVocals}
+                    disabled={(!props.canUsePlayback && !props.isUsingInstrumentalAudio) || props.isRemovingVocals}
                     aria-pressed={props.isUsingInstrumentalAudio}
                 >
                     <span aria-hidden="true">{props.isUsingInstrumentalAudio ? "◼" : "♪"}</span>

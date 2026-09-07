@@ -13,6 +13,7 @@ type PlaybackControllerOptions = {
     isApiMode: boolean;
     isMediaReady: boolean;
     selectedFilePath: string | null;
+    originalAudioStreamUrl: string | null;
     currentTimeSeconds: number;
     durationSeconds: number;
     transposeSemitones: number;
@@ -35,7 +36,6 @@ type PlaybackControllerOptions = {
     setInstrumentalAudioPath: Dispatch<SetStateAction<string | null>>;
     setInstrumentalAudioStreamUrl: Dispatch<SetStateAction<string | null>>;
     setIsUsingInstrumentalAudio: Dispatch<SetStateAction<boolean>>;
-    setIsVocalHidden: Dispatch<SetStateAction<boolean>>;
 };
 
 export function usePlaybackController(options: PlaybackControllerOptions) {
@@ -43,6 +43,7 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
     const activeBlobUrlRef = useRef<string | null>(null);
     const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
     const audioFadeTimerRef = useRef<number | null>(null);
+    const audioSwitchFallbackTimerRef = useRef<number | null>(null);
     const pendingSeekTimeRef = useRef<number | null>(null);
     const activePitchShiftRequestIdRef = useRef<number>(0);
 
@@ -60,7 +61,6 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
         options.setIsMediaReady(false);
         options.setDurationSeconds(0);
         options.setCurrentTimeSeconds(0);
-        options.setIsVocalHidden(false);
         options.setIsUsingInstrumentalAudio(false);
     };
 
@@ -181,6 +181,10 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
             window.clearInterval(audioFadeTimerRef.current);
             audioFadeTimerRef.current = null;
         }
+        if (audioSwitchFallbackTimerRef.current !== null) {
+            window.clearTimeout(audioSwitchFallbackTimerRef.current);
+            audioSwitchFallbackTimerRef.current = null;
+        }
         if (activeBlobUrlRef.current && typeof URL.revokeObjectURL === "function") {
             URL.revokeObjectURL(activeBlobUrlRef.current);
             activeBlobUrlRef.current = null;
@@ -192,7 +196,7 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
             const nextDuration = Number.isFinite(event.currentTarget.duration) ? Math.max(0, event.currentTarget.duration) : 0;
             const pendingSwitch = pendingAudioSwitchRef.current;
             if (pendingSwitch) {
-                event.currentTarget.volume = pendingSwitch.fadeIn ? 0 : 1;
+                preparePendingAudioSwitch(event.currentTarget, pendingSwitch, nextDuration);
                 event.currentTarget.currentTime = Math.min(pendingSwitch.time, nextDuration || pendingSwitch.time);
                 pendingAudioSwitchRef.current = null;
             }
@@ -205,6 +209,20 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
                 void event.currentTarget.play();
             }
             if (pendingSwitch?.fadeIn) {
+                void fadeAudioVolume(event.currentTarget, 1, 220);
+            }
+        },
+        onCanPlay: (event: SyntheticEvent<HTMLAudioElement>) => {
+            const pendingSwitch = pendingAudioSwitchRef.current;
+            if (pendingSwitch) {
+                const nextDuration = Number.isFinite(event.currentTarget.duration) ? Math.max(0, event.currentTarget.duration) : 0;
+                preparePendingAudioSwitch(event.currentTarget, pendingSwitch, nextDuration);
+                pendingAudioSwitchRef.current = null;
+                if (pendingSwitch.autoplay) {
+                    void event.currentTarget.play();
+                }
+            }
+            if (event.currentTarget.volume === 0) {
                 void fadeAudioVolume(event.currentTarget, 1, 220);
             }
         },
@@ -321,13 +339,17 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
                 playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
             }
         }
-        const playbackSource = await options.bridge.getAudioPlaybackSource(
-            options.isTransposeKeyOnly || options.transposeSemitones === 0 ? audioStreamUrl ?? playbackPath : playbackPath,
-        );
-        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
-        options.setIsUsingInstrumentalAudio(true);
-        options.setIsVocalHidden(true);
-        options.setAnalysisStatus(statusMessage);
+        try {
+            const playbackSourceUrl = await loadPlaybackSourceUrl(
+                options.isTransposeKeyOnly || options.transposeSemitones === 0 ? audioStreamUrl : null,
+                playbackPath,
+            );
+            await replaceAudioSource(playbackSourceUrl, previousTime, wasPlaying);
+            options.setIsUsingInstrumentalAudio(true);
+            options.setAnalysisStatus(statusMessage);
+        } catch {
+            options.setAnalysisStatus("Gagal memuat Vocal Off audio.");
+        }
     };
 
     const handleUseOriginalAudio = async (): Promise<void> => {
@@ -344,11 +366,29 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
                 playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
             }
         }
-        const playbackSource = await options.bridge.getAudioPlaybackSource(playbackPath);
-        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
-        options.setIsUsingInstrumentalAudio(false);
-        options.setIsVocalHidden(false);
-        options.setAnalysisStatus("Original audio restored.");
+        try {
+            const playbackSourceUrl = await loadPlaybackSourceUrl(
+                options.isTransposeKeyOnly || options.transposeSemitones === 0 ? options.originalAudioStreamUrl : null,
+                playbackPath,
+            );
+            await replaceAudioSource(playbackSourceUrl, previousTime, wasPlaying);
+            options.setIsUsingInstrumentalAudio(false);
+            options.setAnalysisStatus("Original audio restored.");
+        } catch {
+            options.setAnalysisStatus("Gagal memuat original audio.");
+        }
+    };
+
+    const loadPlaybackSourceUrl = async (preferredStreamUrl: string | null | undefined, fallbackPath: string): Promise<string> => {
+        if (!options.bridge?.getAudioPlaybackSource) {
+            return preferredStreamUrl ?? fallbackPath;
+        }
+        const source = await options.bridge.getAudioPlaybackSource(preferredStreamUrl ?? fallbackPath);
+        const sourceUrl = toAudioSourceUrl(source);
+        if (!sourceUrl) {
+            throw new Error("Audio playback source is empty");
+        }
+        return sourceUrl;
     };
 
     const replaceAudioSource = async (nextSourceUrl: string, seekTime: number, autoplay: boolean): Promise<void> => {
@@ -356,9 +396,9 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
         const previousBlobUrl = activeBlobUrlRef.current;
         pendingSeekTimeRef.current = null;
         if (audio) {
-            await fadeAudioVolume(audio, 0, 150);
+            audio.volume = 1;
         }
-        pendingAudioSwitchRef.current = { time: Math.max(0, seekTime), autoplay, fadeIn: true };
+        pendingAudioSwitchRef.current = { time: Math.max(0, seekTime), autoplay, fadeIn: false };
         options.setIsMediaReady(false);
         options.setState("paused");
         options.setAudioSourceUrl(nextSourceUrl);
@@ -366,6 +406,42 @@ export function usePlaybackController(options: PlaybackControllerOptions) {
         if (previousBlobUrl && previousBlobUrl !== nextSourceUrl && typeof URL.revokeObjectURL === "function") {
             URL.revokeObjectURL(previousBlobUrl);
         }
+        scheduleAudioSwitchFallback();
+    };
+
+    const preparePendingAudioSwitch = (
+        audio: HTMLAudioElement,
+        pendingSwitch: { time: number; autoplay: boolean; fadeIn: boolean },
+        durationSeconds: number
+    ): void => {
+        audio.volume = pendingSwitch.fadeIn ? 0 : 1;
+        audio.currentTime = Math.min(pendingSwitch.time, durationSeconds || pendingSwitch.time);
+    };
+
+    const scheduleAudioSwitchFallback = (): void => {
+        if (audioSwitchFallbackTimerRef.current !== null) {
+            window.clearTimeout(audioSwitchFallbackTimerRef.current);
+        }
+        audioSwitchFallbackTimerRef.current = window.setTimeout(() => {
+            audioSwitchFallbackTimerRef.current = null;
+            const audio = audioRef.current;
+            const pendingSwitch = pendingAudioSwitchRef.current;
+            if (!audio || !pendingSwitch) {
+                return;
+            }
+            try {
+                audio.load();
+                const safeDuration = Number.isFinite(audio.duration) ? Math.max(0, audio.duration) : 0;
+                audio.currentTime = Math.min(pendingSwitch.time, safeDuration || pendingSwitch.time);
+            } catch {
+                // Media metadata may still be pending; volume recovery must not depend on it.
+            }
+            pendingAudioSwitchRef.current = null;
+            audio.volume = 1;
+            if (pendingSwitch.autoplay) {
+                void audio.play();
+            }
+        }, 420);
     };
 
     const fadeAudioVolume = (audio: HTMLAudioElement, targetVolume: number, durationMs: number): Promise<void> => {

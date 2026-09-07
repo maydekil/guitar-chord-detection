@@ -118,9 +118,36 @@ function useLyricsAutoScroll({ lyricsPreviewRef, viewMode, detectorTab, currentT
         if (!lyricsPreview || viewMode !== "detail" || detectorTab !== "lyrics") {
             return;
         }
-        const activeLine = lyricsPreview.querySelector<HTMLElement>('[data-active="true"]');
-        if (typeof activeLine?.scrollIntoView === "function") {
-            activeLine.scrollIntoView({ block: "center", inline: "nearest" });
-        }
+        const scrollActiveLyricIntoView = (): void => {
+            const activeLine = lyricsPreview.querySelector<HTMLElement>('[data-active-lyric="true"]');
+            if (!activeLine) {
+                return;
+            }
+            const activeOffsetTop = offsetTopWithin(lyricsPreview, activeLine);
+            const centeredTop = activeOffsetTop - (lyricsPreview.clientHeight / 2) + (activeLine.offsetHeight / 2);
+            const maxTop = Math.max(0, lyricsPreview.scrollHeight - lyricsPreview.clientHeight);
+            lyricsPreview.scrollTop = Math.max(0, Math.min(centeredTop, maxTop));
+        };
+        const frameId = window.requestAnimationFrame(scrollActiveLyricIntoView);
+        const timeoutId = window.setTimeout(scrollActiveLyricIntoView, 80);
+        return () => {
+            window.cancelAnimationFrame(frameId);
+            window.clearTimeout(timeoutId);
+        };
     }, [currentTimeSeconds, detectorTab, lyricsPreviewRef, lyricsText, viewMode]);
+}
+
+function offsetTopWithin(container: HTMLElement, element: HTMLElement): number {
+    let offset = 0;
+    let current: HTMLElement | null = element;
+    while (current && current !== container) {
+        offset += current.offsetTop;
+        current = current.offsetParent as HTMLElement | null;
+    }
+    if (current === container) {
+        return offset;
+    }
+    const containerBounds = container.getBoundingClientRect();
+    const elementBounds = element.getBoundingClientRect();
+    return elementBounds.top - containerBounds.top + container.scrollTop;
 }

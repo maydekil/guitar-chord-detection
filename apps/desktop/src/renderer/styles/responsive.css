@@ -1,0 +1,72 @@
+@media (max-width: 680px) {
+    .shell {
+        padding-top: 1.25rem;
+    }
+
+    .shell-header {
+        align-items: flex-start;
+        display: grid;
+        gap: 0.55rem;
+    }
+
+    .shell-title-row {
+        align-items: flex-start;
+        display: grid;
+        gap: 0.45rem;
+    }
+
+    .api-settings-panel {
+        left: auto;
+        right: 0;
+        grid-template-columns: 1fr;
+        min-width: min(320px, calc(100vw - 2.5rem));
+    }
+
+    .api-settings-actions {
+        align-items: stretch;
+    }
+
+    .api-settings-actions button {
+        flex: 1;
+    }
+
+    .workspace-panels {
+        display: grid;
+        gap: 1rem;
+        grid-template-rows: minmax(180px, 35%) minmax(0, 1fr);
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .library-panel,
+    .detector-panel {
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        resize: none;
+    }
+
+    .panel-resizer {
+        display: none;
+    }
+
+    .library-toolbar {
+        grid-template-columns: 1fr;
+    }
+
+    .song-metadata-form {
+        grid-template-columns: 1fr;
+    }
+
+    .detector-topbar,
+    .detector-summary,
+    .transport-strip,
+    .lyrics-frame {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .shell-card {
+        padding: 1rem;
+    }
+}

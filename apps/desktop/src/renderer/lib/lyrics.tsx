@@ -40,6 +40,7 @@ export function renderLyricsPreview(
                         key={`${line.time ?? "plain"}-${line.text}-${index}`}
                         className="lyrics-preview-line"
                         data-active={isActive ? "true" : "false"}
+                        data-active-lyric={isActive ? "true" : "false"}
                     >
                         <span className="lyrics-preview-time">{line.time === null ? "" : formatTime(line.time)}</span>
                         <span className="lyrics-preview-content">

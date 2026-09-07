@@ -1,0 +1,237 @@
+.workspace-panels {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.library-panel {
+    flex: 0 0 auto;
+    min-width: 260px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 1rem;
+    background: rgba(255, 250, 241, 0.78);
+    overflow: auto;
+    min-height: 0;
+}
+
+.panel-resizer {
+    flex: 0 0 18px;
+    position: relative;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.panel-resizer::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 50%;
+    width: 4px;
+    border-radius: 999px;
+    background: rgba(30, 42, 48, 0.16);
+    transform: translateX(-50%);
+    transition: background 120ms ease, width 120ms ease;
+}
+
+.panel-resizer:hover::before,
+.is-resizing-panels .panel-resizer::before {
+    width: 6px;
+    background: rgba(198, 106, 43, 0.72);
+}
+
+.is-resizing-panels {
+    cursor: col-resize;
+    user-select: none;
+}
+
+.detector-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 380px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.detector-empty {
+    display: grid;
+    place-content: center;
+    min-height: 100%;
+    padding: 2rem;
+    text-align: center;
+    color: #586469;
+}
+
+.detector-empty h2 {
+    margin: 0 0 0.4rem;
+    color: var(--ink);
+    font-size: clamp(1.5rem, 4vw, 2.4rem);
+}
+
+.detector-empty p {
+    max-width: 420px;
+    margin: 0 auto;
+    line-height: 1.55;
+}
+
+.library-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+}
+
+.library-toolbar h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.library-toolbar p {
+    margin: 0.2rem 0 0;
+    color: #5f6564;
+    font-size: 0.86rem;
+}
+
+.library-toolbar input {
+    grid-column: 1 / -1;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.58rem 0.7rem;
+    background: #fffdf8;
+    color: var(--ink);
+}
+
+.library-list {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+}
+
+.library-song {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: center;
+    width: 100%;
+    border: 1px solid rgba(30, 42, 48, 0.12);
+    border-radius: 10px;
+    padding: 0.35rem;
+    background: #fffdf8;
+    color: var(--ink);
+    text-align: left;
+}
+
+.library-song[data-active="true"] {
+    border-color: #243036;
+    box-shadow: inset 3px 0 0 #243036;
+}
+
+.library-song-main {
+    display: grid;
+    gap: 0.18rem;
+    min-width: 0;
+    border: none;
+    border-radius: 8px;
+    padding: 0.35rem 0.4rem;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+}
+
+.library-song span {
+    font-weight: 800;
+}
+
+.library-song small {
+    color: #596468;
+}
+
+.library-song-artist {
+    color: #38454a;
+    font-weight: 700;
+}
+
+.library-delete-btn {
+    border: 1px solid rgba(30, 42, 48, 0.12);
+    border-radius: 7px;
+    padding: 0.38rem 0.55rem;
+    background: #f7ebe0;
+    color: #7f2f20;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+.library-empty {
+    margin: 0.85rem 0 0;
+    color: #5f6564;
+}
+
+.library-pagination {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.28rem;
+    margin-top: 0.8rem;
+    color: #5f6564;
+    font-size: 0.72rem;
+}
+
+.library-pagination button,
+.library-pagination select {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.18rem 0.32rem;
+    background: #fffdf8;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.library-pagination button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.library-pagination span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    min-width: 0;
+    color: #6b7374;
+    font-weight: 400;
+}
+
+.library-pagination span i {
+    padding: 0 0.12rem;
+    color: #8d9392;
+    font-style: normal;
+}
+
+.library-pagination label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.26rem;
+    font-weight: 400;
+}
+
+.library-pagination select {
+    max-width: 3.4rem;
+}
+
+.library-pagination .library-page-number {
+    min-width: 1.35rem;
+    padding-inline: 0.28rem;
+}
+
+.library-pagination .library-page-number[data-active="true"] {
+    background: #263238;
+    border-color: #263238;
+    color: #fffaf1;
+    opacity: 1;
+}

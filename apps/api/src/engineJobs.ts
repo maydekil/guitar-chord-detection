@@ -194,25 +194,31 @@ export function createEngineJobStore(db: DatabaseSync, commands: EngineCommands)
 
     function startEstimatedProgress(job: EngineJob): NodeJS.Timeout {
         const startedAt = Date.now();
-        const expectedMs = getExpectedJobDurationMs(job.kind);
         return setInterval(() => {
             if (job.status !== "running") {
                 return;
             }
             const elapsed = Date.now() - startedAt;
-            const estimated = 5 + Math.min(90, Math.round((elapsed / expectedMs) * 90));
+            const estimated = estimateJobProgress(job.kind, elapsed);
             if (estimated > job.progress && estimated < 96) {
                 updateEngineJob(job, { progress: estimated });
             }
-        }, 1000);
+        }, 650);
+    }
+
+    function estimateJobProgress(kind: EngineJobKind, elapsedMs: number): number {
+        const expectedMs = getExpectedJobDurationMs(kind);
+        const ratio = Math.max(0, Math.min(1, elapsedMs / expectedMs));
+        const easedRatio = 1 - ((1 - ratio) ** 2);
+        return 5 + Math.min(90, Math.floor(easedRatio * 90));
     }
 
     function getExpectedJobDurationMs(kind: EngineJobKind): number {
         if (kind === "lyrics") {
-            return 120_000;
+            return 90_000;
         }
         if (kind === "vocals") {
-            return 240_000;
+            return 180_000;
         }
         if (kind === "pitch-shift") {
             return 45_000;

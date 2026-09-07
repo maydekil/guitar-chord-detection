@@ -142,7 +142,7 @@ async function handleRequest(request: http.IncomingMessage, response: http.Serve
     }
 
     if (songMatch && method === "DELETE") {
-        const deleted = deleteSong(database, decodeURIComponent(songMatch[1]), audioDir);
+        const deleted = await deleteSong(database, decodeURIComponent(songMatch[1]), audioDir);
         sendJson(response, 200, { deleted });
         return;
     }
