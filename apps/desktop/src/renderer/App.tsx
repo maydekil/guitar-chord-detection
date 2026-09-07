@@ -1,30 +1,29 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
 import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
 import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
 
-type ShellState = "idle" | "loading-file" | "analyzing" | "ready" | "playing" | "paused" | "error";
-type ViewMode = "library" | "detail";
-type DetectorTab = "timeline" | "lyrics";
-type LyricsModel = "tiny" | "base" | "small" | "medium" | "large";
-type ApiHealthState = "local" | "checking" | "connected" | "offline";
-type ExportFormat = "txt" | "lrc";
-type PendingConfirmation =
-    | { kind: "save"; metadata: SongMetadataInput }
-    | { kind: "delete"; song: SongLibrarySummary };
-type ApiJobProgressEvent = {
-    id: string;
-    kind: "analysis" | "lyrics" | "vocals" | "pitch-shift";
-    status: "queued" | "running" | "succeeded" | "failed";
-    progress: number;
-};
-type TimelineEditSnapshot = {
-    segments: ChordSegment[];
-    selectedSegmentIndex: number | null;
-};
+import { formatApiJobKind } from "./lib/apiStatus.js";
+import type { ApiHealthState, ApiJobProgressEvent, DetectorTab, ExportFormat, LyricsModel, PendingConfirmation, ShellState, TimelineEditSnapshot, ViewMode } from "./appTypes.js";
+import { ConfirmationModal } from "./components/ConfirmationModal.js";
+import { DetectorPanel } from "./components/DetectorPanel.js";
+import { ExportPreviewModal } from "./components/ExportPreviewModal.js";
+import { ShellHeader } from "./components/ShellHeader.js";
+import { SongLibraryPanel } from "./components/SongLibraryPanel.js";
+import { toAudioSourceUrl, toFileUrl } from "./lib/audioSources.js";
+import { estimateMajorKey, formatAverageConfidence, formatTranspose, normalizeEditableChord, transposeChordLabel } from "./lib/chords.js";
+import { safeDownloadName } from "./lib/downloads.js";
+import { buildLocalChordSheetExport, buildLocalLrcExport } from "./lib/exports.js";
+import { autoSyncLyrics } from "./lib/lyrics.js";
+import { buildSongMetadata, displaySongTitle, normalizeSongLibraryListResult } from "./lib/songLibrary.js";
+import { formatTime } from "./lib/time.js";
+import { usePanelResize } from "./hooks/usePanelResize.js";
+import { usePlaybackController } from "./hooks/usePlaybackController.js";
+import { useTimelineEditor } from "./hooks/useTimelineEditor.js";
+import { useTimelineDomEffects } from "./hooks/useTimelineDomEffects.js";
+import { cloneTimelineSegments, findActiveChord, normalizeTimelineSegments, snapSplitTime } from "./lib/timelineSegments.js";
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
@@ -82,149 +81,61 @@ export function App() {
     const [isPitchShiftingAudio, setIsPitchShiftingAudio] = useState<boolean>(false);
     const [apiJobProgress, setApiJobProgress] = useState<ApiJobProgressEvent | null>(null);
     const activeRequestIdRef = useRef<number>(0);
-    const activePitchShiftRequestIdRef = useRef<number>(0);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
-    const activeBlobUrlRef = useRef<string | null>(null);
     const timelineRef = useRef<HTMLElement | null>(null);
     const chordEditorRef = useRef<HTMLDivElement | null>(null);
     const lyricsPreviewRef = useRef<HTMLDivElement | null>(null);
     const workspaceRef = useRef<HTMLDivElement | null>(null);
-    const pendingAudioSwitchRef = useRef<{ time: number; autoplay: boolean; fadeIn: boolean } | null>(null);
-    const audioFadeTimerRef = useRef<number | null>(null);
-    const pendingSeekTimeRef = useRef<number | null>(null);
     const latestApiJobProgressRef = useRef<ApiJobProgressEvent | null>(null);
     const cancelledApiJobIdsRef = useRef<Set<string>>(new Set());
     const bridge = window.gcd;
-
-    useEffect(() => {
-        const element = timelineRef.current;
-        if (!element) {
-            setTimelineWidthPx(0);
-            return;
-        }
-
-        const measureWidth = (): void => {
-            const nextWidth = element.getBoundingClientRect().width;
-            setTimelineWidthPx(Number.isFinite(nextWidth) ? Math.max(0, nextWidth) : 0);
-        };
-
-        measureWidth();
-
-        if (typeof ResizeObserver === "undefined") {
-            return;
-        }
-
-        const observer = new ResizeObserver(() => {
-            measureWidth();
-        });
-
-        observer.observe(element);
-        return () => {
-            observer.disconnect();
-        };
-    }, [viewMode]);
-
-    useEffect(() => {
-        const timeline = timelineRef.current;
-        if (!timeline || viewMode !== "detail") {
-            return;
-        }
-
-        const activeSegment = timeline.querySelector<HTMLElement>('[data-testid="timeline-segment"][data-active="true"]');
-        if (typeof activeSegment?.scrollIntoView === "function") {
-            activeSegment.scrollIntoView({
-                block: "nearest",
-                inline: "nearest"
-            });
-        }
-    }, [currentTimeSeconds, timelineSegments, viewMode]);
-
-    useEffect(() => {
-        if (selectedSegmentIndex === null) {
-            return;
-        }
-
-        const handlePointerDown = (event: PointerEvent): void => {
-            const target = event.target;
-            if (!(target instanceof Node)) {
-                return;
-            }
-            if (chordEditorRef.current?.contains(target)) {
-                return;
-            }
-            if (timelineRef.current?.contains(target)) {
-                const segment = target instanceof Element
-                    ? target.closest('[data-testid="timeline-segment"]')
-                    : null;
-                if (segment) {
-                    return;
-                }
-            }
-
-            setSelectedSegmentIndex(null);
-            setEditingChord("");
-        };
-
-        document.addEventListener("pointerdown", handlePointerDown);
-        return () => {
-            document.removeEventListener("pointerdown", handlePointerDown);
-        };
-    }, [selectedSegmentIndex]);
-
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent): void => {
-            if (viewMode !== "detail" || detectorTab !== "timeline") {
-                return;
-            }
-            const target = event.target;
-            const isTextEditing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
-            const isUndo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && !event.shiftKey;
-            const isRedo = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z" && event.shiftKey;
-            if (isUndo && !isTextEditing) {
-                event.preventDefault();
-                handleUndoTimelineEdit();
-            }
-            if (isRedo && !isTextEditing) {
-                event.preventDefault();
-                handleRedoTimelineEdit();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [detectorTab, timelineRedoStack, timelineSegments, timelineUndoStack, viewMode]);
-
-    useEffect(() => {
-        const lyricsPreview = lyricsPreviewRef.current;
-        if (!lyricsPreview || viewMode !== "detail" || detectorTab !== "lyrics") {
-            return;
-        }
-
-        const activeLine = lyricsPreview.querySelector<HTMLElement>('[data-active="true"]');
-        if (typeof activeLine?.scrollIntoView === "function") {
-            activeLine.scrollIntoView({
-                block: "center",
-                inline: "nearest"
-            });
-        }
-    }, [currentTimeSeconds, detectorTab, lyricsText, viewMode]);
+    const {
+        audioRef,
+        activeBlobUrlRef,
+        resetPlaybackState,
+        handleTogglePlayback,
+        handleSeek,
+        handleSetTranspose,
+        handleSetTransposeKeyOnly,
+        handleToggleVocalHide,
+        cleanupPlaybackResources,
+        cancelPitchShiftRequest,
+        audioHandlers,
+    } = usePlaybackController({
+        bridge,
+        state,
+        isApiMode,
+        isMediaReady,
+        selectedFilePath,
+        currentTimeSeconds,
+        durationSeconds,
+        transposeSemitones,
+        isTransposeKeyOnly,
+        instrumentalAudioPath,
+        instrumentalAudioStreamUrl,
+        isUsingInstrumentalAudio,
+        latestApiJobProgressRef,
+        cancelledApiJobIdsRef,
+        setState,
+        setAnalysisStatus,
+        setAudioSourceUrl,
+        setIsMediaReady,
+        setDurationSeconds,
+        setCurrentTimeSeconds,
+        setTransposeSemitones,
+        setIsTransposeKeyOnly,
+        setIsPitchShiftingAudio,
+        setIsRemovingVocals,
+        setInstrumentalAudioPath,
+        setInstrumentalAudioStreamUrl,
+        setIsUsingInstrumentalAudio,
+        setIsVocalHidden,
+    });
 
     useEffect(() => {
         return () => {
-            if (audioFadeTimerRef.current !== null) {
-                window.clearInterval(audioFadeTimerRef.current);
-                audioFadeTimerRef.current = null;
-            }
-            if (activeBlobUrlRef.current) {
-                if (typeof URL.revokeObjectURL === "function") {
-                    URL.revokeObjectURL(activeBlobUrlRef.current);
-                }
-                activeBlobUrlRef.current = null;
-            }
+            cleanupPlaybackResources();
         };
-    }, []);
+    }, [cleanupPlaybackResources]);
 
     useEffect(() => {
         if (!bridge) {
@@ -356,6 +267,29 @@ export function App() {
         setEditingChord(nextSelectedIndex === null ? "" : normalized[nextSelectedIndex]?.chord ?? "");
         setHasUnsavedChordEdits(true);
     };
+
+    const {
+        handleSelectTimelineSegment,
+        handleApplyEditedChord,
+        handleSplitSelectedSegment,
+        handleMergeSelectedSegment,
+        handleUndoTimelineEdit,
+        handleRedoTimelineEdit,
+    } = useTimelineEditor({
+        timelineSegments,
+        selectedSegmentIndex,
+        editingChord,
+        currentTimeSeconds,
+        timelineUndoStack,
+        timelineRedoStack,
+        commitTimelineSegments,
+        restoreTimelineSnapshot,
+        setSelectedSegmentIndex,
+        setEditingChord,
+        setTimelineUndoStack,
+        setTimelineRedoStack,
+        setAnalysisStatus,
+    });
 
     const runAnalysis = async (audioPath: string, options?: { forceRefresh?: boolean }): Promise<void> => {
         if (!bridge?.analyzeAudio) {
@@ -862,7 +796,7 @@ export function App() {
                 setIsRemovingVocals(false);
             }
             if (apiJobProgress.kind === "pitch-shift") {
-                activePitchShiftRequestIdRef.current += 1;
+                cancelPitchShiftRequest();
                 setIsPitchShiftingAudio(false);
             }
             if (apiJobProgress.kind === "analysis") {
@@ -889,452 +823,7 @@ export function App() {
         }
     };
 
-    const resetPlaybackState = (): void => {
-        pendingSeekTimeRef.current = null;
-        const audio = audioRef.current;
-        if (audio) {
-            try {
-                audio.pause();
-            } catch {
-                // Some test environments do not fully implement media pause.
-            }
-
-            try {
-                audio.currentTime = 0;
-            } catch {
-                // Ignore media seek reset failures and still clear UI state.
-            }
-        }
-        setIsMediaReady(false);
-        setDurationSeconds(0);
-        setCurrentTimeSeconds(0);
-        setIsVocalHidden(false);
-        setIsUsingInstrumentalAudio(false);
-    };
-
-    const handlePlay = async (): Promise<void> => {
-        const audio = audioRef.current;
-        if (!audio) {
-            return;
-        }
-
-        if (!isMediaReady) {
-            audio.load();
-        }
-
-        try {
-            await audio.play();
-        } catch (error) {
-            const reason = error instanceof Error && error.message ? ` (${error.message})` : "";
-            setAnalysisStatus(`Could not play this audio file.${reason}`);
-            // play() can reject for transient media timing reasons; keep analysis state intact.
-            setState((current) => (current === "playing" ? "paused" : current));
-        }
-    };
-
-    const handlePause = (): void => {
-        const audio = audioRef.current;
-        if (!audio) {
-            return;
-        }
-        audio.pause();
-    };
-
-    const handleTogglePlayback = async (): Promise<void> => {
-        if (isPlaying) {
-            handlePause();
-            return;
-        }
-        await handlePlay();
-    };
-
-    const handleSeek = (value: number): void => {
-        const audio = audioRef.current;
-        if (!audio) {
-            return;
-        }
-
-        const safeValue = Math.max(0, Math.min(value, durationSeconds || value));
-        pendingSeekTimeRef.current = safeValue;
-        audio.currentTime = safeValue;
-        setCurrentTimeSeconds(safeValue);
-    };
-
-    const handleSelectTimelineSegment = (segmentIndex: number): void => {
-        const segment = timelineSegments[segmentIndex];
-        if (!segment) {
-            return;
-        }
-        setSelectedSegmentIndex(segmentIndex);
-        setEditingChord(segment.chord);
-    };
-
-    const handleApplyEditedChord = (): void => {
-        if (selectedSegmentIndex === null) {
-            return;
-        }
-        const normalizedChord = normalizeEditableChord(editingChord);
-        if (!normalizedChord) {
-            setAnalysisStatus("Chord tidak valid. Contoh: A, Bm, C#m, Ddim, atau N.");
-            return;
-        }
-        const nextSegments = timelineSegments.map((segment, index) => index === selectedSegmentIndex
-            ? { ...segment, chord: normalizedChord, confidence: Math.max(segment.confidence, 0.96) }
-            : segment);
-        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
-        setEditingChord(normalizedChord);
-        setAnalysisStatus(`Chord corrected to ${normalizedChord}. Save to persist.`);
-    };
-
-    const handleSplitSelectedSegment = (): void => {
-        if (selectedSegmentIndex === null) {
-            return;
-        }
-        const segment = timelineSegments[selectedSegmentIndex];
-        if (!segment) {
-            return;
-        }
-        const rawSplitTime = currentTimeSeconds > segment.start + 0.2 && currentTimeSeconds < segment.end - 0.2
-            ? currentTimeSeconds
-            : segment.start + ((segment.end - segment.start) / 2);
-        const splitTime = snapSplitTime(rawSplitTime, segment);
-        if (splitTime <= segment.start || splitTime >= segment.end) {
-            return;
-        }
-        const nextSegments = [
-            ...timelineSegments.slice(0, selectedSegmentIndex),
-            { ...segment, end: splitTime },
-            { ...segment, start: splitTime },
-            ...timelineSegments.slice(selectedSegmentIndex + 1)
-        ];
-        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
-        setSelectedSegmentIndex(selectedSegmentIndex + 1);
-        setEditingChord(segment.chord);
-        setAnalysisStatus(`Segment split at ${formatTime(splitTime)} with snap. Save to persist.`);
-    };
-
-    const handleMergeSelectedSegment = (direction: "left" | "right"): void => {
-        if (selectedSegmentIndex === null) {
-            return;
-        }
-        const neighborIndex = direction === "left" ? selectedSegmentIndex - 1 : selectedSegmentIndex + 1;
-        const segment = timelineSegments[selectedSegmentIndex];
-        const neighbor = timelineSegments[neighborIndex];
-        if (!segment || !neighbor) {
-            return;
-        }
-        const start = Math.min(segment.start, neighbor.start);
-        const end = Math.max(segment.end, neighbor.end);
-        const merged: ChordSegment = {
-            start,
-            end,
-            chord: segment.chord,
-            confidence: Math.max(segment.confidence, neighbor.confidence, 0.96)
-        };
-        const leftIndex = Math.min(selectedSegmentIndex, neighborIndex);
-        const rightIndex = Math.max(selectedSegmentIndex, neighborIndex);
-        const nextSegments = [
-            ...timelineSegments.slice(0, leftIndex),
-            merged,
-            ...timelineSegments.slice(rightIndex + 1)
-        ];
-        commitTimelineSegments(nextSegments, { markDirty: true, pushHistory: true });
-        setSelectedSegmentIndex(leftIndex);
-        setEditingChord(merged.chord);
-        setAnalysisStatus(`Merged segment ${direction}. Save to persist.`);
-    };
-
-    const handleUndoTimelineEdit = (): void => {
-        const previous = timelineUndoStack[timelineUndoStack.length - 1];
-        if (!previous) {
-            return;
-        }
-        setTimelineUndoStack((current) => current.slice(0, -1));
-        setTimelineRedoStack((current) => [
-            ...current.slice(-24),
-            {
-                segments: cloneTimelineSegments(timelineSegments),
-                selectedSegmentIndex
-            }
-        ]);
-        restoreTimelineSnapshot(previous);
-        setAnalysisStatus("Chord edit undone. Save to persist.");
-    };
-
-    const handleRedoTimelineEdit = (): void => {
-        const next = timelineRedoStack[timelineRedoStack.length - 1];
-        if (!next) {
-            return;
-        }
-        setTimelineRedoStack((current) => current.slice(0, -1));
-        setTimelineUndoStack((current) => [
-            ...current.slice(-24),
-            {
-                segments: cloneTimelineSegments(timelineSegments),
-                selectedSegmentIndex
-            }
-        ]);
-        restoreTimelineSnapshot(next);
-        setAnalysisStatus("Chord edit redone. Save to persist.");
-    };
-
-    const handleSetTranspose = async (nextSemitones: number): Promise<void> => {
-        const safeSemitones = Math.max(-11, Math.min(11, Math.trunc(nextSemitones)));
-        setTransposeSemitones(safeSemitones);
-        if (isTransposeKeyOnly) {
-            setAnalysisStatus(safeSemitones === 0
-                ? "Transpose reset."
-                : `Key transposed ${formatTranspose(safeSemitones)}. Audio unchanged.`);
-            return;
-        }
-        await applyTransposeAudio(safeSemitones);
-    };
-
-    const applyTransposeAudio = async (semitones: number): Promise<void> => {
-        const baseAudioPath = isUsingInstrumentalAudio ? instrumentalAudioPath : selectedFilePath;
-        if (!baseAudioPath || !bridge?.getAudioPlaybackSource) {
-            return;
-        }
-
-        const requestId = activePitchShiftRequestIdRef.current + 1;
-        activePitchShiftRequestIdRef.current = requestId;
-        setIsPitchShiftingAudio(semitones !== 0);
-        setAnalysisStatus(semitones === 0
-            ? "Transpose reset."
-            : isApiMode
-                ? `Rendering transpose audio ${formatTranspose(semitones)} on API server...`
-                : `Rendering transpose audio ${formatTranspose(semitones)}...`);
-
-        let playbackPath = baseAudioPath;
-        if (semitones !== 0) {
-            if (!bridge.pitchShiftAudio) {
-                setIsPitchShiftingAudio(false);
-                setAnalysisStatus("Pitch shift API belum tersedia. Restart aplikasi lalu coba lagi.");
-                return;
-            }
-
-            let result: PitchShiftResult;
-            try {
-                result = await bridge.pitchShiftAudio(baseAudioPath, { semitones });
-            } catch {
-                const latestJob = latestApiJobProgressRef.current;
-                if (latestJob && cancelledApiJobIdsRef.current.has(latestJob.id)) {
-                    return;
-                }
-                setIsPitchShiftingAudio(false);
-                setAnalysisStatus("Gagal menyesuaikan transpose audio.");
-                return;
-            }
-            if (requestId !== activePitchShiftRequestIdRef.current) {
-                return;
-            }
-            if ("error" in result) {
-                setIsPitchShiftingAudio(false);
-                setAnalysisStatus(result.error.message);
-                return;
-            }
-            playbackPath = result.audio.streamUrl ?? result.audio.path;
-        }
-
-        try {
-            const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
-            if (requestId !== activePitchShiftRequestIdRef.current) {
-                return;
-            }
-            const audio = audioRef.current;
-            const previousTime = audio?.currentTime ?? currentTimeSeconds;
-            const wasPlaying = state === "playing";
-            await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
-            setAnalysisStatus(semitones === 0 ? "Transpose reset." : `Audio transposed ${formatTranspose(semitones)}.`);
-        } catch {
-            setAnalysisStatus("Gagal memuat audio transpose.");
-        } finally {
-            if (requestId === activePitchShiftRequestIdRef.current) {
-                setIsPitchShiftingAudio(false);
-            }
-        }
-    };
-
-    const handleSetTransposeKeyOnly = async (nextKeyOnly: boolean): Promise<void> => {
-        setIsTransposeKeyOnly(nextKeyOnly);
-        if (nextKeyOnly) {
-            await applyTransposeAudio(0);
-            setAnalysisStatus(transposeSemitones === 0
-                ? "Only Key enabled. Audio unchanged."
-                : `Only Key enabled. Key remains ${formatTranspose(transposeSemitones)}, audio restored.`);
-            return;
-        }
-        if (transposeSemitones !== 0) {
-            await applyTransposeAudio(transposeSemitones);
-        } else {
-            setAnalysisStatus("Only Key disabled. Next transpose will also render audio.");
-        }
-    };
-
-    const handleToggleVocalHide = async (): Promise<void> => {
-        if (isUsingInstrumentalAudio) {
-            await handleUseOriginalAudio();
-            return;
-        }
-
-        if (instrumentalAudioPath) {
-            await handleUseInstrumentalAudio(instrumentalAudioPath, instrumentalAudioStreamUrl, "Karaoke audio enabled.");
-            return;
-        }
-        if (!selectedFilePath) {
-            setAnalysisStatus("Open audio dulu sebelum Vocal Off.");
-            return;
-        }
-        if (!bridge?.removeVocals || !bridge?.getAudioPlaybackSource) {
-            setAnalysisStatus("Vocal Off API belum tersedia. Restart aplikasi lalu coba lagi.");
-            return;
-        }
-
-        setIsRemovingVocals(true);
-        setAnalysisStatus(isApiMode ? "Uploading audio and preparing Vocal Off on API server..." : "Preparing Vocal Off...");
-        let result: VocalRemovalResult;
-        try {
-            result = await bridge.removeVocals(selectedFilePath);
-        } catch {
-            const latestJob = latestApiJobProgressRef.current;
-            if (latestJob && cancelledApiJobIdsRef.current.has(latestJob.id)) {
-                return;
-            }
-            setIsRemovingVocals(false);
-            setAnalysisStatus("Vocal Off gagal dibuat.");
-            return;
-        }
-        setIsRemovingVocals(false);
-
-        if ("error" in result) {
-            setAnalysisStatus(result.error.message);
-            return;
-        }
-
-        setInstrumentalAudioPath(result.audio.path);
-        setInstrumentalAudioStreamUrl(result.audio.streamUrl ?? null);
-        await handleUseInstrumentalAudio(result.audio.path, result.audio.streamUrl ?? null, "Vocal Off ready.");
-    };
-
-    const handleUseInstrumentalAudio = async (audioPath: string, audioStreamUrl: string | null, statusMessage: string): Promise<void> => {
-        if (!bridge?.getAudioPlaybackSource) {
-            return;
-        }
-
-        const audio = audioRef.current;
-        const previousTime = audio?.currentTime ?? currentTimeSeconds;
-        const wasPlaying = state === "playing";
-        let playbackPath = audioPath;
-        if (!isTransposeKeyOnly && transposeSemitones !== 0 && bridge.pitchShiftAudio) {
-            const shifted = await bridge.pitchShiftAudio(audioPath, { semitones: transposeSemitones });
-            if (!("error" in shifted)) {
-                playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
-            }
-        }
-        const playbackSource = await bridge.getAudioPlaybackSource(isTransposeKeyOnly || transposeSemitones === 0 ? audioStreamUrl ?? playbackPath : playbackPath);
-        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
-        setIsUsingInstrumentalAudio(true);
-        setIsVocalHidden(true);
-        setAnalysisStatus(statusMessage);
-    };
-
-    const handleUseOriginalAudio = async (): Promise<void> => {
-        if (!selectedFilePath || !bridge?.getAudioPlaybackSource) {
-            return;
-        }
-
-        const audio = audioRef.current;
-        const previousTime = audio?.currentTime ?? currentTimeSeconds;
-        const wasPlaying = state === "playing";
-        let playbackPath = selectedFilePath;
-        if (!isTransposeKeyOnly && transposeSemitones !== 0 && bridge.pitchShiftAudio) {
-            const shifted = await bridge.pitchShiftAudio(selectedFilePath, { semitones: transposeSemitones });
-            if (!("error" in shifted)) {
-                playbackPath = shifted.audio.streamUrl ?? shifted.audio.path;
-            }
-        }
-        const playbackSource = await bridge.getAudioPlaybackSource(playbackPath);
-        await replaceAudioSource(toAudioSourceUrl(playbackSource), previousTime, wasPlaying);
-        setIsUsingInstrumentalAudio(false);
-        setIsVocalHidden(false);
-        setAnalysisStatus("Original audio restored.");
-    };
-
-    const replaceAudioSource = async (nextSourceUrl: string, seekTime: number, autoplay: boolean): Promise<void> => {
-        const audio = audioRef.current;
-        const previousBlobUrl = activeBlobUrlRef.current;
-        pendingSeekTimeRef.current = null;
-        if (audio) {
-            await fadeAudioVolume(audio, 0, 150);
-        }
-        pendingAudioSwitchRef.current = {
-            time: Math.max(0, seekTime),
-            autoplay,
-            fadeIn: true
-        };
-        setIsMediaReady(false);
-        setState("paused");
-        setAudioSourceUrl(nextSourceUrl);
-        activeBlobUrlRef.current = nextSourceUrl.startsWith("blob:") ? nextSourceUrl : null;
-        if (previousBlobUrl && previousBlobUrl !== nextSourceUrl && typeof URL.revokeObjectURL === "function") {
-            URL.revokeObjectURL(previousBlobUrl);
-        }
-    };
-
-    const fadeAudioVolume = (audio: HTMLAudioElement, targetVolume: number, durationMs: number): Promise<void> => {
-        if (audioFadeTimerRef.current !== null) {
-            window.clearInterval(audioFadeTimerRef.current);
-            audioFadeTimerRef.current = null;
-        }
-
-        const startVolume = Number.isFinite(audio.volume) ? audio.volume : 1;
-        const safeTargetVolume = Math.max(0, Math.min(1, targetVolume));
-        const startedAt = window.performance.now();
-
-        return new Promise((resolve) => {
-            audioFadeTimerRef.current = window.setInterval(() => {
-                const progress = Math.min(1, (window.performance.now() - startedAt) / Math.max(1, durationMs));
-                audio.volume = startVolume + (safeTargetVolume - startVolume) * progress;
-                if (progress >= 1) {
-                    if (audioFadeTimerRef.current !== null) {
-                        window.clearInterval(audioFadeTimerRef.current);
-                        audioFadeTimerRef.current = null;
-                    }
-                    audio.volume = safeTargetVolume;
-                    resolve();
-                }
-            }, 16);
-        });
-    };
-
-    const handlePanelResizeStart = (event: MouseEvent<HTMLDivElement>): void => {
-        event.preventDefault();
-        const workspace = workspaceRef.current;
-        if (!workspace) {
-            return;
-        }
-
-        const bounds = workspace.getBoundingClientRect();
-        const minLeftWidth = 260;
-        const minRightWidth = 380;
-        const gapWidth = 16;
-        const maxLeftWidth = Math.max(minLeftWidth, bounds.width - minRightWidth - gapWidth);
-
-        const handleMove = (moveEvent: globalThis.MouseEvent): void => {
-            const nextWidth = Math.max(minLeftWidth, Math.min(moveEvent.clientX - bounds.left, maxLeftWidth));
-            setLibraryPanelWidthPx(nextWidth);
-        };
-
-        const handleUp = (): void => {
-            window.removeEventListener("mousemove", handleMove);
-            window.removeEventListener("mouseup", handleUp);
-            document.body.classList.remove("is-resizing-panels");
-        };
-
-        document.body.classList.add("is-resizing-panels");
-        window.addEventListener("mousemove", handleMove);
-        window.addEventListener("mouseup", handleUp);
-    };
+    const handlePanelResizeStart = usePanelResize(workspaceRef, setLibraryPanelWidthPx);
 
     const isPlayableState = state === "ready" || state === "playing" || state === "paused";
     const canUsePlayback = Boolean(audioSourceUrl) && Number.isFinite(durationSeconds) && durationSeconds > 0 && isPlayableState;
@@ -1356,147 +845,45 @@ export function App() {
 
     return (
         <main className="shell" data-state={state}>
-            <header className="shell-header">
-                <div className="shell-title-row">
-                    <h1>Guitar Chord Detector</h1>
-                    <span className={`mode-badge mode-badge-${apiHealthState}`}>{formatApiHealthLabel(apiHealthState)}</span>
-                    <span className="api-settings-menu">
-                        <button
-                            type="button"
-                            className="api-settings-toggle"
-                            onClick={() => setIsApiSettingsOpen((current) => !current)}
-                            aria-expanded={isApiSettingsOpen}
-                        >
-                            ⚙ API
-                        </button>
-                        {isApiSettingsOpen ? (
-                            <section className="api-settings-panel" aria-label="API settings">
-                                <label>
-                                    <span>API URL</span>
-                                    <input
-                                        type="url"
-                                        value={draftApiBaseUrl}
-                                        onChange={(event) => setDraftApiBaseUrl(event.currentTarget.value)}
-                                        placeholder="Kosongkan untuk Local Mode"
-                                    />
-                                </label>
-                                <div className="api-settings-actions">
-                                    <button type="button" onClick={() => void handleTestApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
-                                        {isTestingApiConfig ? "Testing..." : "Test"}
-                                    </button>
-                                    <button type="button" onClick={() => void handleSaveApiConfig()} disabled={isTestingApiConfig || isSavingApiConfig}>
-                                        {isSavingApiConfig ? "Saving..." : "Save"}
-                                    </button>
-                                </div>
-                                <small>{apiSettingsStatus || (apiBaseUrl ? `Current: ${apiBaseUrl}` : "Current: Local Mode")}</small>
-                            </section>
-                        ) : null}
-                    </span>
-                </div>
-                <p className="shell-meta">Desktop Shell v{version}</p>
-            </header>
+            <ShellHeader
+                version={version}
+                apiHealthState={apiHealthState}
+                apiBaseUrl={apiBaseUrl}
+                draftApiBaseUrl={draftApiBaseUrl}
+                isApiSettingsOpen={isApiSettingsOpen}
+                apiSettingsStatus={apiSettingsStatus}
+                isTestingApiConfig={isTestingApiConfig}
+                isSavingApiConfig={isSavingApiConfig}
+                onToggleApiSettings={() => setIsApiSettingsOpen((current) => !current)}
+                onDraftApiBaseUrlChange={setDraftApiBaseUrl}
+                onTestApiConfig={() => void handleTestApiConfig()}
+                onSaveApiConfig={() => void handleSaveApiConfig()}
+            />
 
             <div className="workspace-panels" ref={workspaceRef}>
-                <section
-                    className="library-panel"
-                    aria-label="song library"
-                    style={{ width: `${libraryPanelWidthPx}px` }}
-                >
-                    <div className="library-toolbar">
-                        <div>
-                            <h2>Song Library</h2>
-                            <p>{libraryTotal} analyzed song(s)</p>
-                        </div>
-                        <button type="button" className="add-song-btn" onClick={handleAddSong} disabled={!bridge}>
-                            Add Song
-                        </button>
-                        <input
-                            type="search"
-                            value={libraryQuery}
-                            onChange={(event) => {
-                                setLibraryQuery(event.currentTarget.value);
-                                setLibraryPage(1);
-                            }}
-                            placeholder="Search title, artist, path"
-                            aria-label="Search library"
-                        />
-                    </div>
-                    {librarySongs.length > 0 ? (
-                        <div className="library-list" data-testid="library-list">
-                            {librarySongs.map((song) => (
-                                <div
-                                    key={song.id}
-                                    className="library-song"
-                                    data-active={selectedSongId === song.id ? "true" : "false"}
-                                >
-                                    <button
-                                        type="button"
-                                        className="library-song-main"
-                                        onClick={() => void handleOpenLibrarySong(song)}
-                                    >
-                                        <span>{song.title}</span>
-                                        <small className="library-song-artist">{song.artist || "Unknown artist"}</small>
-                                        <small>{formatSongChordCount(song)} chords - {formatTime(song.duration)}</small>
-                                        <span className="library-song-meta">
-                                            <small>Key {song.keyEstimate ?? "-"}</small>
-                                            <small>Conf {formatConfidenceValue(song.averageConfidence)}</small>
-                                            <small>{formatShortDate(song.updatedAt)}</small>
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="library-delete-btn"
-                                        aria-label={`Delete ${displaySongTitle(song)}`}
-                                        title="Delete from library"
-                                        onClick={() => void handleDeleteLibrarySong(song)}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="library-empty">No analyzed songs yet.</p>
-                    )}
-                    <div className="library-pagination" aria-label="Song library pagination">
-                        <small>{libraryTotal} song(s)</small>
-                        <label>
-                            Page Rows
-                            <select
-                                aria-label="Songs per page"
-                                value={libraryPageSize}
-                                onChange={(event) => {
-                                    setLibraryPageSize(Number(event.currentTarget.value));
-                                    setLibraryPage(1);
-                                }}
-                            >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                                <option value={50}>50</option>
-                            </select>
-                        </label>
-                        <button
-                            type="button"
-                            aria-label="Previous page"
-                            onClick={() => setLibraryPage((current) => Math.max(1, current - 1))}
-                            disabled={libraryPage <= 1}
-                        >
-                            ‹
-                        </button>
-                        <span>
-                            {renderLibraryPageNumbers(libraryPage, libraryTotalPages, setLibraryPage)}
-                        </span>
-                        <button
-                            type="button"
-                            aria-label="Next page"
-                            onClick={() => setLibraryPage((current) => Math.min(libraryTotalPages, current + 1))}
-                            disabled={libraryPage >= libraryTotalPages}
-                        >
-                            ›
-                        </button>
-                    </div>
-                </section>
+                <SongLibraryPanel
+                    songs={librarySongs}
+                    total={libraryTotal}
+                    query={libraryQuery}
+                    page={libraryPage}
+                    pageSize={libraryPageSize}
+                    totalPages={libraryTotalPages}
+                    selectedSongId={selectedSongId}
+                    widthPx={libraryPanelWidthPx}
+                    canAddSong={Boolean(bridge)}
+                    onAddSong={handleAddSong}
+                    onQueryChange={(value) => {
+                        setLibraryQuery(value);
+                        setLibraryPage(1);
+                    }}
+                    onPageChange={setLibraryPage}
+                    onPageSizeChange={(value) => {
+                        setLibraryPageSize(value);
+                        setLibraryPage(1);
+                    }}
+                    onOpenSong={(song) => void handleOpenLibrarySong(song)}
+                    onDeleteSong={(song) => void handleDeleteLibrarySong(song)}
+                />
 
                 <div
                     className="panel-resizer"
@@ -1506,1375 +893,107 @@ export function App() {
                     onMouseDown={handlePanelResizeStart}
                 />
 
-                <section className="shell-card detector-panel" aria-label="song analyzer detail">
-                    {viewMode === "detail" ? (
-                        <>
-                            <div className="detector-topbar">
-                                <div className="detector-actions">
-                                    <button type="button" className="open-btn" onClick={() => void handleOpenAudio()} disabled={!bridge}>
-                                        Open Audio
-                                    </button>
-                                    {canReanalyze ? (
-                                        <button type="button" className="open-btn" onClick={() => void handleReanalyze()}>
-                                            Re-analyze
-                                        </button>
-                                    ) : null}
-                                    <button
-                                        type="button"
-                                        className="open-btn"
-                                        onClick={() => {
-                                            if (selectedSongId) {
-                                                void handleSaveAnalysis();
-                                            } else {
-                                                setIsSaveFormOpen(true);
-                                            }
-                                        }}
-                                        disabled={!canSaveAnalysis}
-                                        title={canSaveAnalysis ? "Save analysis changes to Song Library" : "Analyze audio first before saving"}
-                                    >
-                                        {hasUnsavedChordEdits ? "Save Changes" : "Save"}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="open-btn secondary-btn"
-                                        onClick={() => handleOpenExportPreview("txt")}
-                                        disabled={!selectedSongId}
-                                    >
-                                        Preview TXT
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="open-btn secondary-btn"
-                                        onClick={() => handleOpenExportPreview("lrc")}
-                                        disabled={!selectedSongId}
-                                    >
-                                        Preview LRC
-                                    </button>
-                                </div>
-                                <p className="state-label">State: {state}</p>
-                            </div>
-                            {isSaveFormOpen ? (
-                                <form
-                                    className="song-metadata-form"
-                                    aria-label="song metadata"
-                                    onSubmit={(event) => {
-                                        event.preventDefault();
-                                        void handleSaveAnalysis();
-                                    }}
-                                >
-                                    <label>
-                                        <span>Artist</span>
-                                        <input
-                                            type="text"
-                                            value={songArtist}
-                                            onChange={(event) => setSongArtist(event.currentTarget.value)}
-                                            placeholder="Contoh: SR Banyak Cerita"
-                                            required
-                                        />
-                                    </label>
-                                    <label>
-                                        <span>Judul</span>
-                                        <input
-                                            type="text"
-                                            value={songTitle}
-                                            onChange={(event) => setSongTitle(event.currentTarget.value)}
-                                            placeholder="Contoh: Album Lama"
-                                            required
-                                        />
-                                    </label>
-                                    <button type="submit" className="open-btn">
-                                        Save to Library
-                                    </button>
-                                </form>
-                            ) : null}
-                            <audio
-                                ref={audioRef}
-                                src={audioSourceUrl ?? undefined}
-                                data-testid="audio-player"
-                                onLoadedMetadata={(event) => {
-                                    const nextDuration = Number.isFinite(event.currentTarget.duration)
-                                        ? Math.max(0, event.currentTarget.duration)
-                                        : 0;
-                                    const pendingSwitch = pendingAudioSwitchRef.current;
-                                    if (pendingSwitch) {
-                                        event.currentTarget.volume = pendingSwitch.fadeIn ? 0 : 1;
-                                        event.currentTarget.currentTime = Math.min(pendingSwitch.time, nextDuration || pendingSwitch.time);
-                                        pendingAudioSwitchRef.current = null;
-                                    }
-                                    if (nextDuration > 0) {
-                                        setDurationSeconds(nextDuration);
-                                    }
-                                    setIsMediaReady(nextDuration > 0);
-                                    setCurrentTimeSeconds(event.currentTarget.currentTime || 0);
-                                    if (pendingSwitch?.autoplay) {
-                                        void event.currentTarget.play();
-                                    }
-                                    if (pendingSwitch?.fadeIn) {
-                                        void fadeAudioVolume(event.currentTarget, 1, 220);
-                                    }
-                                }}
-                                onTimeUpdate={(event) => {
-                                    const nextTime = event.currentTarget.currentTime || 0;
-                                    const pendingSeekTime = pendingSeekTimeRef.current;
-                                    if (pendingSeekTime !== null && nextTime < pendingSeekTime - 0.35) {
-                                        return;
-                                    }
-                                    if (pendingSeekTime !== null) {
-                                        pendingSeekTimeRef.current = null;
-                                    }
-                                    if (!isMediaReady && event.currentTarget.currentTime > 0) {
-                                        setIsMediaReady(true);
-                                    }
-                                    setCurrentTimeSeconds(nextTime);
-                                }}
-                                onSeeked={(event) => {
-                                    pendingSeekTimeRef.current = null;
-                                    setCurrentTimeSeconds(event.currentTarget.currentTime || 0);
-                                }}
-                                onPlay={() => {
-                                    setIsMediaReady(true);
-                                    setState("playing");
-                                }}
-                                onPause={() => {
-                                    setState((current) => (current === "playing" ? "paused" : current));
-                                }}
-                                onEnded={() => {
-                                    setState("paused");
-                                }}
-                                onError={() => {
-                                    setIsMediaReady(false);
-                                    setState("error");
-                                    setAnalysisStatus("Could not analyze this audio file.");
-                                }}
-                            />
-                            <div className="detector-summary">
-                                <div>
-                                    <p className="file-name" aria-live="polite">{selectedFileName}</p>
-                                    <p className="analysis-label" aria-live="polite">
-                                        {analysisStatus}
-                                        {hasUnsavedChordEdits ? <span className="unsaved-edits-badge">Unsaved chord edits</span> : null}
-                                    </p>
-                                    {apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running") ? (
-                                        <div className="job-progress" aria-label="API job progress">
-                                            <span>{formatApiJobKind(apiJobProgress.kind)}</span>
-                                            <div className="job-progress-track">
-                                                <span style={{ width: `${Math.max(5, Math.min(100, apiJobProgress.progress))}%` }} />
-                                            </div>
-                                            <strong>{Math.round(apiJobProgress.progress)}%</strong>
-                                            <button type="button" onClick={() => void handleCancelApiJob()} disabled={!canCancelApiJob}>
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    ) : null}
-                                </div>
-                                <p className="active-chord" aria-live="polite" data-testid="active-chord">
-                                    Active chord: <span>{activeChordLabel}</span>
-                                </p>
-                            </div>
-                            <div className="transport-strip">
-                                <div className="playback-row" aria-label="playback controls">
-                                    <button type="button" onClick={() => void handleTogglePlayback()} disabled={!canUsePlayback}>
-                                        <span aria-hidden="true">{isPlaying ? "II" : "▶"}</span>
-                                        {isPlaying ? "Pause" : "Play"}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleToggleVocalHide()}
-                                        disabled={!canUsePlayback || isRemovingVocals}
-                                        aria-pressed={isUsingInstrumentalAudio}
-                                    >
-                                        <span aria-hidden="true">{isUsingInstrumentalAudio ? "◼" : "♪"}</span>
-                                        {isRemovingVocals ? "Preparing..." : isUsingInstrumentalAudio ? "Vocal: Off" : "Vocal: On"}
-                                    </button>
-                                    <p className="time-label" aria-live="polite">
-                                        {formatTime(currentTimeSeconds)} / {formatTime(durationSeconds)}
-                                    </p>
-                                </div>
-                                <div className="transpose-controls" aria-label="transpose controls">
-                                    <label className="transpose-key-only">
-                                        <input
-                                            type="checkbox"
-                                            checked={isTransposeKeyOnly}
-                                            onChange={(event) => void handleSetTransposeKeyOnly(event.currentTarget.checked)}
-                                            disabled={isPitchShiftingAudio}
-                                        />
-                                        Only Key
-                                    </label>
-                                    <span className="transpose-stepper">
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleSetTranspose(transposeSemitones - 1)}
-                                            disabled={isPitchShiftingAudio}
-                                            aria-label="Transpose down"
-                                        >
-                                            -
-                                        </button>
-                                        <strong>{formatTranspose(transposeSemitones)}</strong>
-                                        <button
-                                            type="button"
-                                            onClick={() => void handleSetTranspose(transposeSemitones + 1)}
-                                            disabled={isPitchShiftingAudio}
-                                            aria-label="Transpose up"
-                                        >
-                                            +
-                                        </button>
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => void handleSetTranspose(0)}
-                                        disabled={isPitchShiftingAudio}
-                                    >
-                                        <span aria-hidden="true">↺</span>
-                                        Reset
-                                    </button>
-                                    {isPitchShiftingAudio ? <small>Rendering audio...</small> : null}
-                                </div>
-                            </div>
-                            <input
-                                type="range"
-                                min={0}
-                                max={durationSeconds || 0}
-                                step={0.01}
-                                value={Math.min(currentTimeSeconds, durationSeconds || currentTimeSeconds)}
-                                onChange={(event) => handleSeek(Number(event.currentTarget.value))}
-                                disabled={!canSeek}
-                                aria-label="Seek"
-                            />
-                            <div className="detector-tabs" role="tablist" aria-label="Chord detector views">
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={detectorTab === "timeline"}
-                                    onClick={() => setDetectorTab("timeline")}
-                                >
-                                    Timeline
-                                </button>
-                                <button
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={detectorTab === "lyrics"}
-                                    onClick={() => setDetectorTab("lyrics")}
-                                >
-                                    Lyrics
-                                </button>
-                            </div>
-                            {detectorTab === "timeline" ? (
-                                <section className="timeline-frame" aria-label="Chord timeline frame">
-                                    <div className="chord-editor" ref={chordEditorRef} aria-label="Chord correction editor">
-                                        {selectedTimelineSegment ? (
-                                            <>
-                                                <span>
-                                                    {formatTime(selectedTimelineSegment.start)} - {formatTime(selectedTimelineSegment.end)}
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    value={editingChord}
-                                                    onChange={(event) => setEditingChord(event.currentTarget.value)}
-                                                    onKeyDown={(event) => {
-                                                        if (event.key === "Enter") {
-                                                            event.preventDefault();
-                                                            handleApplyEditedChord();
-                                                        }
-                                                        if (event.key === "Escape") {
-                                                            event.preventDefault();
-                                                            setSelectedSegmentIndex(null);
-                                                            setEditingChord("");
-                                                        }
-                                                    }}
-                                                    aria-label="Edit selected chord"
-                                                    list="chord-editor-options"
-                                                />
-                                                <datalist id="chord-editor-options">
-                                                    {EDITABLE_CHORD_OPTIONS.map((chord) => (
-                                                        <option key={chord} value={chord} />
-                                                    ))}
-                                                </datalist>
-                                                <button type="button" onClick={handleApplyEditedChord}>Apply</button>
-                                                <button type="button" onClick={handleSplitSelectedSegment}>Split</button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMergeSelectedSegment("left")}
-                                                    disabled={selectedSegmentIndex === 0}
-                                                >
-                                                    Merge ‹
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleMergeSelectedSegment("right")}
-                                                    disabled={selectedSegmentIndex === timelineSegments.length - 1}
-                                                >
-                                                    Merge ›
-                                                </button>
-                                                <button type="button" onClick={handleUndoTimelineEdit} disabled={!canUndoTimelineEdit}>
-                                                    Undo
-                                                </button>
-                                                <button type="button" onClick={handleRedoTimelineEdit} disabled={!canRedoTimelineEdit}>
-                                                    Redo
-                                                </button>
-                                                <small className="chord-editor-shortcuts">Enter apply, Esc cancel, Cmd/Ctrl+Z undo</small>
-                                            </>
-                                        ) : (
-                                            <span>Click chord segment untuk edit, split, atau merge.</span>
-                                        )}
-                                    </div>
-                                    <section ref={timelineRef} className="timeline" aria-label="Chord timeline">
-                                        {renderTimeline(
-                                            timelineSegments,
-                                            durationSeconds,
-                                            timelineWidthPx,
-                                            currentTimeSeconds,
-                                            transposeSemitones,
-                                            handleSeek,
-                                            selectedSegmentIndex,
-                                            handleSelectTimelineSegment
-                                        )}
-                                    </section>
-                                </section>
-                            ) : (
-                                <section className="lyrics-frame" aria-label="Lyrics editor">
-                                    <div className="lyrics-editor">
-                                        <div className="lyrics-tools">
-                                            <div className="lyrics-actions">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void handleGenerateLyricsFromAudio()}
-                                                    disabled={!selectedFilePath || isGeneratingLyrics}
-                                                >
-                                                    {isGeneratingLyrics ? "Generating..." : "Generate Lyrics"}
-                                                </button>
-                                                <label className="lyrics-model">
-                                                    <span>Model</span>
-                                                    <select
-                                                        value={lyricsModel}
-                                                        onChange={(event) => setLyricsModel(event.currentTarget.value as LyricsModel)}
-                                                        disabled={isGeneratingLyrics}
-                                                    >
-                                                        <option value="tiny">tiny</option>
-                                                        <option value="base">base</option>
-                                                        <option value="small">small</option>
-                                                        <option value="medium">medium</option>
-                                                        <option value="large">large</option>
-                                                    </select>
-                                                </label>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAutoSyncLyrics}
-                                                    disabled={!lyricsText.trim() || durationSeconds <= 0 || isGeneratingLyrics}
-                                                >
-                                                    Auto Sync
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setLyricsText(stripLyricsTiming(lyricsText))}
-                                                    disabled={!lyricsText.trim() || isGeneratingLyrics}
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                            <p>Generate dari audio, atau paste lyric polos lalu Auto Sync.</p>
-                                        </div>
-                                        <textarea
-                                            value={lyricsText}
-                                            onChange={(event) => setLyricsText(event.currentTarget.value)}
-                                            placeholder={"Paste lyric polos di sini...\nbaris lyric pertama\nbaris lyric kedua"}
-                                            aria-label="Song lyrics"
-                                        />
-                                    </div>
-                                    <div ref={lyricsPreviewRef} className="lyrics-preview" aria-label="Lyrics preview">
-                                        {renderLyricsPreview(
-                                            lyricsText,
-                                            currentTimeSeconds,
-                                            timelineSegments,
-                                            transposeSemitones
-                                        )}
-                                    </div>
-                                </section>
-                            )}
-                        </>
-                    ) : (
-                        <div className="detector-empty">
-                            <h2>Chord Detector</h2>
-                            <p>Pilih lagu dari Song Library, atau klik Add Song untuk menganalisa audio baru.</p>
-                        </div>
-                    )}
-                </section>
+                <DetectorPanel
+                    viewMode={viewMode}
+                    state={state}
+                    selectedFileName={selectedFileName}
+                    selectedFilePath={selectedFilePath}
+                    audioSourceUrl={audioSourceUrl}
+                    durationSeconds={durationSeconds}
+                    currentTimeSeconds={currentTimeSeconds}
+                    analysisStatus={analysisStatus}
+                    activeChordLabel={activeChordLabel}
+                    hasUnsavedChordEdits={hasUnsavedChordEdits}
+                    apiJobProgress={apiJobProgress}
+                    canCancelApiJob={canCancelApiJob}
+                    canReanalyze={canReanalyze}
+                    canSaveAnalysis={canSaveAnalysis}
+                    canUsePlayback={canUsePlayback}
+                    canSeek={canSeek}
+                    isPlaying={isPlaying}
+                    selectedSongId={selectedSongId}
+                    isSaveFormOpen={isSaveFormOpen}
+                    songArtist={songArtist}
+                    songTitle={songTitle}
+                    transposeSemitones={transposeSemitones}
+                    isTransposeKeyOnly={isTransposeKeyOnly}
+                    isPitchShiftingAudio={isPitchShiftingAudio}
+                    detectorTab={detectorTab}
+                    timelineSegments={timelineSegments}
+                    timelineWidthPx={timelineWidthPx}
+                    selectedSegmentIndex={selectedSegmentIndex}
+                    selectedTimelineSegment={selectedTimelineSegment}
+                    editingChord={editingChord}
+                    canUndoTimelineEdit={canUndoTimelineEdit}
+                    canRedoTimelineEdit={canRedoTimelineEdit}
+                    lyricsText={lyricsText}
+                    lyricsModel={lyricsModel}
+                    isGeneratingLyrics={isGeneratingLyrics}
+                    isRemovingVocals={isRemovingVocals}
+                    isUsingInstrumentalAudio={isUsingInstrumentalAudio}
+                    audioRef={audioRef}
+                    timelineRef={timelineRef}
+                    chordEditorRef={chordEditorRef}
+                    lyricsPreviewRef={lyricsPreviewRef}
+                    onOpenAudio={() => void handleOpenAudio()}
+                    onReanalyze={() => void handleReanalyze()}
+                    onSaveAnalysis={() => void handleSaveAnalysis()}
+                    onOpenSaveForm={() => setIsSaveFormOpen(true)}
+                    onOpenExportPreview={handleOpenExportPreview}
+                    onLoadedMetadata={audioHandlers.onLoadedMetadata}
+                    onTimeUpdate={audioHandlers.onTimeUpdate}
+                    onSeeked={audioHandlers.onSeeked}
+                    onPlay={audioHandlers.onPlay}
+                    onPause={audioHandlers.onPause}
+                    onEnded={audioHandlers.onEnded}
+                    onAudioError={audioHandlers.onAudioError}
+                    onCancelApiJob={() => void handleCancelApiJob()}
+                    onTogglePlayback={() => void handleTogglePlayback()}
+                    onToggleVocalHide={() => void handleToggleVocalHide()}
+                    onSetTranspose={(value) => void handleSetTranspose(value)}
+                    onSetTransposeKeyOnly={(value) => void handleSetTransposeKeyOnly(value)}
+                    onSeek={handleSeek}
+                    onTabChange={setDetectorTab}
+                    onSongArtistChange={setSongArtist}
+                    onSongTitleChange={setSongTitle}
+                    onEditingChordChange={setEditingChord}
+                    onApplyEditedChord={handleApplyEditedChord}
+                    onSplitSelectedSegment={handleSplitSelectedSegment}
+                    onMergeSelectedSegment={handleMergeSelectedSegment}
+                    onUndoTimelineEdit={handleUndoTimelineEdit}
+                    onRedoTimelineEdit={handleRedoTimelineEdit}
+                    onSelectTimelineSegment={handleSelectTimelineSegment}
+                    onClearSelectedSegment={() => {
+                        setSelectedSegmentIndex(null);
+                        setEditingChord("");
+                    }}
+                    onGenerateLyricsFromAudio={() => void handleGenerateLyricsFromAudio()}
+                    onAutoSyncLyrics={handleAutoSyncLyrics}
+                    onLyricsTextChange={setLyricsText}
+                    onLyricsModelChange={setLyricsModel}
+                />
             </div>
+
             {exportPreviewFormat ? (
-                <div className="modal-backdrop" role="presentation" onMouseDown={() => setExportPreviewFormat(null)}>
-                    <section
-                        className="export-preview-modal"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Export preview"
-                        onMouseDown={(event) => event.stopPropagation()}
-                    >
-                        <div className="export-preview-head">
-                            <div>
-                                <strong>{exportPreviewFormat.toUpperCase()} Preview</strong>
-                                <small>
-                                    {songArtist || "Unknown Artist"} - {songTitle || "Untitled"} · Transpose {formatTranspose(transposeSemitones)}
-                                </small>
-                            </div>
-                            <div>
-                                <button type="button" onClick={() => void handleExportSong(exportPreviewFormat)}>
-                                    Download
-                                </button>
-                                <button type="button" onClick={() => setExportPreviewFormat(null)}>
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                        <div className="export-preview-meta">
-                            <span>{exportPreviewContent.split(/\r?\n/).filter((line) => line.trim()).length} line(s)</span>
-                            <span>{timelineSegments.length} chord segment(s)</span>
-                            <span>{lyricsText.trim() ? "Lyrics included" : "Timeline only"}</span>
-                        </div>
-                        {exportPreviewContent.trim() ? (
-                            <pre>{exportPreviewContent}</pre>
-                        ) : (
-                            <p className="export-preview-empty">Tidak ada konten export. Pastikan lagu sudah punya timeline chord atau lyric.</p>
-                        )}
-                    </section>
-                </div>
+                <ExportPreviewModal
+                    format={exportPreviewFormat}
+                    artist={songArtist}
+                    title={songTitle}
+                    transposeSemitones={transposeSemitones}
+                    content={exportPreviewContent}
+                    chordSegmentCount={timelineSegments.length}
+                    hasLyrics={Boolean(lyricsText.trim())}
+                    onDownload={(format) => void handleExportSong(format)}
+                    onClose={() => setExportPreviewFormat(null)}
+                />
             ) : null}
             {pendingConfirmation ? (
-                <div className="modal-backdrop" role="presentation" onMouseDown={() => setPendingConfirmation(null)}>
-                    <section
-                        className="confirm-modal"
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label={pendingConfirmation.kind === "save" ? "Confirm save" : "Confirm delete"}
-                        onMouseDown={(event) => event.stopPropagation()}
-                    >
-                        <strong>{pendingConfirmation.kind === "save" ? "Save chord analysis?" : "Delete song from library?"}</strong>
-                        {pendingConfirmation.kind === "save" ? (
-                            <p>
-                                Simpan chord, lyric, dan metadata untuk {pendingConfirmation.metadata.artist} - {pendingConfirmation.metadata.title}.
-                            </p>
-                        ) : (
-                            <p>
-                                Hapus {displaySongTitle(pendingConfirmation.song)} dari Song Library. File audio yang dikelola API/local juga akan ikut dibersihkan jika tersedia.
-                            </p>
-                        )}
-                        <div className="confirm-modal-actions">
-                            <button type="button" onClick={() => setPendingConfirmation(null)}>
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                className={pendingConfirmation.kind === "delete" ? "danger-btn" : ""}
-                                onClick={() => void handleConfirmAction()}
-                            >
-                                {pendingConfirmation.kind === "save" ? "Confirm Save" : "Confirm Delete"}
-                            </button>
-                        </div>
-                    </section>
-                </div>
+                <ConfirmationModal
+                    confirmation={pendingConfirmation}
+                    onCancel={() => setPendingConfirmation(null)}
+                    onConfirm={() => void handleConfirmAction()}
+                />
             ) : null}
         </main>
     );
-}
-
-function toFileUrl(localPath: string): string {
-    if (/^https?:\/\//i.test(localPath)) {
-        return localPath;
-    }
-
-    const normalized = localPath.replace(/\\/g, "/");
-    const url = new URL("file://");
-
-    if (/^[A-Za-z]:\//.test(normalized)) {
-        url.pathname = `/${normalized}`;
-        return url.href;
-    }
-
-    url.pathname = normalized.startsWith("/") ? normalized : `/${normalized}`;
-    return url.href;
-}
-
-function toAudioSourceUrl(source: { kind?: string; url?: string; bytes?: Uint8Array; mimeType?: string }): string {
-    if (source.kind === "url" && source.url) {
-        return source.url;
-    }
-    if (source.bytes) {
-        return createObjectUrl(source.bytes, source.mimeType);
-    }
-    throw new Error("Unsupported audio playback source");
-}
-
-function createObjectUrl(bytes: Uint8Array, mimeType?: string): string {
-    const stableBytes = new Uint8Array(bytes.length);
-    stableBytes.set(bytes);
-    const blob = new Blob([stableBytes], mimeType ? { type: mimeType } : undefined);
-    return URL.createObjectURL(blob);
-}
-
-function normalizeTimelineSegments(segments: ChordSegment[], durationSeconds: number): ChordSegment[] {
-    const safeDuration = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
-    return [...segments]
-        .sort((a, b) => a.start - b.start)
-        .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
-        .map((segment) => {
-            const start = Math.max(0, segment.start);
-            const maxEnd = safeDuration > 0 ? safeDuration : segment.end;
-            const end = Math.min(maxEnd, Math.max(start, segment.end));
-            return {
-                ...segment,
-                start,
-                end
-            };
-        })
-        .filter((segment) => segment.end > segment.start);
-}
-
-function findActiveChord(segments: ChordSegment[], currentTimeSeconds: number): string | null {
-    if (!Number.isFinite(currentTimeSeconds)) {
-        return null;
-    }
-
-    return segments.find((segment) => segment.start <= currentTimeSeconds && currentTimeSeconds < segment.end)?.chord ?? null;
-}
-
-function displaySongTitle(song: SongLibrarySummary): string {
-    return song.artist.trim().length > 0 ? `${song.artist} - ${song.title}` : song.title;
-}
-
-function buildSongMetadata(title: string, artist: string): SongMetadataInput | null {
-    const normalizedTitle = title.trim();
-    const normalizedArtist = artist.trim();
-    if (!normalizedTitle || !normalizedArtist) {
-        return null;
-    }
-    return {
-        title: normalizedTitle,
-        artist: normalizedArtist
-    };
-}
-
-function normalizeSongLibraryListResult(
-    result: SongLibraryListResult | SongLibraryRecord[],
-    fallbackPage: number,
-    fallbackPageSize: number
-): SongLibraryListResult {
-    if (Array.isArray(result)) {
-        return {
-            records: result,
-            total: result.length,
-            page: fallbackPage,
-            pageSize: fallbackPageSize,
-            totalPages: Math.max(1, Math.ceil(result.length / fallbackPageSize))
-        };
-    }
-
-    return {
-        records: result.records,
-        total: result.total,
-        page: result.page,
-        pageSize: result.pageSize,
-        totalPages: result.totalPages
-    };
-}
-
-function renderLibraryPageNumbers(
-    currentPage: number,
-    totalPages: number,
-    onSelectPage: (page: number) => void
-) {
-    const pages = buildCompactPageNumbers(currentPage, totalPages);
-    return pages.map((page, index) => {
-        if (page === "ellipsis") {
-            return <i key={`ellipsis-${index}`}>...</i>;
-        }
-
-        return (
-            <button
-                key={page}
-                type="button"
-                className="library-page-number"
-                data-active={page === currentPage ? "true" : "false"}
-                onClick={() => onSelectPage(page)}
-                disabled={page === currentPage}
-            >
-                {page}
-            </button>
-        );
-    });
-}
-
-function buildCompactPageNumbers(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
-    if (totalPages <= 5) {
-        return Array.from({ length: totalPages }, (_, index) => index + 1);
-    }
-
-    const pages = new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
-    const sortedPages = [...pages]
-        .filter((page) => page >= 1 && page <= totalPages)
-        .sort((a, b) => a - b);
-    const result: Array<number | "ellipsis"> = [];
-    for (const page of sortedPages) {
-        const previous = result[result.length - 1];
-        if (typeof previous === "number" && page - previous > 1) {
-            result.push("ellipsis");
-        }
-        result.push(page);
-    }
-    return result;
-}
-
-interface LyricLine {
-    time: number | null;
-    text: string;
-}
-
-function renderLyricsPreview(
-    lyrics: string,
-    currentTimeSeconds: number,
-    segments: ChordSegment[],
-    transposeSemitones: number
-) {
-    const lines = parseLyrics(lyrics);
-    if (lines.length === 0) {
-        return <p className="lyrics-empty">Belum ada lyric. Paste text biasa atau format LRC untuk sinkron timestamp.</p>;
-    }
-
-    return (
-        <div className="lyrics-lines" data-testid="lyrics-lines">
-            {lines.map((line, index) => {
-                const previousTimedLine = [...lines.slice(0, index)].reverse().find((candidate) => candidate.time !== null);
-                const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
-                const isActive = line.time !== null
-                    && line.time <= currentTimeSeconds
-                    && (nextTimedLine?.time == null || currentTimeSeconds < nextTimedLine.time);
-                const hasSectionBreak = Boolean(
-                    line.time !== null
-                    && previousTimedLine?.time != null
-                    && line.time - previousTimedLine.time >= 10
-                );
-                const chordMarkers = line.time === null
-                    ? []
-                    : buildLyricChordMarkers(
-                        segments,
-                        line.time,
-                        nextTimedLine?.time ?? line.time + 5,
-                        transposeSemitones
-                    );
-                return (
-                    <div
-                        key={`${line.time ?? "plain"}-${index}-${line.text}`}
-                        className="lyrics-line"
-                        data-active={isActive ? "true" : "false"}
-                        data-section-break={hasSectionBreak ? "true" : "false"}
-                        data-chord-count={chordMarkers.length}
-                    >
-                        <time dateTime={line.time === null ? undefined : `PT${line.time.toFixed(2)}S`}>
-                            {line.time === null ? "--:--" : formatTime(line.time)}
-                        </time>
-                        <div className="lyrics-chord-sheet">
-                            <div className="lyrics-chords" aria-label="Line chords">
-                                {chordMarkers.length > 0 ? chordMarkers.map((marker) => (
-                                    <strong key={`${marker.label}-${marker.left}`} style={{ left: `${marker.left}%` }}>
-                                        {marker.label}
-                                    </strong>
-                                )) : <strong style={{ left: "0%" }}>-</strong>}
-                            </div>
-                            <span>{line.text}</span>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-interface LyricChordMarker {
-    label: string;
-    left: number;
-}
-
-function buildLyricChordMarkers(
-    segments: ChordSegment[],
-    startTime: number,
-    endTime: number,
-    transposeSemitones: number
-): LyricChordMarker[] {
-    const safeEndTime = Math.max(startTime + 0.25, endTime);
-    const windowDuration = safeEndTime - startTime;
-    const markers: LyricChordMarker[] = [];
-    const openingChord = findActiveChord(segments, startTime);
-
-    if (openingChord) {
-        markers.push({
-            label: transposeChordLabel(openingChord, transposeSemitones),
-            left: 0
-        });
-    }
-
-    for (const segment of segments) {
-        if (segment.start <= startTime || segment.start >= safeEndTime) {
-            continue;
-        }
-        const label = transposeChordLabel(segment.chord, transposeSemitones);
-        const previous = markers[markers.length - 1];
-        if (previous?.label === label) {
-            continue;
-        }
-        markers.push({
-            label,
-            left: Math.min(92, Math.max(0, ((segment.start - startTime) / windowDuration) * 100))
-        });
-    }
-
-    return markers;
-}
-
-function parseLyrics(lyrics: string): LyricLine[] {
-    return lyrics
-        .split(/\r?\n/)
-        .map((rawLine) => rawLine.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => {
-            const match = /^\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\](.*)$/.exec(line);
-            if (!match) {
-                return { time: null, text: line };
-            }
-
-            const minutes = Number.parseInt(match[1], 10);
-            const seconds = Number.parseInt(match[2], 10);
-            const fraction = match[3] ? Number.parseFloat(`0.${match[3]}`) : 0;
-            const time = minutes * 60 + seconds + fraction;
-            if (!Number.isFinite(time) || seconds >= 60) {
-                return { time: null, text: line };
-            }
-
-            return {
-                time,
-                text: match[4].trim()
-            };
-        });
-}
-
-function stripLyricsTiming(lyrics: string): string {
-    return extractPlainLyricLines(lyrics).join("\n");
-}
-
-function autoSyncLyrics(lyrics: string, durationSeconds: number, segments: ChordSegment[]): string {
-    const plainLines = extractPlainLyricLines(lyrics);
-    if (plainLines.length === 0 || durationSeconds <= 0) {
-        return "";
-    }
-
-    const syncTimes = buildLyricSyncTimes(plainLines.length, durationSeconds, segments);
-    return plainLines
-        .map((line, index) => `[${formatLrcTime(syncTimes[index] ?? 0)}]${line}`)
-        .join("\n");
-}
-
-function extractPlainLyricLines(lyrics: string): string[] {
-    return lyrics
-        .split(/\r?\n/)
-        .map((rawLine) => rawLine.trim())
-        .map((line) => line.replace(/^(?:\[\d{1,2}:\d{2}(?:\.\d{1,3})?\])+/, "").trim())
-        .filter((line) => line.length > 0);
-}
-
-function buildLyricSyncTimes(lineCount: number, durationSeconds: number, segments: ChordSegment[]): number[] {
-    if (lineCount === 1) {
-        return [Math.min(Math.max(durationSeconds * 0.08, 0), Math.max(durationSeconds - 1, 0))];
-    }
-
-    const introOffset = Math.min(12, Math.max(2, durationSeconds * 0.045));
-    const outroPadding = Math.min(10, Math.max(2, durationSeconds * 0.035));
-    const startTime = Math.min(introOffset, Math.max(durationSeconds - 1, 0));
-    const endTime = Math.max(startTime + 1, durationSeconds - outroPadding);
-    const musicalAnchors = selectMusicalLyricAnchors(segments, startTime, endTime, lineCount);
-
-    if (musicalAnchors.length >= lineCount) {
-        return spreadAnchors(musicalAnchors, lineCount);
-    }
-
-    return Array.from({ length: lineCount }, (_, index) => {
-        const ratio = index / (lineCount - 1);
-        return startTime + (endTime - startTime) * ratio;
-    });
-}
-
-function selectMusicalLyricAnchors(
-    segments: ChordSegment[],
-    startTime: number,
-    endTime: number,
-    lineCount: number
-): number[] {
-    const minGap = Math.max(1.8, Math.min(4.5, (endTime - startTime) / Math.max(lineCount * 1.35, 1)));
-    const anchors: number[] = [];
-    for (const segment of segments) {
-        if (segment.start < startTime || segment.start > endTime) {
-            continue;
-        }
-        const previous = anchors[anchors.length - 1];
-        if (previous === undefined || segment.start - previous >= minGap) {
-            anchors.push(segment.start);
-        }
-    }
-    return anchors;
-}
-
-function spreadAnchors(anchors: number[], lineCount: number): number[] {
-    if (anchors.length === lineCount) {
-        return anchors;
-    }
-    return Array.from({ length: lineCount }, (_, index) => {
-        const anchorIndex = Math.round((index / (lineCount - 1)) * (anchors.length - 1));
-        return anchors[anchorIndex] ?? anchors[anchors.length - 1] ?? 0;
-    });
-}
-
-function cloneTimelineSegments(segments: ChordSegment[]): ChordSegment[] {
-    return segments.map((segment) => ({ ...segment }));
-}
-
-function snapSplitTime(rawSplitTime: number, segment: ChordSegment): number {
-    const minEdgePadding = Math.min(0.45, Math.max(0.18, (segment.end - segment.start) * 0.12));
-    const snapped = Math.round(rawSplitTime / SPLIT_SNAP_GRID_SECONDS) * SPLIT_SNAP_GRID_SECONDS;
-    return Math.max(segment.start + minEdgePadding, Math.min(segment.end - minEdgePadding, snapped));
-}
-
-function formatLrcTime(seconds: number): string {
-    const safeSeconds = Math.max(0, seconds);
-    const minutes = Math.floor(safeSeconds / 60);
-    const wholeSeconds = Math.floor(safeSeconds % 60);
-    const centiseconds = Math.floor((safeSeconds - Math.floor(safeSeconds)) * 100);
-    return `${String(minutes).padStart(2, "0")}:${String(wholeSeconds).padStart(2, "0")}.${String(centiseconds).padStart(2, "0")}`;
-}
-
-const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
-const EDITABLE_CHORD_OPTIONS = ["N", ...SHARP_ROOTS.flatMap((root) => [root, `${root}m`, `${root}dim`])];
-const SPLIT_SNAP_GRID_SECONDS = 0.5;
-const MAJOR_KEY_CHORDS: Record<string, Set<string>> = {
-    C: new Set(["C", "Dm", "Em", "F", "G", "Am", "Bdim"]),
-    "C#": new Set(["C#", "D#m", "Fm", "F#", "G#", "A#m", "Cdim"]),
-    D: new Set(["D", "Em", "F#m", "G", "A", "Bm", "C#dim"]),
-    "D#": new Set(["D#", "Fm", "Gm", "G#", "A#", "Cm", "Ddim"]),
-    E: new Set(["E", "F#m", "G#m", "A", "B", "C#m", "D#dim"]),
-    F: new Set(["F", "Gm", "Am", "A#", "C", "Dm", "Edim"]),
-    "F#": new Set(["F#", "G#m", "A#m", "B", "C#", "D#m", "Fdim"]),
-    G: new Set(["G", "Am", "Bm", "C", "D", "Em", "F#dim"]),
-    "G#": new Set(["G#", "A#m", "Cm", "C#", "D#", "Fm", "Gdim"]),
-    A: new Set(["A", "Bm", "C#m", "D", "E", "F#m", "G#dim"]),
-    "A#": new Set(["A#", "Cm", "Dm", "D#", "F", "Gm", "Adim"]),
-    B: new Set(["B", "C#m", "D#m", "E", "F#", "G#m", "A#dim"])
-};
-
-function formatTranspose(semitones: number): string {
-    if (semitones === 0) {
-        return "0";
-    }
-    return semitones > 0 ? `+${semitones}` : `${semitones}`;
-}
-
-function transposeChordLabel(chord: string, semitones: number): string {
-    if (chord === "N" || semitones === 0) {
-        return chord;
-    }
-
-    const match = /^(C#|D#|F#|G#|A#|C|D|E|F|G|A|B)(.*)$/.exec(chord);
-    if (!match) {
-        return chord;
-    }
-
-    const rootIndex = SHARP_ROOTS.indexOf(match[1] as (typeof SHARP_ROOTS)[number]);
-    if (rootIndex < 0) {
-        return chord;
-    }
-
-    const nextIndex = modulo(rootIndex + semitones, SHARP_ROOTS.length);
-    return `${SHARP_ROOTS[nextIndex]}${match[2]}`;
-}
-
-function modulo(value: number, divisor: number): number {
-    return ((value % divisor) + divisor) % divisor;
-}
-
-function estimateMajorKey(segments: ChordSegment[]): string {
-    if (segments.length === 0) {
-        return "-";
-    }
-    let bestKey = "-";
-    let bestScore = -1;
-    for (const [key, chords] of Object.entries(MAJOR_KEY_CHORDS)) {
-        const score = segments.reduce((total, segment) => (
-            total + (chords.has(segment.chord) ? Math.max(0, segment.end - segment.start) : 0)
-        ), 0);
-        if (score > bestScore) {
-            bestKey = key;
-            bestScore = score;
-        }
-    }
-    return bestKey;
-}
-
-function formatAverageConfidence(segments: ChordSegment[]): string {
-    if (segments.length === 0) {
-        return "-";
-    }
-    const average = segments.reduce((total, segment) => total + segment.confidence, 0) / segments.length;
-    return `${Math.round(average * 100)}%`;
-}
-
-function formatConfidenceValue(confidence: number | undefined): string {
-    if (confidence === undefined || !Number.isFinite(confidence)) {
-        return "-";
-    }
-    return `${Math.round(confidence * 100)}%`;
-}
-
-function formatSongChordCount(song: SongLibrarySummary | SongLibraryRecord): number {
-    if (Number.isFinite(song.chordCount)) {
-        return song.chordCount;
-    }
-    return "analysis" in song ? song.analysis.analysis.chords.length : 0;
-}
-
-function formatShortDate(value: string): string {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return "No date";
-    }
-    return date.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric"
-    });
-}
-
-function normalizeEditableChord(value: string): ChordLabel | null {
-    const trimmed = value.trim();
-    if (trimmed.toUpperCase() === "N") {
-        return "N";
-    }
-    const match = /^(c#|d#|f#|g#|a#|c|d|e|f|g|a|b)(m|dim)?$/i.exec(trimmed);
-    if (!match) {
-        return null;
-    }
-    const root = `${match[1][0].toUpperCase()}${match[1].slice(1)}`;
-    const suffix = match[2]?.toLowerCase() ?? "";
-    const normalized = `${root}${suffix}`;
-    return EDITABLE_CHORD_OPTIONS.includes(normalized as ChordLabel) ? normalized as ChordLabel : null;
-}
-
-type TimelineSegmentLayout = {
-    segmentIndex: number;
-    segment: ChordSegment;
-    fragmentStart: number;
-    fragmentEnd: number;
-    leftPercent: number;
-    widthPercent: number;
-    showLabel: boolean;
-    labelText: string;
-};
-
-type TimelineRowLayout = {
-    rowIndex: number;
-    rowStart: number;
-    rowEnd: number;
-    rowDuration: number;
-    fragments: TimelineSegmentLayout[];
-};
-
-const TIMELINE_ROW_WINDOW_SECONDS = 15;
-
-function renderTimeline(
-    segments: ChordSegment[],
-    durationSeconds: number,
-    timelineWidthPx: number,
-    currentTimeSeconds: number,
-    transposeSemitones: number,
-    onSeek: (value: number) => void,
-    selectedSegmentIndex: number | null,
-    onSelectSegment: (segmentIndex: number) => void
-) {
-    const safeDuration = Number.isFinite(durationSeconds) ? Math.max(0, durationSeconds) : 0;
-    const safeCurrentTime = Number.isFinite(currentTimeSeconds) ? Math.max(0, currentTimeSeconds) : 0;
-
-    if (safeDuration <= 0 || segments.length === 0) {
-        return <p className="timeline-empty">No chord segments</p>;
-    }
-
-    const rows = buildTimelineRows(segments, safeDuration, timelineWidthPx, TIMELINE_ROW_WINDOW_SECONDS);
-
-    return (
-        <div className="timeline-rows" data-testid="timeline-rows">
-            {rows.map((row) => (
-                <section
-                    key={`timeline-row-${row.rowIndex}`}
-                    className="timeline-row"
-                    data-testid="timeline-row"
-                    data-row-index={row.rowIndex}
-                    data-row-start={row.rowStart}
-                    data-row-end={row.rowEnd}
-                >
-                    <p className="timeline-row-range" data-testid="timeline-row-range">
-                        {formatTime(row.rowStart)} - {formatTime(row.rowEnd)}
-                    </p>
-                    <div
-                        className="timeline-track"
-                        data-testid="timeline-track"
-                        onClick={(event) => {
-                            onSeek(timelineClickTime(event, row.rowStart, row.rowDuration, safeDuration));
-                        }}
-                    >
-                        {row.fragments.map(({ segmentIndex, segment, fragmentStart, fragmentEnd, leftPercent, widthPercent, showLabel, labelText }, index) => {
-                            const displayedChord = transposeChordLabel(segment.chord, transposeSemitones);
-                            const displayedLabel = transposeChordLabel(labelText, transposeSemitones);
-                            const confidencePercent = Math.round(segment.confidence * 100);
-                            const confidenceLevel = chordConfidenceLevel(segment.confidence);
-                            return (
-                                <button
-                                    key={`${row.rowIndex}-${segment.start}-${segment.end}-${segment.chord}-${fragmentStart}-${fragmentEnd}-${index}`}
-                                    type="button"
-                                    className="timeline-segment"
-                                    data-testid="timeline-segment"
-                                    data-chord={displayedChord}
-                                    data-show-label={showLabel ? "true" : "false"}
-                                    data-fragment-start={fragmentStart}
-                                    data-fragment-end={fragmentEnd}
-                                    data-confidence={confidenceLevel}
-                                    data-selected={selectedSegmentIndex === segmentIndex ? "true" : "false"}
-                                    data-active={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
-                                    aria-current={fragmentStart <= safeCurrentTime && safeCurrentTime < fragmentEnd ? "true" : "false"}
-                                    aria-label={`${displayedChord} from ${formatTime(fragmentStart)} to ${formatTime(fragmentEnd)}, confidence ${confidencePercent}%`}
-                                    title={`${displayedChord} confidence ${confidencePercent}%`}
-                                    onClick={(event) => {
-                                        event.stopPropagation();
-                                        onSelectSegment(segmentIndex);
-                                        onSeek(timelineClickTime(event, row.rowStart, row.rowDuration, safeDuration));
-                                    }}
-                                    style={{
-                                        left: `${leftPercent}%`,
-                                        width: `${widthPercent}%`
-                                    }}
-                                >
-                                    {showLabel ? (
-                                        <span className="timeline-segment-label-wrap">
-                                            <span className="timeline-segment-label">{displayedLabel}</span>
-                                            <small>{confidencePercent}%</small>
-                                        </span>
-                                    ) : null}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </section>
-            ))}
-        </div>
-    );
-}
-
-function timelineClickTime(
-    event: MouseEvent<HTMLElement>,
-    rowStart: number,
-    rowDuration: number,
-    durationSeconds: number
-): number {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const width = Math.max(1, rect.width);
-    const offset = Math.max(0, Math.min(event.clientX - rect.left, width));
-    const ratio = offset / width;
-    const target = rowStart + ratio * rowDuration;
-    return Math.max(0, Math.min(target, durationSeconds));
-}
-
-function chordConfidenceLevel(confidence: number): "high" | "medium" | "low" {
-    if (!Number.isFinite(confidence)) {
-        return "low";
-    }
-    if (confidence >= 0.78) {
-        return "high";
-    }
-    if (confidence >= 0.58) {
-        return "medium";
-    }
-    return "low";
-}
-
-function buildTimelineRows(
-    segments: ChordSegment[],
-    safeDuration: number,
-    timelineWidthPx: number,
-    windowSeconds: number
-): TimelineRowLayout[] {
-    if (safeDuration <= 0) {
-        return [];
-    }
-
-    const safeWindow = Number.isFinite(windowSeconds) ? Math.max(1, windowSeconds) : TIMELINE_ROW_WINDOW_SECONDS;
-    const rowCount = Math.max(1, Math.ceil(safeDuration / safeWindow));
-
-    return Array.from({ length: rowCount }, (_, rowIndex) => {
-        const rowStart = rowIndex * safeWindow;
-        const rowEnd = Math.min(safeDuration, rowStart + safeWindow);
-        const rowDuration = Math.max(0, rowEnd - rowStart);
-        const rowSegments = buildRowSegmentLayout(segments, rowStart, rowEnd, rowDuration);
-        const fragments = computeVisibleLabels(rowSegments, timelineWidthPx > 0 ? timelineWidthPx : 960);
-        return {
-            rowIndex,
-            rowStart,
-            rowEnd,
-            rowDuration,
-            fragments
-        };
-    });
-}
-
-function buildRowSegmentLayout(
-    segments: ChordSegment[],
-    rowStart: number,
-    rowEnd: number,
-    rowDuration: number
-): TimelineSegmentLayout[] {
-    if (rowDuration <= 0) {
-        return [];
-    }
-
-    const baseLayout = segments
-        .map((segment, segmentIndex) => {
-            const fragmentStart = Math.max(segment.start, rowStart);
-            const fragmentEnd = Math.min(segment.end, rowEnd);
-            if (fragmentEnd <= fragmentStart) {
-                return null;
-            }
-
-            const leftPercentRaw = ((fragmentStart - rowStart) / rowDuration) * 100;
-            const widthPercentRaw = ((fragmentEnd - fragmentStart) / rowDuration) * 100;
-            const leftPercent = Math.max(0, Math.min(leftPercentRaw, 100));
-            const widthPercent = Math.max(0, Math.min(widthPercentRaw, 100 - leftPercent));
-            return {
-                segment,
-                segmentIndex,
-                fragmentStart,
-                fragmentEnd,
-                leftPercent,
-                widthPercent,
-                showLabel: false,
-                labelText: ""
-            };
-        })
-        .filter((item): item is TimelineSegmentLayout => item !== null);
-
-    return baseLayout;
-}
-
-function computeVisibleLabels(layout: TimelineSegmentLayout[], timelineWidthPx: number): TimelineSegmentLayout[] {
-    let lastLabelRightEdgePx = -Infinity;
-
-    return layout.map((item) => {
-        const fullLabel = item.segment.chord.trim();
-        if (!fullLabel) {
-            return {
-                ...item,
-                showLabel: false,
-                labelText: ""
-            };
-        }
-
-        const compactLabel = toCompactChordLabel(fullLabel);
-        const minimalLabel = toMinimalChordLabel(fullLabel);
-        const candidateLabels = [fullLabel, compactLabel, minimalLabel].filter(
-            (label, index, labels) => label.length > 0 && labels.indexOf(label) === index
-        );
-        const leftPx = (item.leftPercent / 100) * timelineWidthPx;
-        const widthPx = (item.widthPercent / 100) * timelineWidthPx;
-
-        for (const labelText of candidateLabels) {
-            const labelWidthPx = estimateLabelWidthPx(labelText);
-            const innerPaddingPx = 2;
-            if (widthPx < labelWidthPx + innerPaddingPx) {
-                continue;
-            }
-
-            const segmentLeftBoundPx = leftPx + 1;
-            const segmentRightBoundPx = leftPx + widthPx - 1;
-            const centeredLeftPx = leftPx + (widthPx - labelWidthPx) / 2;
-            const labelLeftPx = Math.max(segmentLeftBoundPx, Math.min(centeredLeftPx, segmentRightBoundPx - labelWidthPx));
-            const labelRightPx = labelLeftPx + labelWidthPx;
-
-            if (labelLeftPx < lastLabelRightEdgePx + 1) {
-                continue;
-            }
-
-            lastLabelRightEdgePx = labelRightPx;
-            return {
-                ...item,
-                showLabel: true,
-                labelText
-            };
-        }
-
-        return {
-            ...item,
-            showLabel: false,
-            labelText: ""
-        };
-    });
-}
-
-function estimateLabelWidthPx(chord: string): number {
-	const charCount = chord.length;
-	const compactPaddingPx = 1;
-	const averageCharWidthPx = 5;
-    return compactPaddingPx + charCount * averageCharWidthPx;
-}
-
-function toCompactChordLabel(chord: string): string {
-	if (chord === "N") {
-		return chord;
-	}
-
-	if (chord.endsWith("dim") && chord.length > 3) {
-		return `${chord.slice(0, -3)}°`;
-	}
-
-	if (chord.endsWith("m") && chord.length > 1) {
-		return chord.slice(0, -1);
-	}
-
-    return chord;
-}
-
-function toMinimalChordLabel(chord: string): string {
-	if (chord === "N") {
-		return chord;
-	}
-
-	if (chord.endsWith("dim") && chord.length > 3) {
-		return chord.slice(0, -3)[0] ?? "";
-	}
-
-	const [root] = chord;
-	return root ?? "";
-}
-
-function formatTime(totalSeconds: number): string {
-    const safe = Number.isFinite(totalSeconds) ? Math.max(0, Math.floor(totalSeconds)) : 0;
-    const minutes = Math.floor(safe / 60);
-    const seconds = safe % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
-
-function formatApiHealthLabel(state: ApiHealthState): string {
-    if (state === "connected") {
-        return "API Connected";
-    }
-    if (state === "offline") {
-        return "API Offline";
-    }
-    if (state === "checking") {
-        return "Checking API";
-    }
-    return "Local Mode";
-}
-
-function formatApiJobKind(kind: ApiJobProgressEvent["kind"]): string {
-    if (kind === "analysis") {
-        return "Analyzing";
-    }
-    if (kind === "lyrics") {
-        return "Lyrics";
-    }
-    if (kind === "vocals") {
-        return "Vocal Off";
-    }
-    return "Transpose";
-}
-
-function buildLocalChordSheetExport(
-    artist: string,
-    title: string,
-    durationSeconds: number,
-    segments: ChordSegment[],
-    lyrics: string,
-    transposeSemitones: number
-): string {
-    const lines = [
-        `${artist || "Unknown Artist"} - ${title || "Untitled"}`,
-        `Duration: ${formatPreciseTime(durationSeconds)}`,
-        `Transpose: ${formatTranspose(transposeSemitones)}`,
-        ""
-    ];
-
-    if (lyrics.trim()) {
-        lines.push("Chord Sheet:");
-        lines.push(...buildChordOverLyricLines(parseLyrics(lyrics), segments, transposeSemitones));
-        lines.push("");
-        lines.push("Timeline:");
-    } else {
-        lines.push("Timeline:");
-    }
-
-    lines.push(...segments.map((segment) => (
-        `${formatPreciseTime(segment.start)} - ${formatPreciseTime(segment.end)}  ${transposeChordLabel(segment.chord, transposeSemitones)}`
-    )));
-
-    return `${lines.join("\n")}\n`;
-}
-
-function buildLocalLrcExport(lyrics: string, segments: ChordSegment[], transposeSemitones: number): string {
-    if (lyrics.trim()) {
-        return `${buildChordTaggedLrcLines(parseLyrics(lyrics), segments, transposeSemitones).join("\n")}\n`;
-    }
-    return `${segments.map((segment) => `[${formatPreciseTime(segment.start)}]${transposeChordLabel(segment.chord, transposeSemitones)}`).join("\n")}\n`;
-}
-
-function buildChordOverLyricLines(lines: LyricLine[], segments: ChordSegment[], transposeSemitones: number): string[] {
-    const output: string[] = [];
-    for (const [index, line] of lines.entries()) {
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
-        if (line.time === null) {
-            output.push("");
-            output.push(line.text);
-            continue;
-        }
-        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
-        output.push(renderChordLineAboveLyric(line.text, markers));
-        output.push(line.text);
-    }
-    return output;
-}
-
-function buildChordTaggedLrcLines(lines: LyricLine[], segments: ChordSegment[], transposeSemitones: number): string[] {
-    return lines.map((line, index) => {
-        if (line.time === null) {
-            return line.text;
-        }
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
-        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
-        const chordTags = markers.length > 0 ? `${markers.map((marker) => `[${marker.label}]`).join("")} ` : "";
-        return `[${formatPreciseTime(line.time)}]${chordTags}${line.text}`;
-    });
-}
-
-function renderChordLineAboveLyric(text: string, markers: LyricChordMarker[]): string {
-    if (markers.length === 0) {
-        return "";
-    }
-    const width = Math.max(24, text.length);
-    const chars = Array.from({ length: width }, () => " ");
-    for (const marker of markers) {
-        const position = Math.min(width - 1, Math.max(0, Math.round((marker.left / 100) * Math.max(1, width - 1))));
-        const label = marker.label;
-        for (let index = 0; index < label.length && position + index < chars.length; index += 1) {
-            chars[position + index] = label[index] ?? " ";
-        }
-    }
-    return chars.join("").trimEnd();
-}
-
-function safeDownloadName(value: string): string {
-    const safe = value.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-    return safe || "song";
-}
-
-function formatPreciseTime(totalSeconds: number): string {
-    const safe = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
-    const minutes = Math.floor(safe / 60);
-    const seconds = safe % 60;
-    return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(2).padStart(5, "0")}`;
 }
