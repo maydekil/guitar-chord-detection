@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from statistics import mean, median
 
@@ -20,7 +21,10 @@ from chord_engine.analysis_models import (
 )
 from chord_engine.audio import AudioBuffer, AudioDecodeError, load_audio
 from chord_engine.confidence import calibrate_output_confidence as _calibrate_output_confidence
-from chord_engine.diagnostics import summarize_analysis as _summarize_analysis
+from chord_engine.diagnostics import (
+	_count_chord_transitions,
+	summarize_analysis as _summarize_analysis,
+)
 from chord_engine.detector import (
 	FrameChordPrediction,
 	FrameDetectionError,
@@ -347,6 +351,7 @@ def _run_pipeline(
 			)
 			segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 			segments = _calibrate_output_confidence(segments)
+			detected_segments = segments
 			result = AnalysisResult(
 				version=CONTRACT_VERSION,
 				source=SourceMetadata(
@@ -356,7 +361,7 @@ def _run_pipeline(
 				),
 				analysis=AnalysisMetadata(
 					algorithm=ALGORITHM_ID,
-					chords=segments,
+					chords=detected_segments,
 				),
 			)
 			return PipelineRun(result=result, detected_key=detected_key)
@@ -383,11 +388,31 @@ def _run_pipeline(
 			key_estimate=detected_key if use_key_prior else None,
 			beat_reliable=beat_timing.is_reliable,
 		)
-
-		decoded_regions, decoder_path_score, changed_count = _decode_global_chord_sequence(
+		restored_regions = _restore_short_audio_frame_boundaries(
 			harmonic_regions,
-			detected_key=detected_key if use_key_prior else None,
+			audio_duration=audio.duration,
+			chroma=features.chroma,
+			low_chroma=low_chroma,
+			hop_length=features.hop_length,
+			sample_rate=features.sample_rate,
+			key_estimate=detected_key if use_key_prior else None,
 		)
+		short_frame_fallback_active = (
+			audio.duration <= SHORT_AUDIO_FRAME_FALLBACK_MAX_SECONDS
+			and len(restored_regions) >= len(harmonic_regions)
+			and _short_frame_fallback_is_musical(restored_regions)
+		)
+		harmonic_regions = restored_regions
+
+		if short_frame_fallback_active:
+			decoded_regions = [_with_decoded_winner(region) for region in harmonic_regions]
+			decoder_path_score = 0.0
+			changed_count = 0
+		else:
+			decoded_regions, decoder_path_score, changed_count = _decode_global_chord_sequence(
+				harmonic_regions,
+				detected_key=detected_key if use_key_prior else None,
+			)
 		decoded_regions = _collapse_regions_by_decoded_chord(decoded_regions)
 		decoded_boundaries = [region.start_seconds for region in decoded_regions[1:]] if len(decoded_regions) > 1 else []
 		segments = _regions_to_segments(
@@ -398,7 +423,7 @@ def _run_pipeline(
 		)
 		detected_key = _resolve_relative_key_context(segments, detected_key)
 		correction_events: list[CorrectionEvent] = []
-		if use_context_correction:
+		if use_context_correction and audio.duration >= FULL_SONG_CONTEXT_CORRECTION_MIN_SECONDS:
 			segments, correction_events = _apply_context_aware_short_segment_correction(
 				segments,
 				detected_key=detected_key,
@@ -466,10 +491,14 @@ def _run_pipeline(
 			segments, playable_events = _apply_playable_progression_refinement(
 				segments,
 				detected_key=detected_key,
+				chroma=features.chroma,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
 			)
 			correction_events.extend(playable_events)
 		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 		segments = _calibrate_output_confidence(segments)
+		detected_segments = segments
 
 		result = AnalysisResult(
 			version=CONTRACT_VERSION,
@@ -480,7 +509,7 @@ def _run_pipeline(
 			),
 			analysis=AnalysisMetadata(
 				algorithm=ALGORITHM_ID,
-				chords=segments,
+				chords=detected_segments,
 			),
 		)
 		return PipelineRun(
@@ -533,6 +562,72 @@ def _predict_frames(chroma: object, *, key_estimate: KeyEstimate | None) -> list
 
 
 
+
+
+def _with_decoded_winner(region: MusicalRegionObservation) -> MusicalRegionObservation:
+	best_score = max(region.scores.values()) if region.scores else region.winner_confidence
+	return replace(
+		region,
+		local_best_chord=region.winner_chord,
+		local_best_score=float(best_score),
+		decoded_chord=region.winner_chord,
+	)
+
+
+def _short_frame_fallback_is_musical(regions: list[MusicalRegionObservation]) -> bool:
+	labels = [region.winner_chord for region in regions if region.winner_chord != "N"]
+	if len(set(labels)) <= 1:
+		return False
+	if len(labels) == 3 and labels[0] == labels[2]:
+		return False
+	return True
+
+
+def _restore_short_audio_frame_boundaries(
+	regions: list[MusicalRegionObservation],
+	*,
+	audio_duration: float,
+	chroma: np.ndarray,
+	low_chroma: np.ndarray,
+	hop_length: int,
+	sample_rate: int,
+	key_estimate: KeyEstimate | None,
+) -> list[MusicalRegionObservation]:
+	"""Use frame-consistent regions when short controlled audio collapses genuine changes."""
+	if audio_duration > SHORT_AUDIO_FRAME_FALLBACK_MAX_SECONDS:
+		return regions
+
+	frame_predictions = smooth_frame_predictions(_predict_frames(chroma, key_estimate=key_estimate))
+	frame_segments = segment_frame_predictions(
+		frame_predictions,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+		min_segment_duration_ms=MIN_SEGMENT_DURATION_MS,
+	)
+	frame_segments = _merge_adjacent_same_chord_segments(frame_segments)
+	if len(frame_segments) <= max(1, len(regions)):
+		return regions
+
+	boundaries = [0]
+	for segment in frame_segments[1:]:
+		boundaries.append(int(round((segment.start * sample_rate) / hop_length)))
+	boundaries.append(chroma.shape[1])
+	unique_boundaries = np.array(
+		sorted({int(np.clip(value, 0, chroma.shape[1])) for value in boundaries}),
+		dtype=np.int64,
+	)
+	if unique_boundaries.size < 3:
+		return regions
+
+	return _build_musical_region_observations(
+		frame_predictions,
+		boundaries=unique_boundaries,
+		sample_rate=sample_rate,
+		hop_length=hop_length,
+		chroma=chroma,
+		low_chroma=low_chroma,
+		key_estimate=key_estimate,
+	)
 
 
 def _aggregate_predictions_by_boundaries(

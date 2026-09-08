@@ -26,6 +26,8 @@ class EvalSample:
 	audio_path: Path
 	expected_key: str | None
 	allowed_chords: set[str]
+	expected_anchors: list[tuple[float, str]]
+	min_anchor_accuracy: float | None
 	min_segments: int | None
 	max_segments: int | None
 	min_average_confidence: float
@@ -104,6 +106,7 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 	chord_durations = _chord_duration_histogram(segments)
 	key_estimate = _estimate_major_key(chord_durations)
 	unknown_chords = sorted(chord for chord in chord_durations if sample.allowed_chords and chord not in sample.allowed_chords)
+	anchor_result = _evaluate_expected_anchors(segments, sample.expected_anchors)
 	long_segments = [
 		{
 			"start": round(segment.start, 2),
@@ -131,6 +134,12 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 		failures.append(f"transitions/min {transitions_per_minute:.1f} > max {sample.max_transitions_per_minute:.1f}")
 	if unknown_chords:
 		failures.append(f"outside allowed chord family: {', '.join(unknown_chords)}")
+	if (
+		sample.min_anchor_accuracy is not None
+		and anchor_result["total"] > 0
+		and anchor_result["accuracy"] < sample.min_anchor_accuracy
+	):
+		failures.append(f"anchor accuracy {anchor_result['accuracy']:.3f} < min {sample.min_anchor_accuracy:.3f}")
 
 	result: dict[str, object] = {
 		"name": sample.name,
@@ -146,6 +155,10 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 		"keyEstimate": key_estimate,
 		"topChords": _top_chords(chord_durations),
 		"longSegments": long_segments[:12],
+		"anchorAccuracy": round(anchor_result["accuracy"], 3),
+		"anchorMatches": anchor_result["matches"],
+		"anchorTotal": anchor_result["total"],
+		"anchorMismatches": anchor_result["mismatches"],
 	}
 	baseline_sample = _find_baseline_sample(baseline, sample.name)
 	if baseline_sample:
@@ -190,6 +203,8 @@ def _parse_samples(manifest: dict[str, Any]) -> list[EvalSample]:
 				audio_path=_expand_path(audio_path),
 				expected_key=_optional_str(raw_sample.get("expectedKey")),
 				allowed_chords=allowed_chords,
+				expected_anchors=_parse_expected_anchors(raw_sample.get("expectedAnchors")),
+				min_anchor_accuracy=_optional_float_or_none(raw_sample.get("minAnchorAccuracy")),
 				min_segments=_optional_int(raw_sample.get("minSegments")),
 				max_segments=_optional_int(raw_sample.get("maxSegments")),
 				min_average_confidence=_optional_float(raw_sample.get("minAverageConfidence"), DEFAULT_MIN_AVERAGE_CONFIDENCE),
@@ -241,6 +256,58 @@ def _optional_float(value: Any, default: float) -> float:
 	except (TypeError, ValueError):
 		return default
 	return parsed if parsed == parsed else default
+
+
+def _optional_float_or_none(value: Any) -> float | None:
+	if value is None:
+		return None
+	try:
+		parsed = float(value)
+	except (TypeError, ValueError):
+		return None
+	return parsed if parsed == parsed else None
+
+
+def _parse_expected_anchors(value: Any) -> list[tuple[float, str]]:
+	if not isinstance(value, list):
+		return []
+	anchors: list[tuple[float, str]] = []
+	for item in value:
+		if not isinstance(item, dict):
+			continue
+		try:
+			time = float(item.get("time"))
+		except (TypeError, ValueError):
+			continue
+		chord = str(item.get("chord", "")).strip()
+		if time >= 0.0 and chord:
+			anchors.append((time, chord))
+	return anchors
+
+
+def _evaluate_expected_anchors(segments: list[ChordSegment], anchors: list[tuple[float, str]]) -> dict[str, Any]:
+	mismatches: list[dict[str, object]] = []
+	matches = 0
+	for time, expected in anchors:
+		actual = _label_at_time(segments, time)
+		if actual == expected:
+			matches += 1
+		else:
+			mismatches.append({"time": round(time, 2), "expected": expected, "actual": actual})
+	total = len(anchors)
+	return {
+		"accuracy": 1.0 if total == 0 else matches / total,
+		"matches": matches,
+		"total": total,
+		"mismatches": mismatches[:20],
+	}
+
+
+def _label_at_time(segments: list[ChordSegment], time: float) -> str:
+	for segment in segments:
+		if segment.start <= time < segment.end:
+			return segment.chord
+	return segments[-1].chord if segments else "N"
 
 
 def _chord_duration_histogram(segments: list[ChordSegment]) -> dict[str, float]:
@@ -313,4 +380,3 @@ def _numeric_delta(current: object, baseline: object) -> float | None:
 	if not isinstance(current, (int, float)) or not isinstance(baseline, (int, float)):
 		return None
 	return round(float(current) - float(baseline), 3)
-

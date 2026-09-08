@@ -3,6 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type { SaveSongAnalysisRequest, SongLibraryListResult, SongLibraryRecord } from "@gcd/shared/library";
+import { buildLeadSheetAnalysis } from "@gcd/shared/lyricChordLayout";
 
 import { normalizePage, normalizePageSize, normalizeSearch } from "./queryParams.js";
 import { buildSearchIndex, buildSongId, buildStableFileHash, summarizeAnalysis } from "./songMetadata.js";
@@ -55,26 +56,28 @@ export function saveSong(db: DatabaseSync, request: SaveSongAnalysisRequest, pub
     const fileHash = buildStableFileHash(request.audioPath, request.analysis.source.path);
     const id = buildSongId(fileHash);
     const existing = getSong(db, id);
-    const analysisSummary = summarizeAnalysis(request.analysis);
+    const lyrics = request.lyrics ?? existing?.lyrics ?? "";
+    const playableAnalysis = buildLeadSheetAnalysis(request.analysis, lyrics);
+    const analysisSummary = summarizeAnalysis(playableAnalysis);
     const record: SongLibraryRecord = {
         id,
         title: request.metadata.title.trim(),
         artist: request.metadata.artist.trim(),
         audioPath: request.audioPath,
         audioStreamUrl: `${publicBaseUrl}/songs/${encodeURIComponent(id)}/audio/original/stream`,
-        lyrics: request.lyrics ?? existing?.lyrics,
+        lyrics,
         instrumentalAudioPath: request.instrumentalAudioPath ?? existing?.instrumentalAudioPath,
         instrumentalAudioStreamUrl: request.instrumentalAudioPath || existing?.instrumentalAudioPath
             ? `${publicBaseUrl}/songs/${encodeURIComponent(id)}/audio/instrumental/stream`
             : undefined,
         fileHash,
-        algorithm: request.analysis.analysis.algorithm,
-        contractVersion: request.analysis.version,
-        duration: request.analysis.source.duration,
+        algorithm: playableAnalysis.analysis.algorithm,
+        contractVersion: playableAnalysis.version,
+        duration: playableAnalysis.source.duration,
         chordCount: analysisSummary.chordCount,
         keyEstimate: analysisSummary.keyEstimate ?? undefined,
         averageConfidence: analysisSummary.averageConfidence ?? undefined,
-        analysis: request.analysis,
+        analysis: playableAnalysis,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
     };

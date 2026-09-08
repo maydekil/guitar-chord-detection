@@ -97,21 +97,22 @@ def _estimate_region_root_aware_identity(
 		if is_diminished_label:
 			quality_component = diminished_quality_evidence
 		elif is_minor_label:
-			quality_component = minor_quality_evidence
+			quality_component = _minor_quality_evidence_for_root(energy, root_pc)
 		else:
-			quality_component = major_quality_evidence
-		if is_quality_ambiguous:
+			quality_component = _major_quality_evidence_for_root(energy, root_pc)
+		label_quality_margin = _quality_margin_for_root(energy, root_pc)
+		if label_quality_margin < ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN:
 			quality_component *= 0.55
 		key_context_adjust = 0.0
 		if key_estimate is not None:
 			key_context_adjust = ROOT_AWARE_KEY_CONTEXT_WEIGHT * (_harmonic_plausibility(label, key_estimate) - 0.5)
 			strong_local_quality = bool(
 				root_pc == selected_root_pc
-				and quality_margin >= ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN
+				and label_quality_margin >= ROOT_AWARE_QUALITY_AMBIGUOUS_MARGIN
 				and (
 					(is_diminished_label and (diminished_quality_evidence > major_quality_evidence))
-					or (is_minor_label and (minor_quality_evidence > major_quality_evidence))
-					or ((not is_minor_label and not is_diminished_label) and (major_quality_evidence > minor_quality_evidence))
+					or (is_minor_label and (_minor_quality_evidence_for_root(energy, root_pc) > _major_quality_evidence_for_root(energy, root_pc)))
+					or ((not is_minor_label and not is_diminished_label) and (_major_quality_evidence_for_root(energy, root_pc) > _minor_quality_evidence_for_root(energy, root_pc)))
 				)
 			)
 			template_root_support = bool(template_top_root is not None and root_pc == template_top_root)
@@ -168,6 +169,24 @@ def _normalize_nonnegative(values: np.ndarray) -> np.ndarray:
 			return arr
 		return np.full(arr.shape, 1.0 / arr.size, dtype=np.float32)
 	return arr / total
+
+
+def _major_quality_evidence_for_root(energy: np.ndarray, root_pc: int) -> float:
+	return float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * energy[(root_pc + 4) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((energy[root_pc] + energy[(root_pc + 7) % 12]) / 2.0)
+	)
+
+
+def _minor_quality_evidence_for_root(energy: np.ndarray, root_pc: int) -> float:
+	return float(
+		ROOT_AWARE_QUALITY_THIRD_WEIGHT * energy[(root_pc + 3) % 12]
+		+ ROOT_AWARE_QUALITY_SUPPORT_WEIGHT * ((energy[root_pc] + energy[(root_pc + 7) % 12]) / 2.0)
+	)
+
+
+def _quality_margin_for_root(energy: np.ndarray, root_pc: int) -> float:
+	return abs(_major_quality_evidence_for_root(energy, root_pc) - _minor_quality_evidence_for_root(energy, root_pc))
 
 def _template_score_with_soft_key(
 	frame_vec: np.ndarray,

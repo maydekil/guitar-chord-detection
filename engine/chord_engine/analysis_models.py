@@ -22,6 +22,9 @@ class SourceMetadata:
 class AnalysisMetadata:
     algorithm: str
     chords: list[ChordSegment]
+    detectedChords: list[ChordSegment] | None = None
+    leadSheetChords: list[ChordSegment] | None = None
+    leadSheetSource: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,16 @@ class AnalysisResult:
     analysis: AnalysisMetadata
 
     def to_dict(self) -> dict[str, object]:
+        analysis: dict[str, object] = {
+            "algorithm": self.analysis.algorithm,
+            "chords": _segments_to_dicts(self.analysis.chords),
+        }
+        if self.analysis.detectedChords is not None:
+            analysis["detectedChords"] = _segments_to_dicts(self.analysis.detectedChords)
+        if self.analysis.leadSheetChords is not None:
+            analysis["leadSheetChords"] = _segments_to_dicts(self.analysis.leadSheetChords)
+        if self.analysis.leadSheetSource is not None:
+            analysis["leadSheetSource"] = self.analysis.leadSheetSource
         return {
             "version": self.version,
             "source": {
@@ -38,19 +51,20 @@ class AnalysisResult:
                 "duration": self.source.duration,
                 "sampleRate": self.source.sampleRate,
             },
-            "analysis": {
-                "algorithm": self.analysis.algorithm,
-                "chords": [
-                    {
-                        "start": seg.start,
-                        "end": seg.end,
-                        "chord": seg.chord,
-                        "confidence": seg.confidence,
-                    }
-                    for seg in self.analysis.chords
-                ],
-            },
+            "analysis": analysis,
         }
+
+
+def _segments_to_dicts(segments: list[ChordSegment]) -> list[dict[str, object]]:
+    return [
+        {
+            "start": seg.start,
+            "end": seg.end,
+            "chord": seg.chord,
+            "confidence": seg.confidence,
+        }
+        for seg in segments
+    ]
 
 
 @dataclass(frozen=True)

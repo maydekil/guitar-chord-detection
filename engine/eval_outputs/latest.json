@@ -4,111 +4,197 @@
   "sampleCount": 2,
   "samples": [
     {
-      "algorithm": "chroma-template-v11",
+      "algorithm": "chroma-template-v26",
+      "anchorAccuracy": 0.812,
+      "anchorMatches": 13,
+      "anchorMismatches": [
+        {
+          "actual": "A",
+          "expected": "C#m",
+          "time": 28.0
+        },
+        {
+          "actual": "C#m",
+          "expected": "D",
+          "time": 31.0
+        },
+        {
+          "actual": "F#m",
+          "expected": "E",
+          "time": 68.5
+        }
+      ],
+      "anchorTotal": 16,
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
-      "averageConfidence": 0.68,
+      "averageConfidence": 0.776,
       "duration": 282.68,
       "failures": [],
       "keyEstimate": "A",
-      "longSegments": [],
+      "longSegments": [
+        {
+          "chord": "A",
+          "confidence": 0.815,
+          "duration": 16.28,
+          "end": 129.92,
+          "start": 113.64
+        },
+        {
+          "chord": "A",
+          "confidence": 0.94,
+          "duration": 8.1,
+          "end": 154.29,
+          "start": 146.19
+        },
+        {
+          "chord": "C#m",
+          "confidence": 0.94,
+          "duration": 11.31,
+          "end": 187.25,
+          "start": 175.94
+        }
+      ],
       "lowConfidencePercent": 0.0,
       "name": "Album Lama",
-      "segmentCount": 154,
+      "segmentCount": 77,
       "status": "pass",
       "topChords": [
         {
           "chord": "A",
-          "duration": 82.27,
-          "percentage": 29.1
+          "duration": 76.33,
+          "percentage": 27.0
         },
         {
           "chord": "E",
-          "duration": 57.26,
-          "percentage": 20.26
+          "duration": 64.56,
+          "percentage": 22.84
         },
         {
           "chord": "C#m",
-          "duration": 54.03,
-          "percentage": 19.11
-        },
-        {
-          "chord": "Bm",
-          "duration": 33.23,
-          "percentage": 11.75
+          "duration": 64.37,
+          "percentage": 22.77
         },
         {
           "chord": "D",
-          "duration": 30.53,
-          "percentage": 10.8
+          "duration": 35.55,
+          "percentage": 12.58
+        },
+        {
+          "chord": "Bm",
+          "duration": 29.88,
+          "percentage": 10.57
         },
         {
           "chord": "F#m",
-          "duration": 25.36,
-          "percentage": 8.97
+          "duration": 11.99,
+          "percentage": 4.24
         }
       ],
-      "transitionsPerMinute": 32.47
+      "transitionsPerMinute": 16.13
     },
     {
-      "algorithm": "chroma-template-v11",
+      "algorithm": "chroma-template-v26",
+      "anchorAccuracy": 0.688,
+      "anchorMatches": 11,
+      "anchorMismatches": [
+        {
+          "actual": "Em",
+          "expected": "F",
+          "time": 28.5
+        },
+        {
+          "actual": "C",
+          "expected": "G",
+          "time": 32.5
+        },
+        {
+          "actual": "C",
+          "expected": "Em",
+          "time": 35.5
+        },
+        {
+          "actual": "Em",
+          "expected": "F",
+          "time": 38.5
+        },
+        {
+          "actual": "Em",
+          "expected": "F",
+          "time": 53.5
+        }
+      ],
+      "anchorTotal": 16,
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
-      "averageConfidence": 0.702,
+      "averageConfidence": 0.805,
       "duration": 289.12,
       "failures": [],
       "keyEstimate": "C",
       "longSegments": [
         {
           "chord": "C",
-          "confidence": 0.792,
-          "duration": 9.08,
+          "confidence": 0.845,
+          "duration": 11.42,
           "end": 145.5,
-          "start": 136.42
+          "start": 134.07
         },
         {
           "chord": "C",
-          "confidence": 0.784,
-          "duration": 8.2,
-          "end": 245.83,
-          "start": 237.63
+          "confidence": 0.94,
+          "duration": 12.94,
+          "end": 200.33,
+          "start": 187.39
+        },
+        {
+          "chord": "G",
+          "confidence": 0.907,
+          "duration": 11.95,
+          "end": 212.28,
+          "start": 200.33
+        },
+        {
+          "chord": "C",
+          "confidence": 0.834,
+          "duration": 12.16,
+          "end": 266.54,
+          "start": 254.39
         }
       ],
-      "lowConfidencePercent": 0.65,
+      "lowConfidencePercent": 1.52,
       "name": "Foto Kita Berdua",
-      "segmentCount": 153,
+      "segmentCount": 66,
       "status": "pass",
       "topChords": [
         {
           "chord": "C",
-          "duration": 109.1,
-          "percentage": 37.73
+          "duration": 105.75,
+          "percentage": 36.58
         },
         {
           "chord": "G",
-          "duration": 57.63,
-          "percentage": 19.93
+          "duration": 54.71,
+          "percentage": 18.92
         },
         {
           "chord": "Em",
-          "duration": 51.78,
-          "percentage": 17.91
+          "duration": 54.28,
+          "percentage": 18.77
         },
         {
           "chord": "F",
-          "duration": 39.52,
-          "percentage": 13.67
+          "duration": 53.74,
+          "percentage": 18.59
         },
         {
           "chord": "Am",
-          "duration": 19.34,
-          "percentage": 6.69
+          "duration": 11.15,
+          "percentage": 3.86
         },
         {
           "chord": "Dm",
-          "duration": 11.75,
-          "percentage": 4.06
+          "duration": 9.49,
+          "percentage": 3.28
         }
       ],
-      "transitionsPerMinute": 31.54
+      "transitionsPerMinute": 13.49
     }
   ],
   "status": "pass",

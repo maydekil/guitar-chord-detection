@@ -8,6 +8,7 @@
     "exports": {
         ".": "./src/index.ts",
         "./analysis": "./src/analysis.ts",
+        "./lyricChordLayout": "./src/lyricChordLayout.ts",
         "./library": "./src/library.ts",
         "./lyrics": "./src/lyrics.ts",
         "./vocals": "./src/vocals.ts",

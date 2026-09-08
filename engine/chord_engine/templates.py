@@ -8,11 +8,9 @@ from chord_engine.features import PITCH_CLASS_ORDER
 
 MAJOR_INTERVALS: tuple[int, int, int] = (0, 4, 7)
 MINOR_INTERVALS: tuple[int, int, int] = (0, 3, 7)
-DIMINISHED_INTERVALS: tuple[int, int, int] = (0, 3, 6)
 
 MAJOR_SUFFIX = ""
 MINOR_SUFFIX = "m"
-DIMINISHED_SUFFIX = "dim"
 
 
 def _build_template(root_index: int, intervals: tuple[int, ...]) -> np.ndarray:
@@ -23,7 +21,7 @@ def _build_template(root_index: int, intervals: tuple[int, ...]) -> np.ndarray:
 
 
 def generate_chord_templates() -> dict[str, np.ndarray]:
-	"""Generate major, minor, and diminished triad templates."""
+	"""Generate the public major/minor triad template vocabulary."""
 	templates: dict[str, np.ndarray] = {}
 
 	for root_index, root_name in enumerate(PITCH_CLASS_ORDER):
@@ -33,9 +31,5 @@ def generate_chord_templates() -> dict[str, np.ndarray]:
 	for root_index, root_name in enumerate(PITCH_CLASS_ORDER):
 		minor_name = f"{root_name}{MINOR_SUFFIX}"
 		templates[minor_name] = _build_template(root_index, MINOR_INTERVALS)
-
-	for root_index, root_name in enumerate(PITCH_CLASS_ORDER):
-		diminished_name = f"{root_name}{DIMINISHED_SUFFIX}"
-		templates[diminished_name] = _build_template(root_index, DIMINISHED_INTERVALS)
 
 	return templates

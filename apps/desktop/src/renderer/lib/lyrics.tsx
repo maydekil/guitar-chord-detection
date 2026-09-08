@@ -1,4 +1,5 @@
 import type { ChordSegment } from "@gcd/shared/analysis";
+import { buildLeadSheetLyricChordMarkers, renderChordLineAboveLyric } from "@gcd/shared/lyricChordLayout";
 
 import { transposeChordLabel } from "./chords.js";
 import { formatLrcTime, formatTime } from "./time.js";
@@ -6,11 +7,6 @@ import { formatLrcTime, formatTime } from "./time.js";
 export interface LyricLine {
     time: number | null;
     text: string;
-}
-
-interface LyricChordMarker {
-    label: string;
-    left: number;
 }
 
 export function renderLyricsPreview(
@@ -34,7 +30,7 @@ export function renderLyricsPreview(
                 const isActive = line.time !== null && currentTimeSeconds >= lineStart && currentTimeSeconds < lineEnd;
                 const markers = line.time === null
                     ? []
-                    : buildLyricChordMarkers(segments, lineStart, lineEnd, transposeSemitones);
+                    : buildTransposedLyricChordMarkers(lines, index, segments, lineEnd, transposeSemitones);
                 return (
                     <div
                         key={`${line.time ?? "plain"}-${line.text}-${index}`}
@@ -72,7 +68,7 @@ export function buildChordOverLyricLines(lines: LyricLine[], segments: ChordSegm
             output.push("", line.text);
             continue;
         }
-        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const markers = buildTransposedLyricChordMarkers(lines, index, segments, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
         output.push(renderChordLineAboveLyric(line.text, markers), line.text);
     }
     return output;
@@ -84,7 +80,7 @@ export function buildChordTaggedLrcLines(lines: LyricLine[], segments: ChordSegm
             return line.text;
         }
         const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
-        const markers = buildLyricChordMarkers(segments, line.time, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const markers = buildTransposedLyricChordMarkers(lines, index, segments, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
         const chordTags = markers.length > 0 ? `${markers.map((marker) => `[${marker.label}]`).join("")} ` : "";
         return `[${formatLrcTime(line.time)}]${chordTags}${line.text}`;
     });
@@ -121,48 +117,18 @@ export function autoSyncLyrics(lyrics: string, durationSeconds: number, segments
     return plainLines.map((line, index) => `[${formatLrcTime(times[index] ?? 0)}]${line}`).join("\n");
 }
 
-function buildLyricChordMarkers(
+function buildTransposedLyricChordMarkers(
+    lines: LyricLine[],
+    lineIndex: number,
     segments: ChordSegment[],
-    startTime: number,
     endTime: number,
     transposeSemitones: number,
-): LyricChordMarker[] {
-    const safeEndTime = Math.max(startTime + 0.25, endTime);
-    const windowDuration = safeEndTime - startTime;
-    const markers: LyricChordMarker[] = [];
-    const openingChord = segments.find((segment) => startTime >= segment.start && startTime < segment.end)?.chord;
-    if (openingChord) {
-        markers.push({ label: transposeChordLabel(openingChord, transposeSemitones), left: 0 });
-    }
-    for (const segment of segments) {
-        if (segment.start <= startTime || segment.start >= safeEndTime) {
-            continue;
-        }
-        const label = transposeChordLabel(segment.chord, transposeSemitones);
-        if (markers.at(-1)?.label === label) {
-            continue;
-        }
-        markers.push({
-            label,
-            left: Math.min(92, Math.max(0, ((segment.start - startTime) / windowDuration) * 100)),
-        });
-    }
-    return markers;
-}
-
-function renderChordLineAboveLyric(text: string, markers: LyricChordMarker[]): string {
-    if (markers.length === 0) {
-        return "";
-    }
-    const width = Math.max(24, text.length);
-    const chars = Array.from({ length: width }, () => " ");
-    for (const marker of markers) {
-        const position = Math.min(width - 1, Math.max(0, Math.round((marker.left / 100) * Math.max(1, width - 1))));
-        for (let index = 0; index < marker.label.length && position + index < chars.length; index += 1) {
-            chars[position + index] = marker.label[index] ?? " ";
-        }
-    }
-    return chars.join("").trimEnd();
+){
+    return buildLeadSheetLyricChordMarkers(lines, lineIndex, segments, endTime)
+        .map((marker) => ({
+            ...marker,
+            label: transposeChordLabel(marker.label, transposeSemitones),
+        }));
 }
 
 function extractPlainLyricLines(lyrics: string): string[] {

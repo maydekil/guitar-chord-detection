@@ -53,6 +53,9 @@ export interface AnalysisSource {
 export interface AnalysisMetadata {
     algorithm: string;
     chords: ChordSegment[];
+    detectedChords?: ChordSegment[];
+    leadSheetChords?: ChordSegment[];
+    leadSheetSource?: "lyrics" | "audio";
 }
 
 export interface ChordAnalysisSuccess {

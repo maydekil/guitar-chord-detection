@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
+import { buildLeadSheetAnalysis, buildLeadSheetTimelineFromSegments, buildLeadSheetTimelineSegments, selectPlayableChordSegments } from "@gcd/shared/lyricChordLayout";
 import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -15,7 +16,7 @@ import { toAudioSourceUrl, toFileUrl } from "./lib/audioSources.js";
 import { estimateMajorKey, formatAverageConfidence, formatTranspose, normalizeEditableChord, transposeChordLabel } from "./lib/chords.js";
 import { safeDownloadName, triggerDownload } from "./lib/downloads.js";
 import { buildLocalChordSheetExport, buildLocalLrcExport } from "./lib/exports.js";
-import { autoSyncLyrics } from "./lib/lyrics.js";
+import { autoSyncLyrics, parseLyrics } from "./lib/lyrics.js";
 import { buildSongMetadata, displaySongTitle, normalizeSongLibraryListResult } from "./lib/songLibrary.js";
 import { formatTime } from "./lib/time.js";
 import { usePanelResize } from "./hooks/usePanelResize.js";
@@ -229,7 +230,8 @@ export function App() {
                 ...current,
                 analysis: {
                     ...current.analysis,
-                    chords: normalized
+                    chords: normalized,
+                    leadSheetChords: normalized,
                 }
             }
             : current);
@@ -246,7 +248,8 @@ export function App() {
                 ...current,
                 analysis: {
                     ...current.analysis,
-                    chords: normalized
+                    chords: normalized,
+                    leadSheetChords: normalized,
                 }
             }
             : current);
@@ -257,6 +260,23 @@ export function App() {
         setEditingChord(nextSelectedIndex === null ? "" : normalized[nextSelectedIndex]?.chord ?? "");
         setHasUnsavedChordEdits(true);
     };
+    const effectiveTimelineSegments = useMemo(() => {
+        if (timelineSegments.length === 0) {
+            return timelineSegments;
+        }
+        if (lyricsText.trim()) {
+            const detectedSegments = latestAnalysis?.analysis.detectedChords ?? timelineSegments;
+            const leadSheetSegments = buildLeadSheetTimelineSegments(parseLyrics(lyricsText), detectedSegments, durationSeconds);
+            return leadSheetSegments.length > 0 ? normalizeTimelineSegments(leadSheetSegments, durationSeconds) : timelineSegments;
+        }
+        if (latestAnalysis?.analysis.leadSheetChords?.length) {
+            return normalizeTimelineSegments(selectPlayableChordSegments(latestAnalysis), durationSeconds);
+        }
+        {
+            const leadSheetSegments = buildLeadSheetTimelineFromSegments(timelineSegments, durationSeconds);
+            return leadSheetSegments.length > 0 ? normalizeTimelineSegments(leadSheetSegments, durationSeconds) : timelineSegments;
+        }
+    }, [durationSeconds, latestAnalysis, lyricsText, timelineSegments]);
     const {
         handleSelectTimelineSegment,
         handleApplyEditedChord,
@@ -265,7 +285,7 @@ export function App() {
         handleUndoTimelineEdit,
         handleRedoTimelineEdit,
     } = useTimelineEditor({
-        timelineSegments,
+        timelineSegments: effectiveTimelineSegments,
         selectedSegmentIndex,
         editingChord,
         currentTimeSeconds,
@@ -286,7 +306,7 @@ export function App() {
         viewMode,
         detectorTab,
         currentTimeSeconds,
-        timelineSegments,
+        timelineSegments: effectiveTimelineSegments,
         lyricsText,
         selectedSegmentIndex,
         onClearSelectedSegment: () => {
@@ -601,9 +621,17 @@ export function App() {
             setPendingConfirmation(null);
             return;
         }
+        const analysisToSave: ChordAnalysisSuccess = buildLeadSheetAnalysis({
+            ...latestAnalysis,
+            analysis: {
+                ...latestAnalysis.analysis,
+                detectedChords: latestAnalysis.analysis.detectedChords ?? timelineSegments,
+                chords: effectiveTimelineSegments,
+            },
+        }, lyricsText);
         const savedSong = await bridge.saveSongAnalysis({
             audioPath: selectedFilePath,
-            analysis: latestAnalysis,
+            analysis: analysisToSave,
             metadata,
             lyrics: lyricsText,
             instrumentalAudioPath: instrumentalAudioPath ?? undefined
@@ -635,6 +663,10 @@ export function App() {
         }
         setInstrumentalAudioPath(savedSong.instrumentalAudioPath ?? null);
         setInstrumentalAudioStreamUrl(savedSong.instrumentalAudioStreamUrl ?? null);
+        setLatestAnalysis(savedSong.analysis);
+        const savedTimelineSegments = normalizeTimelineSegments(selectPlayableChordSegments(savedSong.analysis), savedSong.duration);
+        setTimelineSegments(savedTimelineSegments);
+        setAnalysisSegmentCount(savedTimelineSegments.length);
         setSelectedFileName(displaySongTitle(savedSong));
         setIsSaveFormOpen(false);
         setPendingConfirmation(null);
@@ -803,15 +835,15 @@ export function App() {
     const canReanalyze = Boolean(selectedFilePath) && Boolean(bridge?.analyzeAudio);
     const canSaveAnalysis = Boolean(selectedFilePath) && Boolean(latestAnalysis);
     const canCancelApiJob = Boolean(apiJobProgress && (apiJobProgress.status === "queued" || apiJobProgress.status === "running"));
-    const selectedTimelineSegment = selectedSegmentIndex === null ? null : timelineSegments[selectedSegmentIndex] ?? null;
+    const selectedTimelineSegment = selectedSegmentIndex === null ? null : effectiveTimelineSegments[selectedSegmentIndex] ?? null;
     const canUndoTimelineEdit = timelineUndoStack.length > 0;
     const canRedoTimelineEdit = timelineRedoStack.length > 0;
     const exportPreviewContent = exportPreviewFormat === null
         ? ""
         : exportPreviewFormat === "lrc"
-            ? buildLocalLrcExport(lyricsText, timelineSegments, transposeSemitones)
-            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, timelineSegments, lyricsText, transposeSemitones);
-    const activeChord = findActiveChord(timelineSegments, currentTimeSeconds);
+            ? buildLocalLrcExport(lyricsText, effectiveTimelineSegments, transposeSemitones)
+            : buildLocalChordSheetExport(songArtist, songTitle, durationSeconds, effectiveTimelineSegments, lyricsText, transposeSemitones);
+    const activeChord = findActiveChord(effectiveTimelineSegments, currentTimeSeconds);
     const activeChordLabel = activeChord ? transposeChordLabel(activeChord, transposeSemitones) : "None";
     return (
         <main className="shell" data-state={state}>
@@ -886,7 +918,7 @@ export function App() {
                     isTransposeKeyOnly={isTransposeKeyOnly}
                     isPitchShiftingAudio={isPitchShiftingAudio}
                     detectorTab={detectorTab}
-                    timelineSegments={timelineSegments}
+                    timelineSegments={effectiveTimelineSegments}
                     timelineWidthPx={timelineWidthPx}
                     selectedSegmentIndex={selectedSegmentIndex}
                     selectedTimelineSegment={selectedTimelineSegment}
@@ -948,7 +980,7 @@ export function App() {
                     title={songTitle}
                     transposeSemitones={transposeSemitones}
                     content={exportPreviewContent}
-                    chordSegmentCount={timelineSegments.length}
+                    chordSegmentCount={effectiveTimelineSegments.length}
                     hasLyrics={Boolean(lyricsText.trim())}
                     onDownload={(format) => void handleExportSong(format)}
                     onClose={() => setExportPreviewFormat(null)}
