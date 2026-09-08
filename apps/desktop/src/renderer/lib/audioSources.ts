@@ -1,7 +1,8 @@
 export function toFileUrl(localPath: string): string {
     const normalizedPath = localPath.replace(/\\/g, "/");
     const withLeadingSlash = normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
-    return `file://${encodeURI(withLeadingSlash)}`;
+    const encodedPath = withLeadingSlash.split("/").map((part) => encodeURIComponent(part)).join("/");
+    return `file://${encodedPath}`;
 }
 
 export function toAudioSourceUrl(source: { kind?: string; url?: string; bytes?: Uint8Array; mimeType?: string }): string {

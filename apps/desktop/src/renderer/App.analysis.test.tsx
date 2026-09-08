@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildLeadSheetAnalysis } from "@gcd/shared/lyricChordLayout";
 
 import { App } from "./App";
 import { activeChords, openAnalyzerForm, setMediaTiming } from "./testUtils";
@@ -54,7 +55,7 @@ describe("App", () => {
                 algorithm: "chroma-template-v1",
                 chords: []
             }
-        } as const;
+        };
         const analyzeAudio = vi.fn().mockResolvedValue({
             ...analysisResult
         });
@@ -104,7 +105,8 @@ describe("App", () => {
         fireEvent.click(screen.getByRole("button", { name: "Confirm Save" }));
         expect(saveSongAnalysis).toHaveBeenCalledWith({
             audioPath: "/tmp/demo.wav",
-            analysis: analysisResult,
+            analysis: buildLeadSheetAnalysis(analysisResult, ""),
+            instrumentalAudioPath: undefined,
             lyrics: "",
             metadata: {
                 artist: "Demo Artist",

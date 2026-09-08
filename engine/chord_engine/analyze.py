@@ -32,6 +32,10 @@ from chord_engine.detector import (
 	estimate_global_key,
 	predict_frame_chord,
 )
+from chord_engine.external_backends import (
+	ExternalBackendError,
+	analyze_with_essentia,
+)
 from chord_engine.root_aware import (
 	_estimate_region_root_aware_identity,
 	_normalize_nonnegative,
@@ -94,8 +98,15 @@ from chord_engine.templates import generate_chord_templates
 from chord_engine.analysis_config import *  # noqa: F403 - central pipeline tuning constants
 
 
-def analyze_audio(path: str | Path) -> AnalysisResult:
+def analyze_audio(path: str | Path, *, backend: str = "builtin") -> AnalysisResult:
 	"""Run full chord-analysis pipeline and return contract-shaped result."""
+	if backend == "essentia":
+		try:
+			return analyze_with_essentia(path)
+		except ExternalBackendError as exc:
+			raise AnalysisError(code=exc.code, message=exc.message) from exc
+	if backend != "builtin":
+		raise AnalysisError("ANALYSIS_BACKEND_UNSUPPORTED", f"Unsupported analysis backend: {backend}")
 	return analyze_audio_run(path, include_diagnostics=False).result
 
 

@@ -5,6 +5,27 @@ Use this document to record approved deviations, blockers, and technical decisio
 ## Entries
 
 - Phase 0: repository skeleton bootstrap initialized.
+- Optional Essentia backend spike:
+	- Added an explicit `--backend essentia` path for development comparison against the built-in engine.
+	- Built-in `chroma-template-v28` remains the default engine for desktop and CLI analysis.
+	- Essentia is optional metadata only; missing package returns controlled `ESSENTIA_BACKEND_UNAVAILABLE` JSON instead of breaking default analysis.
+	- Optional dependency range uses `essentia>=2.1b6.dev90,<2.1b7` because PyPI publishes the 2.1b6 line as dev wheels rather than a final `2.1b6` release for the tested Python 3.11 environment.
+	- Essentia labels are normalized to the MVP vocabulary (12 major, 12 minor, `N`) before entering the public analysis contract.
+	- Added Essentia-only playable compaction for full-song output: weighted label majority smoothing around a short musical window plus repeated absorption of weak/brief isolated fragments into stronger neighboring chords.
+	- Fixed Essentia pitch-class ordering: repository chroma is canonical `C..B`, while Essentia HPCP chord detection expects `A..G#`; passing C-order directly transposed A-major material toward F#.
+	- License note: Essentia is AGPL-3.0-only upstream, so distribution/commercial packaging needs a licensing decision before making it a production default.
+- Playable lead-sheet arranger spike:
+	- Added a shared lyric-aware arranger that converts current audio chord evidence into a musician-facing phrase timeline when timestamped lyrics are available.
+	- The arranger estimates a major-key family from source chord durations, applies generic pop/guitar functional patterns, treats `[Intro]`, `[Instrumental]`, and `[Outro]` section markers as structural hints, and reuses chord patterns for repeated lyric lines.
+	- The arranger is generic and does not hardcode Album Lama, artist names, local paths, or exact private timestamps/progressions.
+	- Renderer re-analysis now applies the arranger immediately when lyrics are already loaded, so the desktop timeline can be tested without waiting for save/export.
+	- Added short-line lyric mode for denser songs: when timestamped lyric gaps are short or lines-per-minute is high, the arranger uses one chord per lyric line and advances the progression across lines instead of placing two or more chords inside each short line.
+	- Added local adaptive learning profile in the desktop renderer:
+		- saving a song extracts phrase-to-chord-pattern examples from the current editable lead sheet;
+		- learned examples are stored locally in `localStorage` under `gcd.leadSheetLearningProfile.v1`;
+		- subsequent re-analysis applies exact/fuzzy learned phrase patterns before the default pop/guitar grammar;
+		- learning is opportunistic and offline-only, so save/analysis still works if local storage is unavailable.
+	- Original detector output remains preserved in `detectedChords`; arranged output is marked `leadSheetSource: "lyrics"`.
 - Phase 7 Task 7.1A:
 	- Added harmonic-focused preprocessing with deterministic HPSS fallback in feature extraction.
 	- Added beat-synchronous frame-boundary estimation plus deterministic boundary densification to avoid single-region collapse when beat detection is sparse.

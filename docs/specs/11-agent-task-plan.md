@@ -50,6 +50,23 @@ When a detected progression feels wrong on guitar, first check whether the
 musical grid is shifted before adding more chord-label heuristics. Raw segment
 accuracy is not the final goal; musician-facing playable chord timing is.
 
+### Active spike: optional third-party chord backend
+
+Add an explicit optional backend path for comparing a third-party Python chord
+detector against the built-in engine. The first approved spike backend is
+Essentia. It must preserve the public analysis contract, normalize labels to the
+MVP vocabulary, keep the built-in engine as default, and return a controlled
+error when the optional dependency is unavailable.
+
+Allowed scope: `engine/chord_engine/analyze.py`,
+`engine/chord_engine/cli.py`, `engine/chord_engine/external_backends.py`,
+`engine/tests/**`, `engine/pyproject.toml`, relevant specs, and
+`docs/implementation-notes.md`.
+
+Verify default analysis remains unchanged, explicit Essentia backend dispatches
+through the optional adapter, unavailable Essentia fails with controlled JSON,
+and label normalization stays inside the MVP vocabulary.
+
 ---
 
 ## Phase 3 — Task 3.1: Analysis Orchestrator

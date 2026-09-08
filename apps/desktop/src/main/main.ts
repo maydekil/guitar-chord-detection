@@ -89,6 +89,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ANALYSIS_CONTRACT_VERSION = "1";
 const ANALYSIS_ALGORITHM = "chroma-template-v28";
+
+function currentAnalysisAlgorithm(): string {
+    const backend = process.env.GCD_CHORD_BACKEND;
+    return backend && backend !== "builtin" ? `${ANALYSIS_ALGORITHM}:${backend}` : ANALYSIS_ALGORITHM;
+}
 const WINDOW_ICON_PATH = path.resolve(app.getAppPath(), "assets", "otehdekil.ico");
 const DOCK_ICON_PATH = path.resolve(app.getAppPath(), "assets", "otehdekil.png");
 
@@ -176,7 +181,7 @@ function registerIpcHandlers(): void {
         const cache = getAnalysisCache();
         const result = await cache.analyzeWithCache({
             audioPath: normalized.audioPath,
-            algorithm: ANALYSIS_ALGORITHM,
+            algorithm: currentAnalysisAlgorithm(),
             contractVersion: ANALYSIS_CONTRACT_VERSION,
             forceRefresh: normalized.forceRefresh === true,
             analyze: (pathToAnalyze) => analyzeAudioInEngine(pathToAnalyze, { appPath: app.getAppPath() })
@@ -248,7 +253,7 @@ function registerIpcHandlers(): void {
 
         return await getSongLibrary().upsertAnalysis({
             audioPath: request.audioPath,
-            algorithm: ANALYSIS_ALGORITHM,
+            algorithm: currentAnalysisAlgorithm(),
             contractVersion: ANALYSIS_CONTRACT_VERSION,
             analysis: request.analysis,
             metadata,

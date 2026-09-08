@@ -54,6 +54,14 @@ tracker must be kept separate from harmonic analysis-window construction.
 Experimental bar/phrase diagnostics are opt-in and must not trigger a second
 audio analysis during regression evaluation or run on ordinary playback requests.
 
+When the user explicitly enables musician-facing lead-sheet output, shared
+presentation may arrange a separate `analysis.chords` timeline from current
+audio chord evidence plus timestamped lyrics. This arranger must be generic:
+it may use detected key family, section markers, lyric phrase windows, repeated
+lyric text, and soft pop/guitar harmonic grammar, but it must not hardcode a
+song title, local path, artist, exact timestamp list, or private progression.
+The original detector timeline must remain preserved in `detectedChords`.
+
 For further real-song accuracy work, do not tune the final chord labels first.
 The engine must improve the musical foundation in this order:
 
@@ -217,6 +225,23 @@ Guardrails:
 - do not assume chord changes only on bar boundaries;
 - do not hardcode specific song/key/progression/genre;
 - secondary dominants and valid borrowed non-diatonic chords must remain possible outcomes.
+
+### Experimental Subtask — Optional Essentia Backend Spike
+
+Objective: allow a direct third-party Python chord detector to be tested against
+the current built-in engine without replacing the production default.
+
+Rules:
+
+- Essentia backend selection must be explicit, for example CLI `--backend essentia`
+  or an equivalent development environment override.
+- Default analysis remains the repository's built-in deterministic engine.
+- The public JSON contract shape remains unchanged.
+- Output chord labels must be normalized to the MVP vocabulary: 12 major,
+  12 minor, and `N`.
+- Missing optional dependency must return a controlled engine error.
+- Essentia output is an experiment/benchmark source, not proof of accuracy until
+  compared against local ground truth or user-reviewed real-song results.
 
 Benchmark extension requirements:
 

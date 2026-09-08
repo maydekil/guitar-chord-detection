@@ -10,7 +10,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+import chord_engine.cli as cli_module
 from chord_engine.audio import TARGET_SAMPLE_RATE
+from chord_engine.analysis_models import AnalysisMetadata, AnalysisResult, SourceMetadata
 
 
 def _tone(freq: float, duration: float = 1.4, amp: float = 0.45, sr: int = TARGET_SAMPLE_RATE) -> np.ndarray:
@@ -30,6 +32,15 @@ def _write_wav(path: Path, samples: np.ndarray, sr: int = TARGET_SAMPLE_RATE) ->
 def _run_cli(path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "chord_engine.cli", "analyze", str(path)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _run_cli_with_backend(path: Path, backend: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "chord_engine.cli", "analyze", str(path), "--backend", backend],
         text=True,
         capture_output=True,
         check=False,
@@ -71,6 +82,48 @@ def test_cli_wav_success_outputs_valid_json(tmp_path: Path) -> None:
     assert "error" not in payload
     assert "source" in payload
     assert "analysis" in payload
+
+
+def test_cli_backend_flag_is_passed_to_analyzer(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    def fake_analyze(path: str, *, backend: str) -> AnalysisResult:
+        seen["path"] = path
+        seen["backend"] = backend
+        return AnalysisResult("1", SourceMetadata(path, 1.0, 22050), AnalysisMetadata("fake", []))
+
+    monkeypatch.setattr(cli_module, "analyze_audio", fake_analyze)
+    proc = cli_module.main(["analyze", "song.wav", "--backend", "essentia"])
+
+    assert proc == 0
+    assert seen == {"path": "song.wav", "backend": "essentia"}
+
+
+def test_cli_backend_env_is_used_when_flag_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    def fake_analyze(path: str, *, backend: str) -> AnalysisResult:
+        seen["backend"] = backend
+        return AnalysisResult("1", SourceMetadata(path, 1.0, 22050), AnalysisMetadata("fake", []))
+
+    monkeypatch.setenv("GCD_CHORD_BACKEND", "essentia")
+    monkeypatch.setattr(cli_module, "analyze_audio", fake_analyze)
+
+    assert cli_module.main(["analyze", "song.wav"]) == 0
+    assert seen["backend"] == "essentia"
+
+
+def test_cli_essentia_backend_unavailable_returns_controlled_json(tmp_path: Path) -> None:
+    wav = tmp_path / "c_major.wav"
+    _write_wav(wav, _chord([261.63, 329.63, 392.00], duration=1.0))
+
+    proc = _run_cli_with_backend(wav, "essentia")
+
+    if proc.returncode == 0:
+        pytest.skip("Essentia is installed in this environment; unavailable-backend path is not active")
+    payload = _parse_json_stdout(proc.stdout)
+    assert payload["version"] == "1"
+    assert payload["error"]["code"] == "ESSENTIA_BACKEND_UNAVAILABLE"  # type: ignore[index]
 
 
 def test_cli_mp3_success_if_available(tmp_path: Path) -> None:

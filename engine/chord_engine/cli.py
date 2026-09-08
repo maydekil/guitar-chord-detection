@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from chord_engine.analyze import CONTRACT_VERSION, AnalysisError, analyze_audio
 from chord_engine.evaluation import EvaluationError, evaluate_against_ground_truth
+from chord_engine.external_backends import SUPPORTED_EXTERNAL_BACKENDS
 from chord_engine.lyrics import LyricsError, transcribe_lyrics
 from chord_engine.pitch import PitchShiftError, pitch_shift_audio
 from chord_engine.regression import RegressionEvaluationError, evaluate_regression_set
@@ -20,6 +22,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 	analyze_parser = subparsers.add_parser("analyze")
 	analyze_parser.add_argument("path")
+	analyze_parser.add_argument("--backend", choices=SUPPORTED_EXTERNAL_BACKENDS, default=None)
 
 	lyrics_parser = subparsers.add_parser("transcribe-lyrics")
 	lyrics_parser.add_argument("path")
@@ -58,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 	args = parser.parse_args(argv)
 
 	if args.command == "analyze":
-		return _run_analyze(args.path)
+		return _run_analyze(args.path, backend=args.backend)
 	if args.command == "transcribe-lyrics":
 		return _run_transcribe_lyrics(args.path, model_name=args.model)
 	if args.command == "remove-vocals":
@@ -79,9 +82,10 @@ def main(argv: list[str] | None = None) -> int:
 	return 2
 
 
-def _run_analyze(path: str) -> int:
+def _run_analyze(path: str, *, backend: str | None = None) -> int:
 	try:
-		result = analyze_audio(path)
+		selected_backend = backend or os.getenv("GCD_CHORD_BACKEND", "builtin")
+		result = analyze_audio(path, backend=selected_backend)
 		_print_json(result.to_dict())
 		return 0
 	except AnalysisError as exc:

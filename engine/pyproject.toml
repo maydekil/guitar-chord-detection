@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+essentia = ["essentia>=2.1b6.dev90,<2.1b7"]
 lyrics = ["openai-whisper>=20231117"]
 vocals = ["demucs>=4.0.1"]
 

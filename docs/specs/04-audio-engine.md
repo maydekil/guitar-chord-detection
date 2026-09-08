@@ -20,6 +20,17 @@ soundfile
 pydantic
 ```
 
+Optional experimental backend:
+
+```text
+essentia
+```
+
+Essentia may be used only as an explicit alternative analysis backend or
+benchmark comparator. It must not become a hidden dependency of the default
+engine path, and absence of the optional package must produce a controlled
+error when the Essentia backend is explicitly requested.
+
 MP3 decoding dapat menggunakan backend yang tersedia melalui librosa/audioread atau ffmpeg.
 
 ---

@@ -9,6 +9,7 @@
 - `segmentation.py`: predictions to non-overlapping time segments, merge, minimum duration.
 - `models.py`: typed data models/validation; no algorithm dumping.
 - `analyze.py`: orchestration only: audio → features → detector → smoothing → segmentation.
+- `external_backends.py`: optional third-party backend adapters; preserve public API contract; no default-backend side effects.
 - `cli.py`: CLI parsing, JSON stdout, stderr diagnostics, exit codes; no DSP logic.
 - `engine/tests/`: Python engine tests only.
 
