@@ -18,6 +18,7 @@ const NO_LYRIC_PHRASE_SECONDS = 5.6;
 const NO_LYRIC_MIN_PHRASE_SECONDS = 3.2;
 const SECTION_CYCLE_CHORD_COUNT = 4;
 const SECTION_MIN_CHORD_SECONDS = 1.4;
+const SECTION_TARGET_CHORD_SECONDS = 2.8;
 const MUSICAL_START_MIN_STABLE_SECONDS = 2.2;
 const MUSICAL_START_IGNORE_SECONDS = 0.35;
 const SHARP_ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
@@ -100,7 +101,7 @@ export function buildLeadSheetLyricChordMarkers(
         return buildPhraseAwareLyricChordMarkers(segments, line.time, endTime);
     }
     if (isSectionLine(line.text)) {
-        return buildSectionMarkers(line.text, keyPc, Math.max(line.time, musicalStartTime), endTime, segments);
+        return buildSectionMarkers(line.text, keyPc, line.time, endTime, segments, musicalStartTime);
     }
     const vocalIndex = vocalLineIndexInSong(lines, lineIndex);
     if (vocalIndex === null) {
@@ -122,28 +123,54 @@ function buildSectionMarkers(
     startTime: number,
     endTime: number,
     segments: ChordSegment[],
+    musicalStartTime: number,
 ): LyricChordMarker[] {
     const degrees = sectionDegrees(text);
     const duration = Math.max(MIN_LINE_DURATION_SECONDS, endTime - startTime);
     const cycleCount = estimateSectionCycleCount(segments, startTime, endTime);
     const totalChords = Math.max(1, cycleCount * degrees.length);
+    const placementOffset = Math.max(0, Math.min(duration - MIN_LINE_DURATION_SECONDS, musicalStartTime - startTime));
     return Array.from({ length: totalChords }, (_, index) => ({
         label: chordForMajorDegree(keyPc, degrees[index % degrees.length]),
-        left: Math.min(MAX_MARKER_LEFT_PERCENT, (index / totalChords) * 100),
+        left: Math.min(
+            MAX_MARKER_LEFT_PERCENT,
+            ((placementOffset + ((duration - placementOffset) * index) / totalChords) / duration) * 100,
+        ),
     }));
 }
 
 function estimateSectionCycleCount(segments: ChordSegment[], startTime: number, endTime: number): number {
     const duration = Math.max(MIN_LINE_DURATION_SECONDS, endTime - startTime);
     const overlapping = segments.filter((segment) => segment.end > startTime && segment.start < endTime);
+    const countByPattern = estimateRepeatedSectionPatternCount(overlapping);
     const chordStarts = overlapping
         .map((segment) => Math.max(startTime, segment.start))
         .filter((time, index, times) => time > startTime + 0.2 && times.indexOf(time) === index)
         .sort((left, right) => left - right);
     const evidenceCount = Math.max(1, chordStarts.length + 1);
     const countByEvidence = Math.max(1, Math.round(evidenceCount / SECTION_CYCLE_CHORD_COUNT));
+    const countByDuration = Math.max(1, Math.floor(duration / (SECTION_CYCLE_CHORD_COUNT * SECTION_TARGET_CHORD_SECONDS)));
     const maxByDuration = Math.max(1, Math.floor(duration / (SECTION_CYCLE_CHORD_COUNT * SECTION_MIN_CHORD_SECONDS)));
-    return Math.max(1, Math.min(countByEvidence, maxByDuration));
+    return Math.max(1, Math.min(Math.max(countByPattern, countByEvidence, countByDuration), maxByDuration));
+}
+
+function estimateRepeatedSectionPatternCount(overlapping: ChordSegment[]): number {
+    const labels = overlapping
+        .filter((segment) => segment.chord !== "N")
+        .map((segment) => segment.chord);
+    if (labels.length < SECTION_CYCLE_CHORD_COUNT * 2) {
+        return 1;
+    }
+    const pattern = labels.slice(0, SECTION_CYCLE_CHORD_COUNT);
+    let count = 0;
+    for (let index = 0; index + SECTION_CYCLE_CHORD_COUNT <= labels.length; index += SECTION_CYCLE_CHORD_COUNT) {
+        const chunk = labels.slice(index, index + SECTION_CYCLE_CHORD_COUNT);
+        if (chunk.length !== SECTION_CYCLE_CHORD_COUNT || !chunk.every((label, offset) => label === pattern[offset])) {
+            break;
+        }
+        count += 1;
+    }
+    return Math.max(1, count);
 }
 
 export function buildLeadSheetTimelineSegments(
