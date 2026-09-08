@@ -4,7 +4,8 @@
   "sampleCount": 2,
   "samples": [
     {
-      "algorithm": "chroma-template-v26",
+      "algorithm": "chroma-template-v28",
+      "analysisSeconds": 14.257,
       "anchorAccuracy": 0.812,
       "anchorMatches": 13,
       "anchorMismatches": [
@@ -26,24 +27,17 @@
       ],
       "anchorTotal": 16,
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
-      "averageConfidence": 0.776,
+      "averageConfidence": 0.787,
       "duration": 282.68,
       "failures": [],
       "keyEstimate": "A",
       "longSegments": [
         {
           "chord": "A",
-          "confidence": 0.815,
-          "duration": 16.28,
-          "end": 129.92,
-          "start": 113.64
-        },
-        {
-          "chord": "A",
           "confidence": 0.94,
-          "duration": 8.1,
-          "end": 154.29,
-          "start": 146.19
+          "duration": 10.85,
+          "end": 129.92,
+          "start": 119.06
         },
         {
           "chord": "C#m",
@@ -54,19 +48,1865 @@
         }
       ],
       "lowConfidencePercent": 0.0,
+      "musicalTiming": {
+        "barLengthSeconds": 2.786,
+        "barPhraseCandidates": [
+          {
+            "end": 0.789,
+            "start": 0.0,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.371,
+                "key": 1.0,
+                "overlap": 0.97,
+                "score": 0.657,
+                "subwindow": 0.528
+              },
+              {
+                "chord": "E",
+                "chroma": 0.532,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.478,
+                "subwindow": 0.372
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.368,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.393,
+                "subwindow": 0.259
+              },
+              {
+                "chord": "D#",
+                "chroma": 0.732,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.388,
+                "subwindow": 0.533
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.695,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.387,
+                "subwindow": 0.58
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 3.576,
+            "start": 0.789,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.66,
+                "key": 1.0,
+                "overlap": 0.97,
+                "score": 0.823,
+                "subwindow": 0.786
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.539,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.508,
+                "subwindow": 0.478
+              },
+              {
+                "chord": "D",
+                "chroma": 0.571,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.507,
+                "subwindow": 0.436
+              },
+              {
+                "chord": "E",
+                "chroma": 0.526,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.5,
+                "subwindow": 0.468
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.477,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.472,
+                "subwindow": 0.422
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 6.362,
+            "start": 3.576,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.637,
+                "key": 1.0,
+                "overlap": 0.873,
+                "score": 0.795,
+                "subwindow": 0.783
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.593,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.531,
+                "subwindow": 0.499
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.485,
+                "key": 1.0,
+                "overlap": 0.088,
+                "score": 0.519,
+                "subwindow": 0.527
+              },
+              {
+                "chord": "E",
+                "chroma": 0.535,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.492,
+                "subwindow": 0.422
+              },
+              {
+                "chord": "D",
+                "chroma": 0.386,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.417,
+                "subwindow": 0.331
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 9.149,
+            "start": 6.362,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.827,
+                "key": 1.0,
+                "overlap": 0.801,
+                "score": 0.873,
+                "subwindow": 0.89
+              },
+              {
+                "chord": "A",
+                "chroma": 0.749,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.607,
+                "subwindow": 0.587
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.565,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.502,
+                "subwindow": 0.421
+              },
+              {
+                "chord": "E",
+                "chroma": 0.512,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.479,
+                "subwindow": 0.403
+              },
+              {
+                "chord": "D",
+                "chroma": 0.344,
+                "key": 1.0,
+                "overlap": 0.081,
+                "score": 0.473,
+                "subwindow": 0.536
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 11.935,
+            "start": 9.149,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.853,
+                "key": 1.0,
+                "overlap": 0.825,
+                "score": 0.895,
+                "subwindow": 0.924
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.651,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.552,
+                "subwindow": 0.501
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.597,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.533,
+                "subwindow": 0.5
+              },
+              {
+                "chord": "A",
+                "chroma": 0.545,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.519,
+                "subwindow": 0.514
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.371,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.448,
+                "subwindow": 0.469
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 14.721,
+            "start": 11.935,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.768,
+                "key": 1.0,
+                "overlap": 0.9,
+                "score": 0.864,
+                "subwindow": 0.858
+              },
+              {
+                "chord": "A",
+                "chroma": 0.655,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.558,
+                "subwindow": 0.521
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.615,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.525,
+                "subwindow": 0.445
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.68,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.374,
+                "subwindow": 0.55
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.697,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.371,
+                "subwindow": 0.517
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 17.508,
+            "start": 14.721,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.578,
+                "key": 1.0,
+                "overlap": 0.87,
+                "score": 0.746,
+                "subwindow": 0.675
+              },
+              {
+                "chord": "A",
+                "chroma": 0.663,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.584,
+                "subwindow": 0.609
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.569,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.523,
+                "subwindow": 0.496
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.501,
+                "key": 1.0,
+                "overlap": 0.029,
+                "score": 0.501,
+                "subwindow": 0.479
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.402,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.437,
+                "subwindow": 0.387
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 20.294,
+            "start": 17.508,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.876,
+                "key": 1.0,
+                "overlap": 0.863,
+                "score": 0.906,
+                "subwindow": 0.907
+              },
+              {
+                "chord": "A",
+                "chroma": 0.68,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.565,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "E",
+                "chroma": 0.538,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.514,
+                "subwindow": 0.506
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.51,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.478,
+                "subwindow": 0.402
+              },
+              {
+                "chord": "D",
+                "chroma": 0.274,
+                "key": 1.0,
+                "overlap": 0.021,
+                "score": 0.406,
+                "subwindow": 0.416
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 23.081,
+            "start": 20.294,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.651,
+                "key": 1.0,
+                "overlap": 0.752,
+                "score": 0.759,
+                "subwindow": 0.719
+              },
+              {
+                "chord": "A",
+                "chroma": 0.529,
+                "key": 1.0,
+                "overlap": 0.121,
+                "score": 0.56,
+                "subwindow": 0.601
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.565,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.499,
+                "subwindow": 0.411
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.479,
+                "subwindow": 0.441
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.426,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.448,
+                "subwindow": 0.397
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 25.867,
+            "start": 23.081,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.583,
+                "key": 1.0,
+                "overlap": 0.967,
+                "score": 0.782,
+                "subwindow": 0.732
+              },
+              {
+                "chord": "E",
+                "chroma": 0.685,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.57,
+                "subwindow": 0.529
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.533,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.486,
+                "subwindow": 0.404
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.341,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.403,
+                "subwindow": 0.335
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.712,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.381,
+                "subwindow": 0.536
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 28.653,
+            "start": 25.867,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.758,
+                "key": 1.0,
+                "overlap": 0.87,
+                "score": 0.836,
+                "subwindow": 0.788
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.678,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.554,
+                "subwindow": 0.474
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.524,
+                "key": 1.0,
+                "overlap": 0.088,
+                "score": 0.544,
+                "subwindow": 0.571
+              },
+              {
+                "chord": "E",
+                "chroma": 0.514,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.482,
+                "subwindow": 0.413
+              },
+              {
+                "chord": "D",
+                "chroma": 0.466,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.453,
+                "subwindow": 0.366
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 31.44,
+            "start": 28.653,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.797,
+                "key": 1.0,
+                "overlap": 0.877,
+                "score": 0.86,
+                "subwindow": 0.823
+              },
+              {
+                "chord": "A",
+                "chroma": 0.662,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.553,
+                "subwindow": 0.494
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.502,
+                "subwindow": 0.419
+              },
+              {
+                "chord": "E",
+                "chroma": 0.416,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.439,
+                "subwindow": 0.374
+              },
+              {
+                "chord": "C#",
+                "chroma": 0.702,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.385,
+                "subwindow": 0.564
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 34.226,
+            "start": 31.44,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.713,
+                "key": 1.0,
+                "overlap": 0.804,
+                "score": 0.817,
+                "subwindow": 0.821
+              },
+              {
+                "chord": "A",
+                "chroma": 0.635,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.564,
+                "subwindow": 0.571
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.52,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.521,
+                "subwindow": 0.555
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.533,
+                "key": 1.0,
+                "overlap": 0.044,
+                "score": 0.514,
+                "subwindow": 0.478
+              },
+              {
+                "chord": "E",
+                "chroma": 0.487,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.497,
+                "subwindow": 0.506
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 37.013,
+            "start": 34.226,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.725,
+                "key": 1.0,
+                "overlap": 0.667,
+                "score": 0.795,
+                "subwindow": 0.826
+              },
+              {
+                "chord": "D",
+                "chroma": 0.503,
+                "key": 1.0,
+                "overlap": 0.191,
+                "score": 0.571,
+                "subwindow": 0.621
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.62,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.551,
+                "subwindow": 0.537
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.521,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.494,
+                "subwindow": 0.449
+              },
+              {
+                "chord": "E",
+                "chroma": 0.461,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.461,
+                "subwindow": 0.401
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 39.799,
+            "start": 37.013,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.74,
+                "key": 1.0,
+                "overlap": 0.658,
+                "score": 0.779,
+                "subwindow": 0.755
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.551,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.519,
+                "subwindow": 0.508
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.524,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.513,
+                "subwindow": 0.52
+              },
+              {
+                "chord": "A",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.061,
+                "score": 0.507,
+                "subwindow": 0.393
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.434,
+                "key": 1.0,
+                "overlap": 0.131,
+                "score": 0.481,
+                "subwindow": 0.411
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 42.585,
+            "start": 39.799,
+            "top": [
+              {
+                "chord": "F#m",
+                "chroma": 0.624,
+                "key": 1.0,
+                "overlap": 0.847,
+                "score": 0.751,
+                "subwindow": 0.652
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.573,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.54,
+                "subwindow": 0.557
+              },
+              {
+                "chord": "A",
+                "chroma": 0.525,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.519,
+                "subwindow": 0.541
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.541,
+                "key": 1.0,
+                "overlap": 0.027,
+                "score": 0.504,
+                "subwindow": 0.441
+              },
+              {
+                "chord": "E",
+                "chroma": 0.515,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.488,
+                "subwindow": 0.433
+              }
+            ],
+            "winner": "F#m"
+          }
+        ],
+        "beatCount": 794,
+        "beatReliable": true,
+        "diagnosticOnly": true,
+        "downbeatPhaseCandidates": [
+          {
+            "downbeat": -1.997,
+            "phase": 1,
+            "score": 30.557,
+            "winners": [
+              "A",
+              "A",
+              "E",
+              "C#m",
+              "D",
+              "A",
+              "E",
+              "C#m"
+            ]
+          },
+          {
+            "downbeat": -1.3,
+            "phase": 2,
+            "score": 25.293,
+            "winners": [
+              "A",
+              "A",
+              "E",
+              "C#m",
+              "D",
+              "A",
+              "E",
+              "C#m"
+            ]
+          },
+          {
+            "downbeat": -2.694,
+            "phase": 0,
+            "score": 22.547,
+            "winners": [
+              "A",
+              "E",
+              "C#m",
+              "D",
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ]
+          },
+          {
+            "downbeat": -0.604,
+            "phase": 3,
+            "score": 20.609,
+            "winners": [
+              "A",
+              "E",
+              "C#m",
+              "D",
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ]
+          }
+        ],
+        "downbeatSeconds": -1.997,
+        "firstBarWindows": [
+          {
+            "end": 0.789,
+            "start": 0.0
+          },
+          {
+            "end": 3.576,
+            "start": 0.789
+          },
+          {
+            "end": 6.362,
+            "start": 3.576
+          },
+          {
+            "end": 9.149,
+            "start": 6.362
+          },
+          {
+            "end": 11.935,
+            "start": 9.149
+          },
+          {
+            "end": 14.721,
+            "start": 11.935
+          },
+          {
+            "end": 17.508,
+            "start": 14.721
+          },
+          {
+            "end": 20.294,
+            "start": 17.508
+          }
+        ],
+        "firstBeatSeconds": 0.093,
+        "firstChordStarts": [
+          {
+            "chord": "A",
+            "time": 0.0
+          },
+          {
+            "chord": "C#m",
+            "time": 6.084
+          },
+          {
+            "chord": "D",
+            "time": 8.893
+          },
+          {
+            "chord": "E",
+            "time": 11.749
+          },
+          {
+            "chord": "C#m",
+            "time": 17.415
+          },
+          {
+            "chord": "D",
+            "time": 20.225
+          },
+          {
+            "chord": "A",
+            "time": 22.732
+          },
+          {
+            "chord": "C#m",
+            "time": 28.375
+          }
+        ],
+        "harmonicStartCandidates": [
+          {
+            "agreement": 0.805,
+            "dominance": 0.495,
+            "end": 0.906,
+            "stable": true,
+            "start": 0.0
+          },
+          {
+            "agreement": 0.786,
+            "dominance": 0.53,
+            "end": 1.161,
+            "stable": true,
+            "start": 0.255
+          },
+          {
+            "agreement": 0.811,
+            "dominance": 0.649,
+            "end": 1.416,
+            "stable": true,
+            "start": 0.511
+          },
+          {
+            "agreement": 0.831,
+            "dominance": 0.6,
+            "end": 1.672,
+            "stable": true,
+            "start": 0.766
+          },
+          {
+            "agreement": 0.837,
+            "dominance": 0.455,
+            "end": 1.927,
+            "stable": true,
+            "start": 1.022
+          },
+          {
+            "agreement": 0.798,
+            "dominance": 0.51,
+            "end": 2.183,
+            "stable": true,
+            "start": 1.277
+          },
+          {
+            "agreement": 0.825,
+            "dominance": 0.688,
+            "end": 2.438,
+            "stable": true,
+            "start": 1.533
+          },
+          {
+            "agreement": 0.854,
+            "dominance": 0.693,
+            "end": 2.694,
+            "stable": true,
+            "start": 1.788
+          }
+        ],
+        "initialPickupSeconds": 0.0,
+        "leadSheetBarCandidates": [
+          {
+            "end": 0.789,
+            "start": 0.0,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.371,
+                "key": 1.0,
+                "overlap": 0.97,
+                "score": 0.617,
+                "subwindow": 0.528
+              },
+              {
+                "chord": "E",
+                "chroma": 0.532,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.531,
+                "subwindow": 0.372
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.695,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.443,
+                "subwindow": 0.58
+              },
+              {
+                "chord": "D#",
+                "chroma": 0.732,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.437,
+                "subwindow": 0.533
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.368,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.436,
+                "subwindow": 0.259
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 3.576,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 0.789,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.66,
+                "key": 1.0,
+                "overlap": 0.97,
+                "score": 0.808,
+                "subwindow": 0.786
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.539,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.574,
+                "subwindow": 0.478
+              },
+              {
+                "chord": "D",
+                "chroma": 0.571,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.568,
+                "subwindow": 0.436
+              },
+              {
+                "chord": "E",
+                "chroma": 0.526,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.566,
+                "subwindow": 0.468
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.477,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.533,
+                "subwindow": 0.422
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 6.362,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "rawWinner": "A",
+            "start": 3.576,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.637,
+                "key": 1.0,
+                "overlap": 0.873,
+                "score": 0.791,
+                "subwindow": 0.783
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.593,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.599,
+                "subwindow": 0.499
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.485,
+                "key": 1.0,
+                "overlap": 0.088,
+                "score": 0.582,
+                "subwindow": 0.527
+              },
+              {
+                "chord": "E",
+                "chroma": 0.535,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.552,
+                "subwindow": 0.422
+              },
+              {
+                "chord": "D",
+                "chroma": 0.386,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.469,
+                "subwindow": 0.331
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 9.149,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 6.362,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.827,
+                "key": 1.0,
+                "overlap": 0.801,
+                "score": 0.887,
+                "subwindow": 0.89
+              },
+              {
+                "chord": "A",
+                "chroma": 0.749,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.683,
+                "subwindow": 0.587
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.565,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.561,
+                "subwindow": 0.421
+              },
+              {
+                "chord": "D",
+                "chroma": 0.344,
+                "key": 1.0,
+                "overlap": 0.081,
+                "score": 0.54,
+                "subwindow": 0.536
+              },
+              {
+                "chord": "E",
+                "chroma": 0.512,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.537,
+                "subwindow": 0.403
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 11.935,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 9.149,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.853,
+                "key": 1.0,
+                "overlap": 0.825,
+                "score": 0.91,
+                "subwindow": 0.924
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.651,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.619,
+                "subwindow": 0.501
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.597,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.601,
+                "subwindow": 0.5
+              },
+              {
+                "chord": "A",
+                "chroma": 0.545,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.59,
+                "subwindow": 0.514
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.371,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.517,
+                "subwindow": 0.469
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 14.721,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "rawWinner": "E",
+            "start": 11.935,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.768,
+                "key": 1.0,
+                "overlap": 0.9,
+                "score": 0.864,
+                "subwindow": 0.858
+              },
+              {
+                "chord": "A",
+                "chroma": 0.655,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.627,
+                "subwindow": 0.521
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.615,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.586,
+                "subwindow": 0.445
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.68,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.427,
+                "subwindow": 0.55
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.697,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.42,
+                "subwindow": 0.517
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 17.508,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 14.721,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.578,
+                "key": 1.0,
+                "overlap": 0.87,
+                "score": 0.731,
+                "subwindow": 0.675
+              },
+              {
+                "chord": "A",
+                "chroma": 0.663,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.663,
+                "subwindow": 0.609
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.569,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.591,
+                "subwindow": 0.496
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.501,
+                "key": 1.0,
+                "overlap": 0.029,
+                "score": 0.565,
+                "subwindow": 0.479
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.402,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.496,
+                "subwindow": 0.387
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 20.294,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 17.508,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.876,
+                "key": 1.0,
+                "overlap": 0.863,
+                "score": 0.914,
+                "subwindow": 0.907
+              },
+              {
+                "chord": "A",
+                "chroma": 0.68,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.633,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "E",
+                "chroma": 0.538,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.584,
+                "subwindow": 0.506
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.51,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.536,
+                "subwindow": 0.402
+              },
+              {
+                "chord": "D",
+                "chroma": 0.274,
+                "key": 1.0,
+                "overlap": 0.021,
+                "score": 0.468,
+                "subwindow": 0.416
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 23.081,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 20.294,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.651,
+                "key": 1.0,
+                "overlap": 0.752,
+                "score": 0.762,
+                "subwindow": 0.719
+              },
+              {
+                "chord": "A",
+                "chroma": 0.529,
+                "key": 1.0,
+                "overlap": 0.121,
+                "score": 0.628,
+                "subwindow": 0.601
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.565,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.557,
+                "subwindow": 0.411
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.542,
+                "subwindow": 0.441
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.426,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.507,
+                "subwindow": 0.397
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 25.867,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 23.081,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.583,
+                "key": 1.0,
+                "overlap": 0.967,
+                "score": 0.762,
+                "subwindow": 0.732
+              },
+              {
+                "chord": "E",
+                "chroma": 0.685,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.64,
+                "subwindow": 0.529
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.533,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.544,
+                "subwindow": 0.404
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.341,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.456,
+                "subwindow": 0.335
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.712,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.431,
+                "subwindow": 0.536
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 28.653,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "rawWinner": "A",
+            "start": 25.867,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.758,
+                "key": 1.0,
+                "overlap": 0.87,
+                "score": 0.831,
+                "subwindow": 0.788
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.678,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.617,
+                "subwindow": 0.474
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.524,
+                "key": 1.0,
+                "overlap": 0.088,
+                "score": 0.612,
+                "subwindow": 0.571
+              },
+              {
+                "chord": "E",
+                "chroma": 0.514,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.541,
+                "subwindow": 0.413
+              },
+              {
+                "chord": "D",
+                "chroma": 0.466,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.508,
+                "subwindow": 0.366
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 31.44,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 28.653,
+            "top": [
+              {
+                "chord": "C#m",
+                "chroma": 0.797,
+                "key": 1.0,
+                "overlap": 0.877,
+                "score": 0.858,
+                "subwindow": 0.823
+              },
+              {
+                "chord": "A",
+                "chroma": 0.662,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.62,
+                "subwindow": 0.494
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.561,
+                "subwindow": 0.419
+              },
+              {
+                "chord": "E",
+                "chroma": 0.416,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.495,
+                "subwindow": 0.374
+              },
+              {
+                "chord": "C#",
+                "chroma": 0.702,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.439,
+                "subwindow": 0.564
+              }
+            ],
+            "winner": "C#m"
+          },
+          {
+            "end": 34.226,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 31.44,
+            "top": [
+              {
+                "chord": "D",
+                "chroma": 0.713,
+                "key": 1.0,
+                "overlap": 0.804,
+                "score": 0.825,
+                "subwindow": 0.821
+              },
+              {
+                "chord": "A",
+                "chroma": 0.635,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.64,
+                "subwindow": 0.571
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.52,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.597,
+                "subwindow": 0.555
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.533,
+                "key": 1.0,
+                "overlap": 0.044,
+                "score": 0.576,
+                "subwindow": 0.478
+              },
+              {
+                "chord": "E",
+                "chroma": 0.487,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.568,
+                "subwindow": 0.506
+              }
+            ],
+            "winner": "D"
+          },
+          {
+            "end": 37.013,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 34.226,
+            "top": [
+              {
+                "chord": "A",
+                "chroma": 0.725,
+                "key": 1.0,
+                "overlap": 0.667,
+                "score": 0.819,
+                "subwindow": 0.826
+              },
+              {
+                "chord": "D",
+                "chroma": 0.503,
+                "key": 1.0,
+                "overlap": 0.191,
+                "score": 0.632,
+                "subwindow": 0.621
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.62,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.623,
+                "subwindow": 0.537
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.521,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.557,
+                "subwindow": 0.449
+              },
+              {
+                "chord": "E",
+                "chroma": 0.461,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.52,
+                "subwindow": 0.401
+              }
+            ],
+            "winner": "A"
+          },
+          {
+            "end": 39.799,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "start": 37.013,
+            "top": [
+              {
+                "chord": "E",
+                "chroma": 0.74,
+                "key": 1.0,
+                "overlap": 0.658,
+                "score": 0.796,
+                "subwindow": 0.755
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.551,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.589,
+                "subwindow": 0.508
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.524,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.585,
+                "subwindow": 0.52
+              },
+              {
+                "chord": "A",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.061,
+                "score": 0.556,
+                "subwindow": 0.393
+              },
+              {
+                "chord": "F#m",
+                "chroma": 0.434,
+                "key": 1.0,
+                "overlap": 0.131,
+                "score": 0.525,
+                "subwindow": 0.411
+              }
+            ],
+            "winner": "E"
+          },
+          {
+            "end": 42.585,
+            "phrasePattern": [
+              "A",
+              "E",
+              "C#m",
+              "D"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.171,
+            "phrasePatternScore": 1.232,
+            "rawWinner": "F#m",
+            "start": 39.799,
+            "top": [
+              {
+                "chord": "F#m",
+                "chroma": 0.624,
+                "key": 1.0,
+                "overlap": 0.847,
+                "score": 0.735,
+                "subwindow": 0.652
+              },
+              {
+                "chord": "C#m",
+                "chroma": 0.573,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.615,
+                "subwindow": 0.557
+              },
+              {
+                "chord": "A",
+                "chroma": 0.525,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.593,
+                "subwindow": 0.541
+              },
+              {
+                "chord": "Bm",
+                "chroma": 0.541,
+                "key": 1.0,
+                "overlap": 0.027,
+                "score": 0.563,
+                "subwindow": 0.441
+              },
+              {
+                "chord": "E",
+                "chroma": 0.515,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.549,
+                "subwindow": 0.433
+              }
+            ],
+            "winner": "C#m"
+          }
+        ],
+        "maxGridAlignmentErrorSeconds": 0.534,
+        "meanGridAlignmentErrorSeconds": 0.282,
+        "musicalStartSeconds": 0.0,
+        "rawBarLengthSeconds": 1.393,
+        "rawTempoBpm": 172.265625,
+        "tempoBpm": 86.1328125,
+        "tempoNormalization": "half-time"
+      },
       "name": "Album Lama",
-      "segmentCount": 77,
+      "segmentCount": 82,
       "status": "pass",
       "topChords": [
         {
           "chord": "A",
-          "duration": 76.33,
-          "percentage": 27.0
-        },
-        {
-          "chord": "E",
-          "duration": 64.56,
-          "percentage": 22.84
+          "duration": 74.87,
+          "percentage": 26.49
         },
         {
           "chord": "C#m",
@@ -74,14 +1914,19 @@
           "percentage": 22.77
         },
         {
-          "chord": "D",
-          "duration": 35.55,
-          "percentage": 12.58
+          "chord": "E",
+          "duration": 58.11,
+          "percentage": 20.56
         },
         {
           "chord": "Bm",
-          "duration": 29.88,
-          "percentage": 10.57
+          "duration": 37.79,
+          "percentage": 13.37
+        },
+        {
+          "chord": "D",
+          "duration": 35.55,
+          "percentage": 12.58
         },
         {
           "chord": "F#m",
@@ -89,10 +1934,11 @@
           "percentage": 4.24
         }
       ],
-      "transitionsPerMinute": 16.13
+      "transitionsPerMinute": 17.19
     },
     {
-      "algorithm": "chroma-template-v26",
+      "algorithm": "chroma-template-v28",
+      "analysisSeconds": 13.333,
       "anchorAccuracy": 0.688,
       "anchorMatches": 11,
       "anchorMismatches": [
@@ -124,7 +1970,7 @@
       ],
       "anchorTotal": 16,
       "audioPath": "/Users/oteh/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
-      "averageConfidence": 0.805,
+      "averageConfidence": 0.812,
       "duration": 289.12,
       "failures": [],
       "keyEstimate": "C",
@@ -144,13 +1990,6 @@
           "start": 187.39
         },
         {
-          "chord": "G",
-          "confidence": 0.907,
-          "duration": 11.95,
-          "end": 212.28,
-          "start": 200.33
-        },
-        {
           "chord": "C",
           "confidence": 0.834,
           "duration": 12.16,
@@ -158,20 +1997,1868 @@
           "start": 254.39
         }
       ],
-      "lowConfidencePercent": 1.52,
+      "lowConfidencePercent": 0.0,
+      "musicalTiming": {
+        "barLengthSeconds": 2.786,
+        "barPhraseCandidates": [
+          {
+            "end": 0.302,
+            "start": 0.0,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.312,
+                "key": 1.0,
+                "overlap": 0.928,
+                "score": 0.626,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "F",
+                "chroma": 0.55,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.496,
+                "subwindow": 0.418
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.431,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.435,
+                "subwindow": 0.341
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.363,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.396,
+                "subwindow": 0.278
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.3,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.373,
+                "subwindow": 0.274
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 3.088,
+            "start": 0.302,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.489,
+                "key": 1.0,
+                "overlap": 0.53,
+                "score": 0.646,
+                "subwindow": 0.668
+              },
+              {
+                "chord": "C",
+                "chroma": 0.543,
+                "key": 1.0,
+                "overlap": 0.394,
+                "score": 0.607,
+                "subwindow": 0.554
+              },
+              {
+                "chord": "G",
+                "chroma": 0.482,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.472,
+                "subwindow": 0.414
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.441,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.448,
+                "subwindow": 0.378
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.433,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.444,
+                "subwindow": 0.372
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 5.875,
+            "start": 3.088,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.577,
+                "key": 1.0,
+                "overlap": 0.923,
+                "score": 0.8,
+                "subwindow": 0.841
+              },
+              {
+                "chord": "C",
+                "chroma": 0.809,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.638,
+                "subwindow": 0.628
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.646,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.541,
+                "subwindow": 0.465
+              },
+              {
+                "chord": "G",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.482,
+                "subwindow": 0.452
+              },
+              {
+                "chord": "F",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.471,
+                "subwindow": 0.41
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 8.661,
+            "start": 5.875,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.842,
+                "key": 1.0,
+                "overlap": 0.853,
+                "score": 0.886,
+                "subwindow": 0.883
+              },
+              {
+                "chord": "C",
+                "chroma": 0.688,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.573,
+                "subwindow": 0.536
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.588,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.528,
+                "subwindow": 0.495
+              },
+              {
+                "chord": "G",
+                "chroma": 0.528,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.507,
+                "subwindow": 0.489
+              },
+              {
+                "chord": "F",
+                "chroma": 0.336,
+                "key": 1.0,
+                "overlap": 0.067,
+                "score": 0.453,
+                "subwindow": 0.483
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 11.447,
+            "start": 8.661,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.76,
+                "key": 1.0,
+                "overlap": 0.891,
+                "score": 0.851,
+                "subwindow": 0.825
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.584,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.514,
+                "subwindow": 0.443
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.496,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.485,
+                "subwindow": 0.449
+              },
+              {
+                "chord": "C",
+                "chroma": 0.468,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.468,
+                "subwindow": 0.42
+              },
+              {
+                "chord": "Fm",
+                "chroma": 0.718,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.389,
+                "subwindow": 0.556
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 14.234,
+            "start": 11.447,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.553,
+                "key": 1.0,
+                "overlap": 0.901,
+                "score": 0.739,
+                "subwindow": 0.656
+              },
+              {
+                "chord": "G",
+                "chroma": 0.749,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.612,
+                "subwindow": 0.606
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.584,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.503,
+                "subwindow": 0.402
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.549,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.49,
+                "subwindow": 0.397
+              },
+              {
+                "chord": "F",
+                "chroma": 0.326,
+                "key": 1.0,
+                "overlap": 0.015,
+                "score": 0.396,
+                "subwindow": 0.317
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 17.02,
+            "start": 14.234,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.85,
+                "key": 1.0,
+                "overlap": 0.917,
+                "score": 0.899,
+                "subwindow": 0.87
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.682,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.561,
+                "subwindow": 0.497
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.618,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.557,
+                "subwindow": 0.564
+              },
+              {
+                "chord": "F",
+                "chroma": 0.523,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.486,
+                "subwindow": 0.416
+              },
+              {
+                "chord": "G",
+                "chroma": 0.458,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.454,
+                "subwindow": 0.376
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 19.807,
+            "start": 17.02,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.853,
+                "key": 1.0,
+                "overlap": 0.89,
+                "score": 0.894,
+                "subwindow": 0.868
+              },
+              {
+                "chord": "C",
+                "chroma": 0.638,
+                "key": 1.0,
+                "overlap": 0.015,
+                "score": 0.555,
+                "subwindow": 0.518
+              },
+              {
+                "chord": "G",
+                "chroma": 0.562,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.528,
+                "subwindow": 0.528
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.463,
+                "subwindow": 0.378
+              },
+              {
+                "chord": "E",
+                "chroma": 0.741,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.398,
+                "subwindow": 0.561
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 22.593,
+            "start": 19.807,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.566,
+                "key": 1.0,
+                "overlap": 0.516,
+                "score": 0.667,
+                "subwindow": 0.658
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.534,
+                "key": 1.0,
+                "overlap": 0.385,
+                "score": 0.582,
+                "subwindow": 0.475
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.658,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.552,
+                "subwindow": 0.493
+              },
+              {
+                "chord": "G",
+                "chroma": 0.578,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.548,
+                "subwindow": 0.583
+              },
+              {
+                "chord": "F",
+                "chroma": 0.569,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.532,
+                "subwindow": 0.534
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 25.379,
+            "start": 22.593,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.804,
+                "key": 1.0,
+                "overlap": 0.658,
+                "score": 0.821,
+                "subwindow": 0.831
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.627,
+                "key": 1.0,
+                "overlap": 0.237,
+                "score": 0.628,
+                "subwindow": 0.646
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.58,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.521,
+                "subwindow": 0.475
+              },
+              {
+                "chord": "G",
+                "chroma": 0.5,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.503,
+                "subwindow": 0.513
+              },
+              {
+                "chord": "F",
+                "chroma": 0.547,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.502,
+                "subwindow": 0.447
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 28.166,
+            "start": 25.379,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.654,
+                "key": 1.0,
+                "overlap": 0.888,
+                "score": 0.797,
+                "subwindow": 0.756
+              },
+              {
+                "chord": "C",
+                "chroma": 0.745,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.591,
+                "subwindow": 0.531
+              },
+              {
+                "chord": "G",
+                "chroma": 0.609,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.542,
+                "subwindow": 0.52
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.532,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.48,
+                "subwindow": 0.382
+              },
+              {
+                "chord": "F",
+                "chroma": 0.447,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.456,
+                "subwindow": 0.401
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 30.952,
+            "start": 28.166,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.771,
+                "key": 1.0,
+                "overlap": 0.13,
+                "score": 0.654,
+                "subwindow": 0.641
+              },
+              {
+                "chord": "F",
+                "chroma": 0.316,
+                "key": 1.0,
+                "overlap": 0.741,
+                "score": 0.587,
+                "subwindow": 0.504
+              },
+              {
+                "chord": "C",
+                "chroma": 0.623,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.538,
+                "subwindow": 0.487
+              },
+              {
+                "chord": "G",
+                "chroma": 0.571,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.516,
+                "subwindow": 0.468
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.491,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.482,
+                "subwindow": 0.443
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 33.739,
+            "start": 30.952,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.665,
+                "key": 1.0,
+                "overlap": 0.39,
+                "score": 0.723,
+                "subwindow": 0.841
+              },
+              {
+                "chord": "C",
+                "chroma": 0.538,
+                "key": 1.0,
+                "overlap": 0.494,
+                "score": 0.662,
+                "subwindow": 0.692
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.742,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.595,
+                "subwindow": 0.549
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.577,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.536,
+                "subwindow": 0.538
+              },
+              {
+                "chord": "G",
+                "chroma": 0.5,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.503,
+                "subwindow": 0.511
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 36.525,
+            "start": 33.739,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.747,
+                "key": 1.0,
+                "overlap": 0.696,
+                "score": 0.809,
+                "subwindow": 0.829
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.696,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.582,
+                "subwindow": 0.558
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.558,
+                "key": 1.0,
+                "overlap": 0.196,
+                "score": 0.566,
+                "subwindow": 0.526
+              },
+              {
+                "chord": "F",
+                "chroma": 0.547,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.499,
+                "subwindow": 0.433
+              },
+              {
+                "chord": "G",
+                "chroma": 0.419,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.434,
+                "subwindow": 0.353
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 39.311,
+            "start": 36.525,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.197,
+                "score": 0.595,
+                "subwindow": 0.625
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.721,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.591,
+                "subwindow": 0.56
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.303,
+                "key": 1.0,
+                "overlap": 0.677,
+                "score": 0.572,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.406,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.441,
+                "subwindow": 0.397
+              },
+              {
+                "chord": "C",
+                "chroma": 0.359,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.407,
+                "subwindow": 0.327
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 42.098,
+            "start": 39.311,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.576,
+                "key": 1.0,
+                "overlap": 0.693,
+                "score": 0.714,
+                "subwindow": 0.69
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.744,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.601,
+                "subwindow": 0.569
+              },
+              {
+                "chord": "C",
+                "chroma": 0.545,
+                "key": 1.0,
+                "overlap": 0.191,
+                "score": 0.569,
+                "subwindow": 0.56
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.606,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.525,
+                "subwindow": 0.46
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.476,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.482,
+                "subwindow": 0.46
+              }
+            ],
+            "winner": "F"
+          }
+        ],
+        "beatCount": 413,
+        "beatReliable": true,
+        "diagnosticOnly": true,
+        "downbeatPhaseCandidates": [
+          {
+            "downbeat": -2.485,
+            "phase": 0,
+            "score": 27.453,
+            "winners": [
+              "C",
+              "Em",
+              "C",
+              "G",
+              "F",
+              "Em",
+              "C",
+              "G"
+            ]
+          },
+          {
+            "downbeat": -0.395,
+            "phase": 3,
+            "score": 22.119,
+            "winners": [
+              "C",
+              "G",
+              "Em",
+              "F",
+              "C",
+              "G",
+              "Em",
+              "F"
+            ]
+          },
+          {
+            "downbeat": -1.091,
+            "phase": 2,
+            "score": 19.992,
+            "winners": [
+              "C",
+              "G",
+              "Em",
+              "F",
+              "C",
+              "G",
+              "Em",
+              "F"
+            ]
+          },
+          {
+            "downbeat": -1.788,
+            "phase": 1,
+            "score": 19.851,
+            "winners": [
+              "C",
+              "Em",
+              "G",
+              "F",
+              "C",
+              "Em",
+              "G",
+              "F"
+            ]
+          }
+        ],
+        "downbeatSeconds": -2.485,
+        "firstBarWindows": [
+          {
+            "end": 0.302,
+            "start": 0.0
+          },
+          {
+            "end": 3.088,
+            "start": 0.302
+          },
+          {
+            "end": 5.875,
+            "start": 3.088
+          },
+          {
+            "end": 8.661,
+            "start": 5.875
+          },
+          {
+            "end": 11.447,
+            "start": 8.661
+          },
+          {
+            "end": 14.234,
+            "start": 11.447
+          },
+          {
+            "end": 17.02,
+            "start": 14.234
+          },
+          {
+            "end": 19.807,
+            "start": 17.02
+          }
+        ],
+        "firstBeatSeconds": 0.302,
+        "firstChordStarts": [
+          {
+            "chord": "C",
+            "time": 0.0
+          },
+          {
+            "chord": "Em",
+            "time": 1.486
+          },
+          {
+            "chord": "F",
+            "time": 8.452
+          },
+          {
+            "chord": "C",
+            "time": 11.494
+          },
+          {
+            "chord": "Em",
+            "time": 17.067
+          },
+          {
+            "chord": "C",
+            "time": 20.991
+          },
+          {
+            "chord": "Em",
+            "time": 24.636
+          },
+          {
+            "chord": "F",
+            "time": 28.573
+          }
+        ],
+        "harmonicStartCandidates": [
+          {
+            "agreement": 0.961,
+            "dominance": 0.619,
+            "end": 0.906,
+            "stable": true,
+            "start": 0.0
+          },
+          {
+            "agreement": 0.922,
+            "dominance": 0.663,
+            "end": 1.161,
+            "stable": true,
+            "start": 0.255
+          },
+          {
+            "agreement": 0.839,
+            "dominance": 0.531,
+            "end": 1.416,
+            "stable": true,
+            "start": 0.511
+          },
+          {
+            "agreement": 0.839,
+            "dominance": 0.422,
+            "end": 1.672,
+            "stable": true,
+            "start": 0.766
+          },
+          {
+            "agreement": 0.822,
+            "dominance": 0.453,
+            "end": 1.927,
+            "stable": true,
+            "start": 1.022
+          },
+          {
+            "agreement": 0.878,
+            "dominance": 0.619,
+            "end": 2.183,
+            "stable": true,
+            "start": 1.277
+          },
+          {
+            "agreement": 0.972,
+            "dominance": 0.704,
+            "end": 2.438,
+            "stable": true,
+            "start": 1.533
+          },
+          {
+            "agreement": 0.94,
+            "dominance": 0.65,
+            "end": 2.694,
+            "stable": true,
+            "start": 1.788
+          }
+        ],
+        "initialPickupSeconds": 0.0,
+        "leadSheetBarCandidates": [
+          {
+            "end": 0.302,
+            "start": 0.0,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.312,
+                "key": 1.0,
+                "overlap": 0.928,
+                "score": 0.59,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "F",
+                "chroma": 0.55,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.555,
+                "subwindow": 0.418
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.431,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.487,
+                "subwindow": 0.341
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.363,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.442,
+                "subwindow": 0.278
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.3,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.42,
+                "subwindow": 0.274
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 3.088,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "start": 0.302,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.489,
+                "key": 1.0,
+                "overlap": 0.53,
+                "score": 0.673,
+                "subwindow": 0.668
+              },
+              {
+                "chord": "C",
+                "chroma": 0.543,
+                "key": 1.0,
+                "overlap": 0.394,
+                "score": 0.636,
+                "subwindow": 0.554
+              },
+              {
+                "chord": "G",
+                "chroma": 0.482,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.532,
+                "subwindow": 0.414
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.441,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.505,
+                "subwindow": 0.378
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.433,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.5,
+                "subwindow": 0.372
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 5.875,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "Em",
+            "start": 3.088,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.577,
+                "key": 1.0,
+                "overlap": 0.923,
+                "score": 0.798,
+                "subwindow": 0.841
+              },
+              {
+                "chord": "C",
+                "chroma": 0.809,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.717,
+                "subwindow": 0.628
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.646,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.604,
+                "subwindow": 0.465
+              },
+              {
+                "chord": "G",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.547,
+                "subwindow": 0.452
+              },
+              {
+                "chord": "F",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.531,
+                "subwindow": 0.41
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 8.661,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "Em",
+            "start": 5.875,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.842,
+                "key": 1.0,
+                "overlap": 0.853,
+                "score": 0.893,
+                "subwindow": 0.883
+              },
+              {
+                "chord": "C",
+                "chroma": 0.688,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.644,
+                "subwindow": 0.536
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.588,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.596,
+                "subwindow": 0.495
+              },
+              {
+                "chord": "G",
+                "chroma": 0.528,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.575,
+                "subwindow": 0.489
+              },
+              {
+                "chord": "F",
+                "chroma": 0.336,
+                "key": 1.0,
+                "overlap": 0.067,
+                "score": 0.516,
+                "subwindow": 0.483
+              }
+            ],
+            "winner": "G"
+          },
+          {
+            "end": 11.447,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "start": 8.661,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.76,
+                "key": 1.0,
+                "overlap": 0.891,
+                "score": 0.848,
+                "subwindow": 0.825
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.584,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.575,
+                "subwindow": 0.443
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.496,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.549,
+                "subwindow": 0.449
+              },
+              {
+                "chord": "C",
+                "chroma": 0.468,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.529,
+                "subwindow": 0.42
+              },
+              {
+                "chord": "Fm",
+                "chroma": 0.718,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.441,
+                "subwindow": 0.556
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 14.234,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "G",
+            "sequenceDecoded": true,
+            "start": 11.447,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.553,
+                "key": 1.0,
+                "overlap": 0.901,
+                "score": 0.718,
+                "subwindow": 0.656
+              },
+              {
+                "chord": "G",
+                "chroma": 0.749,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.69,
+                "subwindow": 0.606
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.584,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.56,
+                "subwindow": 0.402
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.549,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.546,
+                "subwindow": 0.397
+              },
+              {
+                "chord": "Gm",
+                "chroma": 0.716,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.452,
+                "subwindow": 0.586
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 17.02,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "start": 14.234,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.85,
+                "key": 1.0,
+                "overlap": 0.917,
+                "score": 0.896,
+                "subwindow": 0.87
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.618,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.632,
+                "subwindow": 0.564
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.682,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.627,
+                "subwindow": 0.497
+              },
+              {
+                "chord": "F",
+                "chroma": 0.523,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.545,
+                "subwindow": 0.416
+              },
+              {
+                "chord": "G",
+                "chroma": 0.458,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.51,
+                "subwindow": 0.376
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 19.807,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "Em",
+            "start": 17.02,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.853,
+                "key": 1.0,
+                "overlap": 0.89,
+                "score": 0.894,
+                "subwindow": 0.868
+              },
+              {
+                "chord": "C",
+                "chroma": 0.638,
+                "key": 1.0,
+                "overlap": 0.015,
+                "score": 0.622,
+                "subwindow": 0.518
+              },
+              {
+                "chord": "G",
+                "chroma": 0.562,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.6,
+                "subwindow": 0.528
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.484,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.519,
+                "subwindow": 0.378
+              },
+              {
+                "chord": "E",
+                "chroma": 0.741,
+                "key": 0.0,
+                "overlap": 0.0,
+                "score": 0.45,
+                "subwindow": 0.561
+              }
+            ],
+            "winner": "G"
+          },
+          {
+            "end": 22.593,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "C",
+            "sequenceDecoded": true,
+            "start": 19.807,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.566,
+                "key": 1.0,
+                "overlap": 0.516,
+                "score": 0.693,
+                "subwindow": 0.658
+              },
+              {
+                "chord": "G",
+                "chroma": 0.578,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.626,
+                "subwindow": 0.583
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.658,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.618,
+                "subwindow": 0.493
+              },
+              {
+                "chord": "F",
+                "chroma": 0.569,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.605,
+                "subwindow": 0.534
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.534,
+                "key": 1.0,
+                "overlap": 0.385,
+                "score": 0.602,
+                "subwindow": 0.475
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 25.379,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "C",
+            "start": 22.593,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.804,
+                "key": 1.0,
+                "overlap": 0.658,
+                "score": 0.846,
+                "subwindow": 0.831
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.627,
+                "key": 1.0,
+                "overlap": 0.237,
+                "score": 0.685,
+                "subwindow": 0.646
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.58,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.586,
+                "subwindow": 0.475
+              },
+              {
+                "chord": "G",
+                "chroma": 0.5,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.575,
+                "subwindow": 0.513
+              },
+              {
+                "chord": "F",
+                "chroma": 0.547,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.565,
+                "subwindow": 0.447
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 28.166,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "Em",
+            "start": 25.379,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.654,
+                "key": 1.0,
+                "overlap": 0.888,
+                "score": 0.788,
+                "subwindow": 0.756
+              },
+              {
+                "chord": "C",
+                "chroma": 0.745,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.66,
+                "subwindow": 0.531
+              },
+              {
+                "chord": "G",
+                "chroma": 0.609,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.612,
+                "subwindow": 0.52
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.532,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.535,
+                "subwindow": 0.382
+              },
+              {
+                "chord": "F",
+                "chroma": 0.447,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.515,
+                "subwindow": 0.401
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 30.952,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "Em",
+            "start": 28.166,
+            "top": [
+              {
+                "chord": "Em",
+                "chroma": 0.771,
+                "key": 1.0,
+                "overlap": 0.13,
+                "score": 0.72,
+                "subwindow": 0.641
+              },
+              {
+                "chord": "C",
+                "chroma": 0.623,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.604,
+                "subwindow": 0.487
+              },
+              {
+                "chord": "G",
+                "chroma": 0.571,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.581,
+                "subwindow": 0.468
+              },
+              {
+                "chord": "F",
+                "chroma": 0.316,
+                "key": 1.0,
+                "overlap": 0.741,
+                "score": 0.572,
+                "subwindow": 0.504
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.491,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.546,
+                "subwindow": 0.443
+              }
+            ],
+            "winner": "G"
+          },
+          {
+            "end": 33.739,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "start": 30.952,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.665,
+                "key": 1.0,
+                "overlap": 0.39,
+                "score": 0.783,
+                "subwindow": 0.841
+              },
+              {
+                "chord": "C",
+                "chroma": 0.538,
+                "key": 1.0,
+                "overlap": 0.494,
+                "score": 0.695,
+                "subwindow": 0.692
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.742,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.666,
+                "subwindow": 0.549
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.577,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.609,
+                "subwindow": 0.538
+              },
+              {
+                "chord": "G",
+                "chroma": 0.5,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.574,
+                "subwindow": 0.511
+              }
+            ],
+            "winner": "F"
+          },
+          {
+            "end": 36.525,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "C",
+            "start": 33.739,
+            "top": [
+              {
+                "chord": "C",
+                "chroma": 0.747,
+                "key": 1.0,
+                "overlap": 0.696,
+                "score": 0.83,
+                "subwindow": 0.829
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.696,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.655,
+                "subwindow": 0.558
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.558,
+                "key": 1.0,
+                "overlap": 0.196,
+                "score": 0.614,
+                "subwindow": 0.526
+              },
+              {
+                "chord": "F",
+                "chroma": 0.547,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.56,
+                "subwindow": 0.433
+              },
+              {
+                "chord": "G",
+                "chroma": 0.419,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.488,
+                "subwindow": 0.353
+              }
+            ],
+            "winner": "Em"
+          },
+          {
+            "end": 39.311,
+            "phrasePattern": [
+              "Em",
+              "C",
+              "G",
+              "F"
+            ],
+            "phrasePatternDecoded": true,
+            "phrasePatternMargin": 0.103,
+            "phrasePatternScore": 1.167,
+            "rawWinner": "F",
+            "sequenceDecoded": true,
+            "start": 36.525,
+            "top": [
+              {
+                "chord": "Dm",
+                "chroma": 0.721,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.664,
+                "subwindow": 0.56
+              },
+              {
+                "chord": "F",
+                "chroma": 0.567,
+                "key": 1.0,
+                "overlap": 0.197,
+                "score": 0.655,
+                "subwindow": 0.625
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.303,
+                "key": 1.0,
+                "overlap": 0.677,
+                "score": 0.567,
+                "subwindow": 0.515
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.406,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.501,
+                "subwindow": 0.397
+              },
+              {
+                "chord": "C",
+                "chroma": 0.359,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.459,
+                "subwindow": 0.327
+              }
+            ],
+            "winner": "C"
+          },
+          {
+            "end": 42.098,
+            "rawWinner": "F",
+            "sequenceDecoded": true,
+            "start": 39.311,
+            "top": [
+              {
+                "chord": "F",
+                "chroma": 0.576,
+                "key": 1.0,
+                "overlap": 0.693,
+                "score": 0.722,
+                "subwindow": 0.69
+              },
+              {
+                "chord": "Am",
+                "chroma": 0.744,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.674,
+                "subwindow": 0.569
+              },
+              {
+                "chord": "C",
+                "chroma": 0.545,
+                "key": 1.0,
+                "overlap": 0.191,
+                "score": 0.622,
+                "subwindow": 0.56
+              },
+              {
+                "chord": "Em",
+                "chroma": 0.606,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.589,
+                "subwindow": 0.46
+              },
+              {
+                "chord": "Dm",
+                "chroma": 0.476,
+                "key": 1.0,
+                "overlap": 0.0,
+                "score": 0.547,
+                "subwindow": 0.46
+              }
+            ],
+            "winner": "C"
+          }
+        ],
+        "maxGridAlignmentErrorSeconds": 0.534,
+        "meanGridAlignmentErrorSeconds": 0.253,
+        "musicalStartSeconds": 0.0,
+        "rawBarLengthSeconds": 2.786,
+        "rawTempoBpm": 86.1328125,
+        "tempoBpm": 86.1328125,
+        "tempoNormalization": "none"
+      },
       "name": "Foto Kita Berdua",
-      "segmentCount": 66,
+      "segmentCount": 67,
       "status": "pass",
       "topChords": [
         {
           "chord": "C",
-          "duration": 105.75,
-          "percentage": 36.58
-        },
-        {
-          "chord": "G",
-          "duration": 54.71,
-          "percentage": 18.92
+          "duration": 113.21,
+          "percentage": 39.16
         },
         {
           "chord": "Em",
@@ -184,9 +3871,14 @@
           "percentage": 18.59
         },
         {
+          "chord": "G",
+          "duration": 48.74,
+          "percentage": 16.86
+        },
+        {
           "chord": "Am",
-          "duration": 11.15,
-          "percentage": 3.86
+          "duration": 9.66,
+          "percentage": 3.34
         },
         {
           "chord": "Dm",
@@ -194,7 +3886,7 @@
           "percentage": 3.28
         }
       ],
-      "transitionsPerMinute": 13.49
+      "transitionsPerMinute": 13.7
     }
   ],
   "status": "pass",

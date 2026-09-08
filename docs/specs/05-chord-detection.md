@@ -30,6 +30,14 @@ Objective: improve robustness on real full-mix songs while preserving existing s
 
 ### Locked modern engine order
 
+Shared presentation uses `analysis.chords` as the single playable sequence from
+the engine or user edits. Timeline, lyrics, save, and export must not infer keys,
+apply fixed progressions, retime chords from lyric lines, or invent confidence.
+Lyric markers only intersect the source timestamps with each lyric time window.
+Keep `detectedChords` as an original snapshot and `leadSheetChords` as a legacy
+compatibility mirror. Preserve stored timelines, including old manual edits;
+re-analysis explicitly replaces old generated chord arrangements.
+
 Instrumental/intro presentation must preserve the engine's segment labels,
 timestamps, repetitions, no-chord regions, and confidence. Section lyric markers
 only locate those segments within the lyric time window. Do not infer an intro

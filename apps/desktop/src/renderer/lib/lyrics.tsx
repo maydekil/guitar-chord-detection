@@ -1,5 +1,5 @@
 import type { ChordSegment } from "@gcd/shared/analysis";
-import { buildLeadSheetLyricChordMarkers, renderChordLineAboveLyric } from "@gcd/shared/lyricChordLayout";
+import { buildLeadSheetLyricChordMarkers, lyricChordWindowEnd, renderChordLineAboveLyric } from "@gcd/shared/lyricChordLayout";
 
 import { transposeChordLabel } from "./chords.js";
 import { formatLrcTime, formatTime } from "./time.js";
@@ -63,12 +63,11 @@ export function renderLyricsPreview(
 export function buildChordOverLyricLines(lines: LyricLine[], segments: ChordSegment[], transposeSemitones: number): string[] {
     const output: string[] = [];
     for (const [index, line] of lines.entries()) {
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
         if (line.time === null) {
             output.push("", line.text);
             continue;
         }
-        const markers = buildTransposedLyricChordMarkers(lines, index, segments, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const markers = buildTransposedLyricChordMarkers(lines, index, segments, lyricChordWindowEnd(lines, index, segments), transposeSemitones);
         output.push(renderChordLineAboveLyric(line.text, markers), line.text);
     }
     return output;
@@ -79,8 +78,7 @@ export function buildChordTaggedLrcLines(lines: LyricLine[], segments: ChordSegm
         if (line.time === null) {
             return line.text;
         }
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
-        const markers = buildTransposedLyricChordMarkers(lines, index, segments, nextTimedLine?.time ?? line.time + 5, transposeSemitones);
+        const markers = buildTransposedLyricChordMarkers(lines, index, segments, lyricChordWindowEnd(lines, index, segments), transposeSemitones);
         const chordTags = markers.length > 0 ? `${markers.map((marker) => `[${marker.label}]`).join("")} ` : "";
         return `[${formatLrcTime(line.time)}]${chordTags}${line.text}`;
     });

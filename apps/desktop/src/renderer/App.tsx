@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
-import { buildLeadSheetAnalysis, buildLeadSheetTimelineFromSegments, buildLeadSheetTimelineSegments, selectPlayableChordSegments } from "@gcd/shared/lyricChordLayout";
+import { buildLeadSheetAnalysis, selectPlayableChordSegments } from "@gcd/shared/lyricChordLayout";
 import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -260,23 +260,7 @@ export function App() {
         setEditingChord(nextSelectedIndex === null ? "" : normalized[nextSelectedIndex]?.chord ?? "");
         setHasUnsavedChordEdits(true);
     };
-    const effectiveTimelineSegments = useMemo(() => {
-        if (timelineSegments.length === 0) {
-            return timelineSegments;
-        }
-        if (lyricsText.trim()) {
-            const detectedSegments = latestAnalysis?.analysis.detectedChords ?? timelineSegments;
-            const leadSheetSegments = buildLeadSheetTimelineSegments(parseLyrics(lyricsText), detectedSegments, durationSeconds);
-            return leadSheetSegments.length > 0 ? normalizeTimelineSegments(leadSheetSegments, durationSeconds) : timelineSegments;
-        }
-        if (latestAnalysis?.analysis.leadSheetChords?.length) {
-            return normalizeTimelineSegments(selectPlayableChordSegments(latestAnalysis), durationSeconds);
-        }
-        {
-            const leadSheetSegments = buildLeadSheetTimelineFromSegments(timelineSegments, durationSeconds);
-            return leadSheetSegments.length > 0 ? normalizeTimelineSegments(leadSheetSegments, durationSeconds) : timelineSegments;
-        }
-    }, [durationSeconds, latestAnalysis, lyricsText, timelineSegments]);
+    const effectiveTimelineSegments = timelineSegments;
     const {
         handleSelectTimelineSegment,
         handleApplyEditedChord,
@@ -380,7 +364,7 @@ export function App() {
         const segmentCount = normalizedTimelineSegments.length;
         const analysisDuration = Number.isFinite(analysis.source.duration) ? Math.max(0, analysis.source.duration) : 0;
         setState("ready");
-        setLatestAnalysis(analysis);
+        setLatestAnalysis(buildLeadSheetAnalysis(analysis, ""));
         setAnalysisSegmentCount(segmentCount);
         setTimelineSegments(normalizedTimelineSegments);
         setSelectedSegmentIndex(null);
@@ -580,7 +564,7 @@ export function App() {
         }
         const normalizedTimelineSegments = normalizeTimelineSegments(song.analysis.analysis.chords, song.duration);
         setAudioSourceUrl(playbackSourceUrl);
-        setLatestAnalysis(song.analysis);
+        setLatestAnalysis(buildLeadSheetAnalysis(song.analysis, song.lyrics ?? ""));
         setIsSaveFormOpen(false);
         setHasUnsavedChordEdits(false);
             setTimelineUndoStack([]);

@@ -9,6 +9,16 @@ Earlier completed tasks remain governed by feature specs and acceptance criteria
 
 ## Current locked engine roadmap — Musical Timing Foundation First
 
+### Active presentation correction: one playable timeline
+
+Remove chord inference and phrase retiming from shared lyric layout. Use current
+`analysis.chords` throughout desktop rendering, save, and API exports. Preserve
+manual edits and existing stored timelines; use re-analysis to replace legacy
+generated results. Keep the Python analysis contract unchanged. Scope: shared
+layout helpers, desktop state consumption, API/desktop export adapters, and tests.
+Verify lyric/timeline agreement, fast and non-diatonic changes, unchanged timing
+when lyrics change, saved-edit preservation, transpose, and final-line coverage.
+
 ### Active refinement: metrical beat identity and single-run evaluation
 
 Preserve actual tracker beats separately from densified analysis boundaries.

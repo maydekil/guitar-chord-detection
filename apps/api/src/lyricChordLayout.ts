@@ -1,5 +1,5 @@
 import type { SongAnalysis } from "./songTypes.js";
-import { buildLeadSheetLyricChordMarkers, renderChordLineAboveLyric } from "@gcd/shared/lyricChordLayout";
+import { buildLeadSheetLyricChordMarkers, lyricChordWindowEnd, renderChordLineAboveLyric } from "@gcd/shared/lyricChordLayout";
 import { transposeChordLabel } from "./chordTranspose.js";
 import { formatExportTime } from "./exportTime.js";
 import type { LyricLine } from "./lyricsParser.js";
@@ -16,7 +16,6 @@ export function buildChordOverLyricLines(
 ): string[] {
     const output: string[] = [];
     for (const [index, line] of lines.entries()) {
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
         if (line.time === null) {
             output.push("", line.text);
             continue;
@@ -25,7 +24,7 @@ export function buildChordOverLyricLines(
             lines,
             index,
             segments,
-            nextTimedLine?.time ?? line.time + 5,
+            lyricChordWindowEnd(lines, index, segments),
             transposeSemitones,
         );
         output.push(renderChordLineAboveLyric(line.text, markers), line.text);
@@ -42,12 +41,11 @@ export function buildChordTaggedLrcLines(
         if (line.time === null) {
             return line.text;
         }
-        const nextTimedLine = lines.slice(index + 1).find((candidate) => candidate.time !== null);
         const markers = buildLyricChordMarkers(
             lines,
             index,
             segments,
-            nextTimedLine?.time ?? line.time + 5,
+            lyricChordWindowEnd(lines, index, segments),
             transposeSemitones,
         );
         const chordTags = markers.map((marker) => `[${marker.label}]`).join("");
