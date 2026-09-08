@@ -7,6 +7,41 @@ Earlier completed tasks remain governed by feature specs and acceptance criteria
 
 ---
 
+## Current locked engine roadmap — Musical Timing Foundation First
+
+### Active refinement: metrical beat identity and single-run evaluation
+
+Preserve actual tracker beats separately from densified analysis boundaries.
+Only actual beats determine beat count, beat reliability, and bar-phase origins.
+Rhythm tracking may use the full mix; chord evidence remains harmonic-only.
+Expose an internal pipeline-run entry point so regression evaluation collects
+chords and diagnostics in one run. Normal analysis does not compute experimental
+musical-timing diagnostics. Preserve the public JSON contract.
+
+Allowed scope: engine timing/features, analysis orchestration, timing consumers,
+regression evaluator and their tests, algorithm cache identifiers, relevant specs.
+Validate metrical invariance under densification, silent/failed tracker fallback,
+synthetic regressions, and existing real-song anchors without changing targets.
+Stop after at most five tuning/evaluation iterations and report regressions honestly.
+
+Future chord-engine tuning must follow this order unless the user explicitly
+overrides it:
+
+1. Harmonic preprocessing stability.
+2. Tempo and beat timing.
+3. Downbeat/bar phase.
+4. Musical start time/pickup handling.
+5. Phrase and section repetition detection.
+6. Beat/bar/phrase chord evidence scoring.
+7. Playable guitar progression decoding.
+8. Timeline, lyric, and export presentation.
+
+When a detected progression feels wrong on guitar, first check whether the
+musical grid is shifted before adding more chord-label heuristics. Raw segment
+accuracy is not the final goal; musician-facing playable chord timing is.
+
+---
+
 ## Phase 3 — Task 3.1: Analysis Orchestrator
 
 REQUIRED SPECS:

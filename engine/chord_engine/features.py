@@ -82,6 +82,20 @@ class BeatTiming:
 	tempo_bpm: float | None
 	beat_count: int
 	is_reliable: bool
+	beat_frames: np.ndarray | None = None
+
+
+def beat_times_seconds(timing: BeatTiming | None, *, hop_length: int, sample_rate: int) -> list[float]:
+	"""Convert tracker beats, excluding artificial analysis-window subdivisions.
+
+	The None fallback supports older callers that supply an already metrical grid.
+	A present but empty beat_frames array means the tracker found no beats.
+	"""
+	if timing is None:
+		return []
+	frames = timing.beat_frames if timing.beat_frames is not None else timing.boundaries[1:-1]
+	frame_seconds = frame_duration_seconds(hop_length=hop_length, sample_rate=sample_rate)
+	return [float(frame) * frame_seconds for frame in frames]
 
 
 def extract_chroma(
@@ -314,6 +328,7 @@ def estimate_beat_timing(
 			tempo_bpm=None,
 			beat_count=0,
 			is_reliable=False,
+			beat_frames=np.array([], dtype=np.int32),
 		)
 
 	arr = np.asarray(samples, dtype=np.float32)
@@ -323,6 +338,7 @@ def estimate_beat_timing(
 			tempo_bpm=None,
 			beat_count=0,
 			is_reliable=False,
+			beat_frames=np.array([], dtype=np.int32),
 		)
 
 	tempo_bpm: float | None = None
@@ -343,10 +359,10 @@ def estimate_beat_timing(
 	except Exception:
 		beats = np.array([], dtype=np.int32)
 
+	beats = np.unique(beats[(beats >= 0) & (beats < n_frames)])
 	if beats.size == 0:
 		boundaries = np.array([0, n_frames], dtype=np.int32)
 	else:
-		beats = beats[(beats > 0) & (beats < n_frames)]
 		boundaries = np.concatenate((np.array([0], dtype=np.int32), beats, np.array([n_frames], dtype=np.int32)))
 	boundaries = np.unique(boundaries)
 	if boundaries[0] != 0:
@@ -355,9 +371,6 @@ def estimate_beat_timing(
 		boundaries = np.concatenate((boundaries, np.array([n_frames], dtype=np.int32)))
 
 	max_region_frames = max(1, int(round(max_region_seconds * sample_rate / hop_length)))
-	if max_region_frames <= 1:
-		return boundaries.astype(np.int32, copy=False)
-
 	densified: list[int] = [int(boundaries[0])]
 	for left, right in zip(boundaries[:-1], boundaries[1:], strict=False):
 		start = int(left)
@@ -369,7 +382,7 @@ def estimate_beat_timing(
 		densified.append(end)
 
 	boundaries = np.unique(np.asarray(densified, dtype=np.int32))
-	beat_count = int(max(0, boundaries.size - 1))
+	beat_count = int(beats.size)
 	tempo_ok = tempo_bpm is not None and MIN_RELIABLE_TEMPO_BPM <= tempo_bpm <= MAX_RELIABLE_TEMPO_BPM
 	is_reliable = bool(beat_count >= MIN_RELIABLE_BEAT_COUNT and tempo_ok)
 	return BeatTiming(
@@ -377,4 +390,5 @@ def estimate_beat_timing(
 		tempo_bpm=tempo_bpm,
 		beat_count=beat_count,
 		is_reliable=is_reliable,
+		beat_frames=beats,
 	)

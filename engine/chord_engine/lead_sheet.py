@@ -10,11 +10,10 @@ from __future__ import annotations
 import numpy as np
 
 from chord_engine.detector import KeyEstimate
-from chord_engine.features import BeatTiming
+from chord_engine.features import BeatTiming, beat_times_seconds
 from chord_engine.music_theory import _chord_root_pc, _is_diatonic_chord, _root_name_from_pc
 from chord_engine.segment_utils import _merge_adjacent_same_chord_segments
 from chord_engine.segmentation import ChordSegment
-from chord_engine.timebase import frame_duration_seconds
 
 BAR_BEATS = 4
 MIN_BAR_COUNT = 2
@@ -73,6 +72,24 @@ def arrange_audio_lead_sheet(
 	return _merge_adjacent_same_chord_segments(arranged) if arranged else segments
 
 
+def build_bar_windows_for_segments(
+	segments: list[ChordSegment],
+	duration_seconds: float,
+	*,
+	beat_timing: BeatTiming | None,
+	hop_length: int | None,
+	sample_rate: int | None,
+) -> list[tuple[float, float]]:
+	windows = _bar_windows(
+		segments,
+		duration_seconds,
+		beat_timing=beat_timing,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+	)
+	return windows.values if windows.source == "bar" else []
+
+
 class LeadSheetWindows:
 	def __init__(self, values: list[tuple[float, float]], source: str) -> None:
 		self.values = values
@@ -121,14 +138,8 @@ def _first_beat_seconds(
 ) -> float:
 	if beat_timing is None or hop_length is None or sample_rate is None:
 		return 0.0
-	if beat_timing.boundaries.size <= 1:
-		return 0.0
-	frame_seconds = frame_duration_seconds(hop_length=hop_length, sample_rate=sample_rate)
-	for frame in beat_timing.boundaries:
-		value = float(frame) * frame_seconds
-		if value > 0.0:
-			return value
-	return 0.0
+	values = beat_times_seconds(beat_timing, hop_length=hop_length, sample_rate=sample_rate)
+	return values[0] if values else 0.0
 
 
 def _infer_downbeat_phase(segments: list[ChordSegment], *, first_beat: float, beat_interval: float) -> float:

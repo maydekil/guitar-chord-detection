@@ -7,6 +7,7 @@ import pytest
 
 import chord_engine.regression as regression_module
 from chord_engine.analyze import AnalysisMetadata, AnalysisResult, SourceMetadata
+from chord_engine.analysis_models import PipelineRun
 from chord_engine.segmentation import ChordSegment
 
 
@@ -32,8 +33,10 @@ def test_evaluate_regression_set_reports_quality_summary(tmp_path: Path, monkeyp
 		encoding="utf-8",
 	)
 
-	def fake_analyze(_path: str | Path) -> AnalysisResult:
-		return AnalysisResult(
+	calls: list[str | Path] = []
+	def fake_analyze(_path: str | Path) -> PipelineRun:
+		calls.append(_path)
+		analysis = AnalysisResult(
 			version="1",
 			source=SourceMetadata(path=str(audio), duration=12.0, sampleRate=22050),
 			analysis=AnalysisMetadata(
@@ -46,7 +49,9 @@ def test_evaluate_regression_set_reports_quality_summary(tmp_path: Path, monkeyp
 			),
 		)
 
-	monkeypatch.setattr(regression_module, "analyze_audio", fake_analyze)
+		return PipelineRun(result=analysis, detected_key=None, musical_timing={"beatCount": 24})
+
+	monkeypatch.setattr(regression_module, "analyze_audio_run", fake_analyze)
 
 	result = regression_module.evaluate_regression_set(manifest)
 
@@ -56,6 +61,9 @@ def test_evaluate_regression_set_reports_quality_summary(tmp_path: Path, monkeyp
 	assert sample["keyEstimate"] == "A"
 	assert sample["segmentCount"] == 3
 	assert sample["averageConfidence"] == pytest.approx(0.75)
+	assert calls == [audio]
+	assert sample["musicalTiming"] == {"beatCount": 24}
+	assert sample["analysisSeconds"] >= 0.0
 
 
 def test_evaluate_regression_set_flags_missing_audio(tmp_path: Path) -> None:

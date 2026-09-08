@@ -100,6 +100,7 @@ class PipelineRun:
     mean_medium_context_distance: float = 0.0
     accepted_boundary_examples: list[dict[str, object]] | None = None
     rejected_local_only_examples: list[dict[str, object]] | None = None
+    musical_timing: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

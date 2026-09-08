@@ -50,6 +50,9 @@ from chord_engine.analysis_config import (
 	PLAYABLE_LEADSHEET_SPLIT_EDGE_MIN_SECONDS,
 	PLAYABLE_LEADSHEET_SPLIT_MIN_SECONDS,
 	PLAYABLE_LEADSHEET_SPLIT_RATIO,
+	PLAYABLE_INTRO_PICKUP_MAX_SECONDS,
+	PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS,
+	PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS,
 )
 from chord_engine.analysis_models import CorrectionEvent
 from chord_engine.detector import KeyEstimate
@@ -72,6 +75,16 @@ from chord_engine.segmentation import ChordSegment
 from chord_engine.numeric import _cosine_similarity
 from chord_engine.templates import generate_chord_templates
 from chord_engine.timebase import frame_duration_seconds
+
+LONG_SEGMENT_CHROMA_SPLIT_MIN_SECONDS = 7.0
+LONG_SEGMENT_CHROMA_SPLIT_MIN_WINDOW_SECONDS = 1.35
+LONG_SEGMENT_CHROMA_SPLIT_DEFAULT_WINDOW_SECONDS = 2.8
+LONG_SEGMENT_CHROMA_SPLIT_MAX_PARTS = 8
+LONG_SEGMENT_CHROMA_SPLIT_SCORE_MIN = 0.56
+LONG_SEGMENT_CHROMA_SPLIT_MARGIN_MIN = 0.035
+LONG_SEGMENT_CHROMA_SPLIT_ORIGINAL_DELTA_MIN = 0.18
+LONG_SEGMENT_CHROMA_SPLIT_DIATONIC_BONUS = 0.08
+LONG_SEGMENT_CHROMA_SPLIT_CONFIDENCE = 0.82
 
 
 def _apply_playable_progression_refinement(
@@ -113,8 +126,185 @@ def _apply_playable_progression_refinement(
 	events.extend(predominant_events)
 	working, leadsheet_events = _apply_major_leadsheet_continuity(working, detected_key)
 	events.extend(leadsheet_events)
+	working, internal_chroma_events = _split_long_segments_by_internal_chroma(
+		working,
+		detected_key,
+		chroma=chroma,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+	)
+	events.extend(internal_chroma_events)
+	working, intro_events = _anchor_intro_pickup_to_tonic(working, detected_key)
+	events.extend(intro_events)
 
 	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _split_long_segments_by_internal_chroma(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	chroma: np.ndarray | None,
+	hop_length: int | None,
+	sample_rate: int | None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if chroma is None or hop_length is None or sample_rate is None or chroma.ndim != 2 or chroma.shape[0] != 12:
+		return segments, []
+	frame_seconds = frame_duration_seconds(hop_length=hop_length, sample_rate=sample_rate)
+	if frame_seconds <= 0.0:
+		return segments, []
+	target_seconds = _internal_split_target_seconds(segments)
+	refined: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	for idx, segment in enumerate(segments):
+		duration = _segment_duration(segment)
+		if segment.chord == "N" or duration < LONG_SEGMENT_CHROMA_SPLIT_MIN_SECONDS:
+			refined.append(segment)
+			continue
+		pieces = _internal_chroma_split_pieces(
+			segment,
+			detected_key,
+			chroma=chroma,
+			frame_seconds=frame_seconds,
+			target_seconds=target_seconds,
+		)
+		if pieces is None:
+			refined.append(segment)
+			continue
+		refined.extend(pieces)
+		events.append(_event(idx, segment, pieces[0], detected_key, score=0.59))
+	return _merge_adjacent_same_chord_segments(refined), events
+
+
+def _internal_split_target_seconds(segments: list[ChordSegment]) -> float:
+	durations = [
+		_segment_duration(segment)
+		for segment in segments
+		if segment.chord != "N" and 1.2 <= _segment_duration(segment) <= 4.2
+	]
+	if not durations:
+		return LONG_SEGMENT_CHROMA_SPLIT_DEFAULT_WINDOW_SECONDS
+	return float(np.clip(np.median(durations), 1.8, LONG_SEGMENT_CHROMA_SPLIT_DEFAULT_WINDOW_SECONDS))
+
+
+def _internal_chroma_split_pieces(
+	segment: ChordSegment,
+	detected_key: KeyEstimate,
+	*,
+	chroma: np.ndarray,
+	frame_seconds: float,
+	target_seconds: float,
+) -> list[ChordSegment] | None:
+	duration = _segment_duration(segment)
+	parts = int(np.clip(round(duration / target_seconds), 2, LONG_SEGMENT_CHROMA_SPLIT_MAX_PARTS))
+	part_duration = duration / parts
+	if part_duration < LONG_SEGMENT_CHROMA_SPLIT_MIN_WINDOW_SECONDS:
+		return None
+	pieces: list[ChordSegment] = []
+	changed = False
+	for part in range(parts):
+		start = segment.start + (part * part_duration)
+		end = segment.end if part == parts - 1 else start + part_duration
+		best = _best_internal_chroma_chord(
+			segment.chord,
+			detected_key,
+			chroma=chroma,
+			frame_seconds=frame_seconds,
+			start=start,
+			end=end,
+		)
+		if best is None:
+			return None
+		chord, score, margin, original_score = best
+		if chord != segment.chord:
+			if (
+				score < LONG_SEGMENT_CHROMA_SPLIT_SCORE_MIN
+				or margin < LONG_SEGMENT_CHROMA_SPLIT_MARGIN_MIN
+				or score - original_score < LONG_SEGMENT_CHROMA_SPLIT_ORIGINAL_DELTA_MIN
+			):
+				chord = segment.chord
+			else:
+				changed = True
+		pieces.append(
+			ChordSegment(
+				start=start,
+				end=end,
+				chord=chord,
+				confidence=float(np.clip(max(segment.confidence, LONG_SEGMENT_CHROMA_SPLIT_CONFIDENCE), 0.0, 1.0)),
+			)
+		)
+	if not changed:
+		return None
+	return _merge_adjacent_same_chord_segments(pieces)
+
+
+def _best_internal_chroma_chord(
+	original_chord: str,
+	detected_key: KeyEstimate,
+	*,
+	chroma: np.ndarray,
+	frame_seconds: float,
+	start: float,
+	end: float,
+) -> tuple[str, float, float] | None:
+	start_frame = max(0, int(np.floor(start / frame_seconds)))
+	end_frame = min(chroma.shape[1], max(start_frame + 1, int(np.ceil(end / frame_seconds))))
+	if end_frame <= start_frame:
+		return None
+	vector = np.mean(chroma[:, start_frame:end_frame], axis=1)
+	if float(np.linalg.norm(vector)) <= 1e-7:
+		return None
+	templates = generate_chord_templates()
+	scores: list[tuple[str, float]] = []
+	for chord in _diatonic_chord_labels_for_key(detected_key):
+		template = templates.get(chord)
+		if template is None:
+			continue
+		score = _cosine_similarity(vector, template, min_norm=1e-7)
+		if _is_diatonic_chord(chord, detected_key):
+			score += LONG_SEGMENT_CHROMA_SPLIT_DIATONIC_BONUS
+		scores.append((chord, float(score)))
+	if not scores:
+		return None
+	scores.sort(key=lambda item: (-item[1], item[0]))
+	best_score = scores[0][1]
+	second_score = scores[1][1] if len(scores) > 1 else 0.0
+	original_score = dict(scores).get(original_chord, 0.0)
+	return scores[0][0], best_score, best_score - second_score, original_score
+
+
+def _anchor_intro_pickup_to_tonic(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 2:
+		return segments, []
+	first = segments[0]
+	if first.start > 0.15 or first.chord == "N" or _segment_duration(first) > PLAYABLE_INTRO_PICKUP_MAX_SECONDS:
+		return segments, []
+	tonic = _major_degree_chord(detected_key, 0)
+	if first.chord == tonic:
+		return segments, []
+	if _early_tonic_duration(segments, tonic) < PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS:
+		return segments, []
+	replacement = ChordSegment(
+		start=first.start,
+		end=first.end,
+		chord=tonic,
+		confidence=float(np.clip(max(first.confidence, 0.78), 0.0, 1.0)),
+	)
+	working = [replacement, *segments[1:]]
+	return _merge_adjacent_same_chord_segments(working), [_event(0, first, replacement, detected_key, score=0.62)]
+
+
+def _early_tonic_duration(segments: list[ChordSegment], tonic: str) -> float:
+	total = 0.0
+	for segment in segments:
+		if segment.start > PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS:
+			break
+		if segment.chord == tonic:
+			total += max(0.0, min(segment.end, PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS) - segment.start)
+	return total
 
 
 def _decode_phrase_level_playable_progression(

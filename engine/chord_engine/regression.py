@@ -8,9 +8,10 @@ import json
 import os
 from pathlib import Path
 from statistics import mean
+from time import perf_counter
 from typing import Any
 
-from chord_engine.analyze import AnalysisError, analyze_audio
+from chord_engine.analyze import AnalysisError, analyze_audio_run
 from chord_engine.numeric import _safe_pct
 from chord_engine.segmentation import ChordSegment
 
@@ -87,7 +88,10 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 		}
 
 	try:
-		analysis = analyze_audio(sample.audio_path)
+		started = perf_counter()
+		run = analyze_audio_run(sample.audio_path)
+		analysis = run.result
+		analysis_seconds = perf_counter() - started
 	except AnalysisError as exc:
 		return {
 			"name": sample.name,
@@ -95,7 +99,6 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 			"status": "error",
 			"failures": [exc.message],
 		}
-
 	segments = analysis.analysis.chords
 	duration = max(0.0, float(analysis.source.duration))
 	segment_count = len(segments)
@@ -147,6 +150,7 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 		"status": "pass" if not failures else "fail",
 		"failures": failures,
 		"algorithm": analysis.analysis.algorithm,
+		"analysisSeconds": round(analysis_seconds, 3),
 		"duration": round(duration, 2),
 		"segmentCount": segment_count,
 		"transitionsPerMinute": round(transitions_per_minute, 2),
@@ -160,6 +164,9 @@ def _evaluate_sample(sample: EvalSample, *, baseline: dict[str, Any] | None) -> 
 		"anchorTotal": anchor_result["total"],
 		"anchorMismatches": anchor_result["mismatches"],
 	}
+	musical_timing = run.musical_timing
+	if isinstance(musical_timing, dict):
+		result["musicalTiming"] = musical_timing
 	baseline_sample = _find_baseline_sample(baseline, sample.name)
 	if baseline_sample:
 		result["baselineDelta"] = _baseline_delta(result, baseline_sample)

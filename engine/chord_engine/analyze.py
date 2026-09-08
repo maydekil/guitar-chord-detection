@@ -47,6 +47,7 @@ from chord_engine.post_refinement import (
 	_suppress_weak_timeline_fragments,
 )
 from chord_engine.playable_progression import _apply_playable_progression_refinement
+from chord_engine.musical_timing import summarize_musical_timing
 from chord_engine.music_theory import (
 	_chord_root_pc,
 	_diatonic_chord_labels_for_key,
@@ -95,14 +96,24 @@ from chord_engine.analysis_config import *  # noqa: F403 - central pipeline tuni
 
 def analyze_audio(path: str | Path) -> AnalysisResult:
 	"""Run full chord-analysis pipeline and return contract-shaped result."""
-	run = _run_pipeline(
+	return analyze_audio_run(path, include_diagnostics=False).result
+
+
+def analyze_audio_run(path: str | Path, *, include_diagnostics: bool = True) -> PipelineRun:
+	"""Return output and optional diagnostics from one production pipeline run."""
+	return _run_pipeline(
 		path,
 		use_harmonic_preprocessing=True,
 		use_beat_sync=True,
 		use_key_prior=True,
 		use_context_correction=True,
+		include_diagnostics=include_diagnostics,
 	)
-	return run.result
+
+
+def analyze_audio_diagnostics(path: str | Path) -> dict[str, object]:
+	"""Run diagnostic comparison without changing the public analysis contract."""
+	return compare_baseline_vs_improved(path)
 
 
 def compare_baseline_vs_improved(path: str | Path) -> dict[str, object]:
@@ -124,6 +135,8 @@ def compare_baseline_vs_improved(path: str | Path) -> dict[str, object]:
 
 	baseline_summary = _summarize_analysis(baseline.result, baseline.detected_key, baseline.beat_timing)
 	improved_summary = _summarize_analysis(improved.result, improved.detected_key, improved.beat_timing)
+	if improved.musical_timing is not None:
+		improved_summary["musicalTiming"] = improved.musical_timing
 
 	harmonic_regions = improved.region_observations or []
 	harmonic_region_durations = [obs.duration_seconds for obs in harmonic_regions]
@@ -330,6 +343,7 @@ def _run_pipeline(
 	use_beat_sync: bool,
 	use_key_prior: bool,
 	use_context_correction: bool,
+	include_diagnostics: bool = True,
 ) -> PipelineRun:
 	"""Internal pipeline executor with explicit feature toggles for benchmarking/tests."""
 	try:
@@ -499,6 +513,15 @@ def _run_pipeline(
 		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 		segments = _calibrate_output_confidence(segments)
 		detected_segments = segments
+		musical_timing = summarize_musical_timing(
+			detected_segments,
+			beat_timing=beat_timing,
+			duration_seconds=audio.duration,
+			hop_length=features.hop_length,
+			sample_rate=features.sample_rate,
+			chroma=features.chroma,
+			detected_key=detected_key,
+		) if include_diagnostics else None
 
 		result = AnalysisResult(
 			version=CONTRACT_VERSION,
@@ -542,6 +565,7 @@ def _run_pipeline(
 			mean_medium_context_distance=float(segmentation_diag.get("meanMediumContextDistance", 0.0)),
 			accepted_boundary_examples=segmentation_diag.get("acceptedBoundaryExamples", None),
 			rejected_local_only_examples=segmentation_diag.get("rejectedLocalOnlyExamples", None),
+			musical_timing=musical_timing,
 		)
 	except (AudioDecodeError, FeatureExtractionError, FrameDetectionError) as exc:
 		raise AnalysisError(code=exc.code, message=exc.message) from exc

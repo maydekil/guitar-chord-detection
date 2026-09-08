@@ -28,6 +28,46 @@ These are baseline tuning values. Do not tune to individual tests. Real-song eva
 
 Objective: improve robustness on real full-mix songs while preserving existing synthetic behavior, vocabulary, and API contract.
 
+### Locked modern engine order
+
+Instrumental/intro presentation must preserve the engine's segment labels,
+timestamps, repetitions, no-chord regions, and confidence. Section lyric markers
+only locate those segments within the lyric time window. Do not infer an intro
+progression, estimate repeat counts from section duration, or apply a second
+musical-start offset in shared presentation code. Audio preceding the first
+timestamped lyric remains visible from the source timeline.
+
+Beat tracker frames and densified analysis-window boundaries have different
+meanings. Keep both: artificial window subdivisions must never increase beat
+count or provide a downbeat origin. Harmonic-window construction retains the
+harmonic signal as its timing source; switching it directly to full-mix beats
+failed moving-bass and real-song regression checks. A future full-mix metrical
+tracker must be kept separate from harmonic analysis-window construction.
+Experimental bar/phrase diagnostics are opt-in and must not trigger a second
+audio analysis during regression evaluation or run on ordinary playback requests.
+
+For further real-song accuracy work, do not tune the final chord labels first.
+The engine must improve the musical foundation in this order:
+
+1. Detect audio preprocessing quality and stable harmonic content.
+2. Detect tempo and beat timing.
+3. Detect downbeat/bar phase.
+4. Detect musical start time so drum/pickup-only intros do not shift the chord grid.
+5. Detect phrase/section repetition from harmonic recurrence.
+6. Score chord evidence per beat/bar/phrase using harmonic chroma.
+7. Decode a playable guitar progression using key as a soft prior.
+8. Render/export the playable timeline from the musical grid.
+
+The final timeline should be guitar-playable. Raw detailed detector segments may
+remain available as diagnostics, but they must not be treated as the preferred
+musician-facing chord sheet when they conflict with stronger beat/bar/phrase
+evidence.
+
+Do not stack threshold patches on the final output until the timing foundation
+has been inspected first. If intro, verse, or post-instrumental chords are late,
+early, or repeated incorrectly, inspect musical start/downbeat/bar alignment
+before changing chord-template thresholds.
+
 ### Non-negotiable constraints
 
 - Keep supported vocabulary exactly: 12 major, 12 minor, `N`.
