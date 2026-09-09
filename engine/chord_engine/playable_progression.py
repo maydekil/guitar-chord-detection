@@ -69,6 +69,9 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_QUALITY_REPLACE_SECONDS_MAX,
 	PLAYABLE_REPEAT_ROLE_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_CADENCE_MIN_SEGMENT_SECONDS,
+	PLAYABLE_REPEAT_ROLE_CONTINUATION_MIN_SEGMENT_SECONDS,
+	PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_MIN_SECONDS,
+	PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_RATIO,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_POST_CADENCE_FRAGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_RESTART_FRAGMENT_SECONDS,
@@ -480,6 +483,8 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(cadence_answer_events)
 	working, restart_events = _recover_opening_answer_phrase_restart(working, detected_key)
 	events.extend(restart_events)
+	working, continuation_events = _recover_opening_phrase_continuation(working, detected_key)
+	events.extend(continuation_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -612,6 +617,59 @@ def _recover_opening_answer_phrase_restart(
 	)
 	working[8] = replacement
 	return working, [_event(8, restart, replacement, detected_key, score=0.56)]
+
+
+def _recover_opening_phrase_continuation(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 11:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for idx in range(4, len(working) - 2):
+		previous_degrees = [_major_degree(segment.chord, detected_key) for segment in working[idx - 4 : idx]]
+		degrees = [_major_degree(segment.chord, detected_key) for segment in working[idx : idx + 3]]
+		if previous_degrees != [7, 9, 2, 7] or degrees != [0, 5, 0]:
+			continue
+		if _segment_duration(working[idx + 1]) < PLAYABLE_REPEAT_ROLE_CONTINUATION_MIN_SEGMENT_SECONDS:
+			continue
+
+		final = working[idx + 2]
+		if _segment_duration(final) < PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_MIN_SECONDS:
+			continue
+
+		middle = working[idx + 1]
+		mediant = _major_degree_chord(detected_key, 4)
+		subdominant = _major_degree_chord(detected_key, 5)
+		tonic = _major_degree_chord(detected_key, 0)
+		middle_replacement = ChordSegment(
+			start=middle.start,
+			end=middle.end,
+			chord=mediant,
+			confidence=float(np.clip(middle.confidence * 0.94, 0.0, 1.0)),
+		)
+		working[idx + 1] = middle_replacement
+		events.append(_event(idx + 1, middle, middle_replacement, detected_key, score=0.56))
+
+		split_at = final.start + (_segment_duration(final) * PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_RATIO)
+		left = ChordSegment(
+			start=final.start,
+			end=split_at,
+			chord=subdominant,
+			confidence=float(np.clip(final.confidence * 0.94, 0.0, 1.0)),
+		)
+		right = ChordSegment(
+			start=split_at,
+			end=final.end,
+			chord=tonic,
+			confidence=float(np.clip(final.confidence * 0.92, 0.0, 1.0)),
+		)
+		working[idx + 2 : idx + 3] = [left, right]
+		events.append(_event(idx + 2, final, left, detected_key, score=0.55))
+		break
+	return working, events
 
 
 def _recover_post_cadence_tonic(

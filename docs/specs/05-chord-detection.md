@@ -117,6 +117,12 @@ back to tonic when the local chord-degree chain matches the same opening/answer
 context. This rule must be anchored to the current song's early chord timeline,
 not to lyrics, a corpus manifest, genre labels, titles, or hardcoded timestamps.
 
+When the same anchored opening/answer context is followed by a shortened
+`I -> IV -> I` continuation, the engine may recover the opening phrase's
+`I -> iii -> IV -> I` continuation by changing only the middle substitute and
+splitting an unusually long final tonic. The split must keep stable durations
+and remain tied to the current song's early phrase template.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase
