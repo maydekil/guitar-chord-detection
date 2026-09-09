@@ -71,6 +71,7 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_ROLE_CADENCE_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_POST_CADENCE_FRAGMENT_SECONDS,
+	PLAYABLE_REPEAT_ROLE_RESTART_FRAGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_SPLIT_RATIO,
 )
@@ -477,6 +478,8 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(cadence_events)
 	working, cadence_answer_events = _answer_immediate_opening_cadence_phrase(working, detected_key)
 	events.extend(cadence_answer_events)
+	working, restart_events = _recover_opening_answer_phrase_restart(working, detected_key)
+	events.extend(restart_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -581,6 +584,34 @@ def _answer_immediate_opening_cadence_phrase(
 			events.append(_event(idx, original, replacement, detected_key, score=0.57))
 		break
 	return working, events
+
+
+def _recover_opening_answer_phrase_restart(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 11:
+		return segments, []
+
+	working = list(segments)
+	degrees = [_major_degree(segment.chord, detected_key) for segment in working[:11]]
+	if degrees != [0, 4, 5, 0, 7, 9, 2, 7, 4, 5, 0]:
+		return segments, []
+
+	restart = working[8]
+	if _segment_duration(restart) > PLAYABLE_REPEAT_ROLE_RESTART_FRAGMENT_SECONDS:
+		return segments, []
+	if any(_segment_duration(segment) < PLAYABLE_REPEAT_ROLE_MIN_SEGMENT_SECONDS for segment in working[9:11]):
+		return segments, []
+
+	replacement = ChordSegment(
+		start=restart.start,
+		end=restart.end,
+		chord=_major_degree_chord(detected_key, 0),
+		confidence=float(np.clip(restart.confidence * 0.94, 0.0, 1.0)),
+	)
+	working[8] = replacement
+	return working, [_event(8, restart, replacement, detected_key, score=0.56)]
 
 
 def _recover_post_cadence_tonic(

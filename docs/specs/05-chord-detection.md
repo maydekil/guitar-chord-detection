@@ -111,6 +111,12 @@ opening phrase's mediant/tonic roles only when all participating regions are
 stable-duration, near-opening chord regions. This remains a constrained
 audio-derived recurrence correction, not a song-specific progression map.
 
+After a clearly established opening phrase plus dominant-answer cadence, the
+first post-cadence phrase restart may align a weak mediant-substitute restart
+back to tonic when the local chord-degree chain matches the same opening/answer
+context. This rule must be anchored to the current song's early chord timeline,
+not to lyrics, a corpus manifest, genre labels, titles, or hardcoded timestamps.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase
