@@ -2,13 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChordAnalysisResult, ChordAnalysisSuccess, ChordLabel, ChordSegment } from "@gcd/shared/analysis";
 import {
     buildLeadSheetAnalysis,
-    extractLeadSheetLearningProfile,
-    mergeLeadSheetLearningProfiles,
     selectPlayableChordSegments,
-    type LeadSheetLearningProfile,
 } from "@gcd/shared/lyricChordLayout";
 import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
-import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
+import { normalizeLyricsText, type LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
 import { formatApiJobKind } from "./lib/apiStatus.js";
@@ -30,31 +27,6 @@ import { usePlaybackController } from "./hooks/usePlaybackController.js";
 import { useTimelineEditor } from "./hooks/useTimelineEditor.js";
 import { useTimelineDomEffects } from "./hooks/useTimelineDomEffects.js";
 import { cloneTimelineSegments, findActiveChord, normalizeTimelineSegments, snapSplitTime } from "./lib/timelineSegments.js";
-const LEAD_SHEET_LEARNING_PROFILE_KEY = "gcd.leadSheetLearningProfile.v1";
-
-function loadLeadSheetLearningProfile(): LeadSheetLearningProfile {
-    try {
-        const raw = window.localStorage.getItem(LEAD_SHEET_LEARNING_PROFILE_KEY);
-        if (!raw) {
-            return { phrasePatterns: {} };
-        }
-        const parsed = JSON.parse(raw) as Partial<LeadSheetLearningProfile>;
-        return parsed && typeof parsed === "object" && parsed.phrasePatterns && typeof parsed.phrasePatterns === "object"
-            ? { phrasePatterns: parsed.phrasePatterns as LeadSheetLearningProfile["phrasePatterns"] }
-            : { phrasePatterns: {} };
-    } catch {
-        return { phrasePatterns: {} };
-    }
-}
-
-function saveLeadSheetLearningProfile(next: LeadSheetLearningProfile): void {
-    try {
-        const merged = mergeLeadSheetLearningProfiles(loadLeadSheetLearningProfile(), next);
-        window.localStorage.setItem(LEAD_SHEET_LEARNING_PROFILE_KEY, JSON.stringify(merged));
-    } catch {
-        // Learning is opportunistic; analysis/save must still succeed if storage is unavailable.
-    }
-}
 
 export function App() {
     const [version, setVersion] = useState<string>("0.0.0");
@@ -392,7 +364,7 @@ export function App() {
             setAnalysisStatus("Could not analyze this audio file.");
             return;
         }
-        const leadSheetAnalysis = buildLeadSheetAnalysis(analysis, lyricsText, loadLeadSheetLearningProfile());
+        const leadSheetAnalysis = buildLeadSheetAnalysis(analysis, lyricsText);
         const normalizedTimelineSegments = normalizeTimelineSegments(leadSheetAnalysis.analysis.chords, analysis.source.duration);
         const segmentCount = normalizedTimelineSegments.length;
         const analysisDuration = Number.isFinite(analysis.source.duration) ? Math.max(0, analysis.source.duration) : 0;
@@ -595,9 +567,10 @@ export function App() {
         if (playbackSourceUrl.startsWith("blob:")) {
             activeBlobUrlRef.current = playbackSourceUrl;
         }
-        const normalizedTimelineSegments = normalizeTimelineSegments(song.analysis.analysis.chords, song.duration);
+        const displayAnalysis = buildLeadSheetAnalysis(song.analysis, song.lyrics ?? "");
+        const normalizedTimelineSegments = normalizeTimelineSegments(selectPlayableChordSegments(displayAnalysis), song.duration);
         setAudioSourceUrl(playbackSourceUrl);
-        setLatestAnalysis(buildLeadSheetAnalysis(song.analysis, song.lyrics ?? ""));
+        setLatestAnalysis(displayAnalysis);
         setIsSaveFormOpen(false);
         setHasUnsavedChordEdits(false);
             setTimelineUndoStack([]);
@@ -645,7 +618,7 @@ export function App() {
                 detectedChords: latestAnalysis.analysis.detectedChords ?? timelineSegments,
                 chords: effectiveTimelineSegments,
             },
-        }, lyricsText, loadLeadSheetLearningProfile());
+        }, lyricsText);
         const savedSong = await bridge.saveSongAnalysis({
             audioPath: selectedFilePath,
             analysis: analysisToSave,
@@ -653,7 +626,6 @@ export function App() {
             lyrics: lyricsText,
             instrumentalAudioPath: instrumentalAudioPath ?? undefined
         });
-        saveLeadSheetLearningProfile(extractLeadSheetLearningProfile(analysisToSave, lyricsText));
         setSelectedSongId(savedSong.id);
         setSongTitle(savedSong.title);
         setSongArtist(savedSong.artist);
@@ -731,7 +703,7 @@ export function App() {
             setAnalysisStatus(result.error.message);
             return;
         }
-        setLyricsText(result.lyrics.text);
+        setLyricsText(normalizeLyricsText(result.lyrics.text));
         setDetectorTab("lyrics");
         setAnalysisStatus(`Lyrics generated${result.lyrics.language ? ` (${result.lyrics.language})` : ""}.`);
     };

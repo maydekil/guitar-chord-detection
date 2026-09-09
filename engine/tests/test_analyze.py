@@ -23,6 +23,7 @@ from chord_engine.analyze import (
 )
 from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
+from chord_engine.playable_progression import _apply_repeated_phrase_quality_consistency
 from chord_engine.segmentation import ChordSegment
 
 
@@ -223,6 +224,44 @@ def test_analyze_mp3_path_if_available(tmp_path: Path) -> None:
 
     result = analyze_audio(mp3).to_dict()
     assert _dominant_segment_label(result) == "Am"
+
+
+def test_playable_progression_consistent_quality_across_repeated_root_phrases() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=2.0, chord="D", confidence=0.86),
+        ChordSegment(start=2.0, end=4.0, chord="F#m", confidence=0.84),
+        ChordSegment(start=4.0, end=6.0, chord="G", confidence=0.83),
+        ChordSegment(start=6.0, end=8.0, chord="A", confidence=0.85),
+        ChordSegment(start=8.0, end=10.0, chord="D", confidence=0.84),
+        ChordSegment(start=10.0, end=12.0, chord="F#m", confidence=0.83),
+        ChordSegment(start=12.0, end=13.6, chord="Gm", confidence=0.58),
+        ChordSegment(start=13.6, end=16.0, chord="A", confidence=0.85),
+    ]
+
+    refined, events = _apply_repeated_phrase_quality_consistency(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "F#m", "G", "A", "D", "F#m", "G", "A"]
+    assert any(event.replaced_chord == "Gm" and event.new_chord == "G" for event in events)
+
+
+def test_playable_progression_preserves_strong_repeated_quality_change() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=2.0, chord="D", confidence=0.86),
+        ChordSegment(start=2.0, end=4.0, chord="F#m", confidence=0.84),
+        ChordSegment(start=4.0, end=7.4, chord="G", confidence=0.83),
+        ChordSegment(start=7.4, end=9.4, chord="A", confidence=0.85),
+        ChordSegment(start=9.4, end=11.4, chord="D", confidence=0.84),
+        ChordSegment(start=11.4, end=13.4, chord="F#m", confidence=0.83),
+        ChordSegment(start=13.4, end=16.8, chord="Gm", confidence=0.90),
+        ChordSegment(start=16.8, end=18.8, chord="A", confidence=0.85),
+    ]
+
+    refined, events = _apply_repeated_phrase_quality_consistency(segments, key)
+
+    assert "Gm" in [segment.chord for segment in refined]
+    assert not any(event.replaced_chord == "Gm" and event.new_chord == "G" for event in events)
 
 
 def test_analysis_contract_shape_is_preserved(tmp_path: Path) -> None:

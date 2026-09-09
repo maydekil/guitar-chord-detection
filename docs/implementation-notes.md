@@ -7,14 +7,14 @@ Use this document to record approved deviations, blockers, and technical decisio
 - Phase 0: repository skeleton bootstrap initialized.
 - Optional Essentia backend spike:
 	- Added an explicit `--backend essentia` path for development comparison against the built-in engine.
-	- Built-in `chroma-template-v28` remains the default engine for desktop and CLI analysis.
+	- Built-in `chroma-template-v29` remains the default engine for desktop and CLI analysis.
 	- Essentia is optional metadata only; missing package returns controlled `ESSENTIA_BACKEND_UNAVAILABLE` JSON instead of breaking default analysis.
 	- Optional dependency range uses `essentia>=2.1b6.dev90,<2.1b7` because PyPI publishes the 2.1b6 line as dev wheels rather than a final `2.1b6` release for the tested Python 3.11 environment.
 	- Essentia labels are normalized to the MVP vocabulary (12 major, 12 minor, `N`) before entering the public analysis contract.
 	- Added Essentia-only playable compaction for full-song output: weighted label majority smoothing around a short musical window plus repeated absorption of weak/brief isolated fragments into stronger neighboring chords.
 	- Fixed Essentia pitch-class ordering: repository chroma is canonical `C..B`, while Essentia HPCP chord detection expects `A..G#`; passing C-order directly transposed A-major material toward F#.
 	- License note: Essentia is AGPL-3.0-only upstream, so distribution/commercial packaging needs a licensing decision before making it a production default.
-- Playable lead-sheet arranger spike:
+- Playable lead-sheet arranger spike (removed from active presentation path):
 	- Added a shared lyric-aware arranger that converts current audio chord evidence into a musician-facing phrase timeline when timestamped lyrics are available.
 	- The arranger estimates a major-key family from source chord durations, applies generic pop/guitar functional patterns, treats `[Intro]`, `[Instrumental]`, and `[Outro]` section markers as structural hints, and reuses chord patterns for repeated lyric lines.
 	- The arranger is generic and does not hardcode Album Lama, artist names, local paths, or exact private timestamps/progressions.
@@ -23,6 +23,7 @@ Use this document to record approved deviations, blockers, and technical decisio
 	- Added local adaptive learning profile in the desktop renderer:
 		- saving a song extracts phrase-to-chord-pattern examples from the current editable lead sheet;
 		- learned examples are stored locally in `localStorage` under `gcd.leadSheetLearningProfile.v1`;
+	- This spike was later removed from the active shared presentation path because lyrics must not change chord labels or transition times. The engine owns chord/timing decisions; lyric views only display/export the current timeline against lyric windows.
 		- subsequent re-analysis applies exact/fuzzy learned phrase patterns before the default pop/guitar grammar;
 		- learning is opportunistic and offline-only, so save/analysis still works if local storage is unavailable.
 	- Original detector output remains preserved in `detectedChords`; arranged output is marked `leadSheetSource: "lyrics"`.
@@ -264,3 +265,23 @@ Use this document to record approved deviations, blockers, and technical decisio
 				- acceptedBoundaryTimestamps: 123;
 				- globalDecoderPathScore: 22.3219;
 				- regionDecisionsChangedByGlobalDecoding: 1.
+		- Removed lyric-driven lead-sheet arrangement from the shared presentation path:
+			- `buildLeadSheetAnalysis` now clones the current audio/manual chord timeline
+				instead of arranging chord labels or transition times from lyric timestamps.
+			- Lyrics remain usable for preview/export by intersecting current chord segments
+				with lyric windows, but generating/editing/saving lyrics no longer changes
+				`analysis.chords`.
+			- Local phrase-learning calls were removed from the desktop save/analyze flow.
+			- Legacy saved analyses marked with `leadSheetSource: "lyrics"` are read back
+				from `detectedChords` when available, so old lyric-arranged records no longer
+				override the detector timeline.
+		- Added engine `chroma-template-v29` repeated-phrase quality consistency:
+			- Final playable progression refinement now looks for repeated root-signature
+				patterns in the audio-derived chord timeline.
+			- Weak/brief same-root major/minor disagreements inside repeated phrases can be
+				normalized to the duration/confidence-supported quality.
+			- Strong sustained same-root quality changes are preserved.
+			- Local real-song benchmark after v29:
+				- Bukan Kencan baseline/improved: 314 segments / 313 transitions / Em key -> 48 segments / 47 transitions / D key;
+				- Bukan Kangen Kok baseline/improved: 253 segments / 252 transitions / C key -> 44 segments / 43 transitions / C key;
+				- Cuma Kebetulan direct v29 analysis: 59 segments / 58 transitions.

@@ -54,13 +54,11 @@ tracker must be kept separate from harmonic analysis-window construction.
 Experimental bar/phrase diagnostics are opt-in and must not trigger a second
 audio analysis during regression evaluation or run on ordinary playback requests.
 
-When the user explicitly enables musician-facing lead-sheet output, shared
-presentation may arrange a separate `analysis.chords` timeline from current
-audio chord evidence plus timestamped lyrics. This arranger must be generic:
-it may use detected key family, section markers, lyric phrase windows, repeated
-lyric text, and soft pop/guitar harmonic grammar, but it must not hardcode a
-song title, local path, artist, exact timestamp list, or private progression.
-The original detector timeline must remain preserved in `detectedChords`.
+Lyrics are presentation data only. Adding, generating, editing, syncing, saving,
+loading, previewing, or exporting lyrics must not rewrite `analysis.chords`,
+change chord labels, retime chord transitions, apply learned phrase patterns, or
+select a different playable progression. Lyric views may only intersect the
+current chord timeline with lyric time windows for display/export.
 
 For further real-song accuracy work, do not tune the final chord labels first.
 The engine must improve the musical foundation in this order:
@@ -73,6 +71,12 @@ The engine must improve the musical foundation in this order:
 6. Score chord evidence per beat/bar/phrase using harmonic chroma.
 7. Decode a playable guitar progression using key as a soft prior.
 8. Render/export the playable timeline from the musical grid.
+
+Phrase repetition consistency must be inferred from the audio chord/root
+sequence, not lyrics. If repeated root patterns contain weak same-root
+major/minor disagreements, the engine may normalize the weaker occurrence to
+the duration/confidence-supported quality. Strong sustained quality changes must
+remain valid.
 
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred

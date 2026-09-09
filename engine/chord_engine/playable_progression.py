@@ -53,6 +53,12 @@ from chord_engine.analysis_config import (
 	PLAYABLE_INTRO_PICKUP_MAX_SECONDS,
 	PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS,
 	PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS,
+	PLAYABLE_REPEAT_PATTERN_MAX_LENGTH,
+	PLAYABLE_REPEAT_PATTERN_MIN_LENGTH,
+	PLAYABLE_REPEAT_PATTERN_MIN_OCCURRENCES,
+	PLAYABLE_REPEAT_QUALITY_MAJORITY_RATIO,
+	PLAYABLE_REPEAT_QUALITY_REPLACE_CONFIDENCE_MAX,
+	PLAYABLE_REPEAT_QUALITY_REPLACE_SECONDS_MAX,
 )
 from chord_engine.analysis_models import CorrectionEvent
 from chord_engine.detector import KeyEstimate
@@ -136,6 +142,8 @@ def _apply_playable_progression_refinement(
 	events.extend(internal_chroma_events)
 	working, intro_events = _anchor_intro_pickup_to_tonic(working, detected_key)
 	events.extend(intro_events)
+	working, repeat_events = _apply_repeated_phrase_quality_consistency(working, detected_key)
+	events.extend(repeat_events)
 
 	return _merge_adjacent_same_chord_segments(working), events
 
@@ -305,6 +313,116 @@ def _early_tonic_duration(segments: list[ChordSegment], tonic: str) -> float:
 		if segment.chord == tonic:
 			total += max(0.0, min(segment.end, PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS) - segment.start)
 	return total
+
+
+def _apply_repeated_phrase_quality_consistency(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < PLAYABLE_REPEAT_PATTERN_MIN_LENGTH * PLAYABLE_REPEAT_PATTERN_MIN_OCCURRENCES:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for length in range(PLAYABLE_REPEAT_PATTERN_MAX_LENGTH, PLAYABLE_REPEAT_PATTERN_MIN_LENGTH - 1, -1):
+		occurrences_by_signature = _repeated_root_signature_occurrences(working, length)
+		for starts in occurrences_by_signature.values():
+			if len(starts) < PLAYABLE_REPEAT_PATTERN_MIN_OCCURRENCES:
+				continue
+			for offset in range(length):
+				winner = _repeated_phrase_quality_winner(working, starts, offset)
+				if winner is None:
+					continue
+				for start in starts:
+					idx = start + offset
+					if idx >= len(working):
+						continue
+					current = working[idx]
+					if not _can_replace_repeated_phrase_quality(current, winner, detected_key):
+						continue
+					replacement = ChordSegment(
+						start=current.start,
+						end=current.end,
+						chord=winner,
+						confidence=float(np.clip(max(current.confidence, 0.70), 0.0, 1.0)),
+					)
+					working[idx] = replacement
+					events.append(_event(idx, current, replacement, detected_key, score=0.61))
+		if events:
+			working = _merge_adjacent_same_chord_segments(working)
+	return working, events
+
+
+def _repeated_root_signature_occurrences(segments: list[ChordSegment], length: int) -> dict[tuple[int, ...], list[int]]:
+	occurrences: dict[tuple[int, ...], list[int]] = {}
+	if length <= 0 or len(segments) < length:
+		return occurrences
+	for start in range(0, len(segments) - length + 1):
+		window = segments[start : start + length]
+		roots: list[int] = []
+		for segment in window:
+			root = _chord_root_pc(segment.chord)
+			if segment.chord == "N" or root is None:
+				roots = []
+				break
+			roots.append(root)
+		if not roots:
+			continue
+		signature = tuple(roots)
+		previous = occurrences.get(signature, [])
+		if previous and start < previous[-1] + length:
+			continue
+		previous.append(start)
+		occurrences[signature] = previous
+	return occurrences
+
+
+def _repeated_phrase_quality_winner(
+	segments: list[ChordSegment],
+	starts: list[int],
+	offset: int,
+) -> str | None:
+	weights: dict[str, float] = {}
+	for start in starts:
+		idx = start + offset
+		if idx >= len(segments):
+			continue
+		segment = segments[idx]
+		if segment.chord == "N":
+			continue
+		root = _chord_root_pc(segment.chord)
+		_, quality = _parse_chord_quality(segment.chord)
+		if root is None or quality is None or quality == "diminished":
+			continue
+		weights[segment.chord] = weights.get(segment.chord, 0.0) + (_segment_duration(segment) * max(0.05, segment.confidence))
+	if len(weights) < 2:
+		return None
+	ranked = sorted(weights.items(), key=lambda item: (-item[1], item[0]))
+	total = sum(weights.values())
+	if total <= 0.0 or ranked[0][1] < total * PLAYABLE_REPEAT_QUALITY_MAJORITY_RATIO:
+		return None
+	return ranked[0][0]
+
+
+def _can_replace_repeated_phrase_quality(
+	current: ChordSegment,
+	winner: str,
+	detected_key: KeyEstimate,
+) -> bool:
+	if current.chord == winner or current.chord == "N":
+		return False
+	if _chord_root_pc(current.chord) != _chord_root_pc(winner):
+		return False
+	current_quality = _parse_chord_quality(current.chord)[1]
+	winner_quality = _parse_chord_quality(winner)[1]
+	if current_quality is None or winner_quality is None or current_quality == winner_quality:
+		return False
+	if _is_diatonic_chord(current.chord, detected_key) and not _is_diatonic_chord(winner, detected_key):
+		return False
+	return (
+		current.confidence <= PLAYABLE_REPEAT_QUALITY_REPLACE_CONFIDENCE_MAX
+		or _segment_duration(current) <= PLAYABLE_REPEAT_QUALITY_REPLACE_SECONDS_MAX
+	)
 
 
 def _decode_phrase_level_playable_progression(
