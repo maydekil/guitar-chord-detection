@@ -123,6 +123,13 @@ When the same anchored opening/answer context is followed by a shortened
 splitting an unusually long final tonic. The split must keep stable durations
 and remain tied to the current song's early phrase template.
 
+After the current song has established a stable opening/answer phrase template,
+a later body phrase that appears as `IV -> V -> I -> IV -> V -> I` may recover
+the middle cadence roles `vi -> ii` when all involved regions have stable
+durations. The first `IV -> V` pickup and final `V -> I` resolution must remain
+unchanged; this is a constrained phrase-template correction, not a global rule
+that every such sequence must be rewritten.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

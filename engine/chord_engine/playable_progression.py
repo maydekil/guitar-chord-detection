@@ -69,6 +69,7 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_QUALITY_REPLACE_SECONDS_MAX,
 	PLAYABLE_REPEAT_ROLE_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_CADENCE_MIN_SEGMENT_SECONDS,
+	PLAYABLE_REPEAT_ROLE_BODY_CADENCE_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_CONTINUATION_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_RATIO,
@@ -485,6 +486,8 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(restart_events)
 	working, continuation_events = _recover_opening_phrase_continuation(working, detected_key)
 	events.extend(continuation_events)
+	working, body_cadence_events = _recover_body_cadence_from_opening_answer(working, detected_key)
+	events.extend(body_cadence_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -587,6 +590,44 @@ def _answer_immediate_opening_cadence_phrase(
 			)
 			working[idx] = replacement
 			events.append(_event(idx, original, replacement, detected_key, score=0.57))
+		break
+	return working, events
+
+
+def _recover_body_cadence_from_opening_answer(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 14:
+		return segments, []
+
+	working = list(segments)
+	opening = [_major_degree(segment.chord, detected_key) for segment in working[:8]]
+	if opening not in ([0, 4, 5, 7, 0, 4, 5, 0], [0, 4, 5, 0, 7, 9, 2, 7]):
+		return segments, []
+
+	events: list[CorrectionEvent] = []
+	for idx in range(8, len(working) - 5):
+		degrees = [_major_degree(segment.chord, detected_key) for segment in working[idx : idx + 6]]
+		if degrees != [5, 7, 0, 5, 7, 0]:
+			continue
+		if any(
+			_segment_duration(segment) < PLAYABLE_REPEAT_ROLE_BODY_CADENCE_MIN_SEGMENT_SECONDS
+			for segment in working[idx + 2 : idx + 6]
+		):
+			continue
+
+		for offset, degree in ((2, 9), (3, 2)):
+			segment_idx = idx + offset
+			original = working[segment_idx]
+			replacement = ChordSegment(
+				start=original.start,
+				end=original.end,
+				chord=_major_degree_chord(detected_key, degree),
+				confidence=float(np.clip(original.confidence * 0.94, 0.0, 1.0)),
+			)
+			working[segment_idx] = replacement
+			events.append(_event(segment_idx, original, replacement, detected_key, score=0.56))
 		break
 	return working, events
 
