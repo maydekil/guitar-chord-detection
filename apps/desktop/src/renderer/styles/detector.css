@@ -74,9 +74,170 @@
     opacity: 0.42;
 }
 
+.secondary-btn {
+    border: 1px solid rgba(30, 42, 48, 0.14);
+    background: #fffdf8;
+    color: var(--ink);
+}
+
 .back-btn {
     margin-right: 0.5rem;
     background: #273238;
+}
+
+.genre-evaluation-panel {
+    gap: 0;
+}
+
+.genre-evaluation-summary {
+    align-items: center;
+}
+
+.genre-evaluation-empty {
+    flex: 1 1 auto;
+}
+
+.genre-evaluation-error {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    margin-bottom: 0.7rem;
+    border: 1px solid rgba(142, 46, 38, 0.24);
+    border-radius: 10px;
+    padding: 0.62rem 0.72rem;
+    background: rgba(169, 67, 51, 0.08);
+    color: #7f2f20;
+    font-size: 0.82rem;
+}
+
+.genre-evaluation-report {
+    display: grid;
+    gap: 0.85rem;
+    min-height: 0;
+    overflow: auto;
+    padding-top: 0.15rem;
+}
+
+.genre-evaluation-kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(84px, 1fr));
+    gap: 0.5rem;
+}
+
+.genre-evaluation-metric {
+    display: grid;
+    gap: 0.18rem;
+    border: 1px solid rgba(30, 42, 48, 0.1);
+    border-radius: 8px;
+    padding: 0.58rem 0.62rem;
+    background: rgba(255, 253, 248, 0.82);
+}
+
+.genre-evaluation-metric small {
+    color: #687376;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.genre-evaluation-metric strong {
+    color: var(--ink);
+    font-size: 1rem;
+}
+
+.genre-evaluation-section {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.genre-evaluation-section h3 {
+    margin: 0;
+    color: var(--ink);
+    font-size: 0.95rem;
+}
+
+.genre-evaluation-table,
+.genre-evaluation-items {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.genre-evaluation-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 1.4fr) repeat(6, minmax(64px, 0.8fr));
+    gap: 0.35rem;
+    align-items: center;
+    border: 1px solid rgba(30, 42, 48, 0.1);
+    border-radius: 8px;
+    padding: 0.48rem 0.55rem;
+    background: #fffdf8;
+    color: #435157;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.genre-evaluation-row span:first-child {
+    color: var(--ink);
+    font-weight: 800;
+}
+
+.genre-evaluation-row.header-row {
+    background: rgba(38, 50, 56, 0.08);
+    color: #263238;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.genre-evaluation-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    align-items: center;
+    border: 1px solid rgba(30, 42, 48, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem 0.58rem;
+    background: #fffdf8;
+}
+
+.genre-evaluation-item div {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.genre-evaluation-item strong {
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 0.84rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.genre-evaluation-item small {
+    color: #687376;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.genre-evaluation-confusions {
+    overflow: hidden;
+    color: #8a4931;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.genre-evaluation-item span {
+    color: #263238;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.genre-evaluation-item[data-status="error"] {
+    border-color: rgba(142, 46, 38, 0.24);
+    background: rgba(169, 67, 51, 0.06);
 }
 
 .file-name {

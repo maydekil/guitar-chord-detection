@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
 import type { DeleteSongResult, SaveSongAnalysisRequest, SongLibraryListResult, SongLibraryRecord, SongLibrarySearchOptions } from "@gcd/shared/library";
+import type { GenreEvaluationResult } from "@gcd/shared/genreEvaluation";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
@@ -65,7 +66,9 @@ export interface DesktopApi {
     testApiConfig?(config: ApiConfig): Promise<ApiStatus>;
     saveApiConfig?(config: ApiConfig): Promise<ApiStatus>;
     selectAudioFile(): Promise<FileSelectionResult>;
+    selectGenreEvaluationManifest?(): Promise<FileSelectionResult>;
     analyzeAudio?(audioPath: string, options?: AnalyzeAudioOptions): Promise<ChordAnalysisResult>;
+    evaluateGenreCorpus?(manifestPath: string): Promise<GenreEvaluationResult>;
     generateLyricsFromAudio?(audioPath: string, options?: GenerateLyricsOptions): Promise<LyricsTranscriptionResult>;
     pitchShiftAudio?(audioPath: string, options: PitchShiftOptions): Promise<PitchShiftResult>;
     removeVocals?(audioPath: string): Promise<VocalRemovalResult>;
@@ -86,11 +89,14 @@ const desktopApi: DesktopApi = {
     testApiConfig: (config: ApiConfig) => ipcRenderer.invoke("app:testApiConfig", config) as Promise<ApiStatus>,
     saveApiConfig: (config: ApiConfig) => ipcRenderer.invoke("app:saveApiConfig", config) as Promise<ApiStatus>,
     selectAudioFile: () => ipcRenderer.invoke("file:selectAudio") as Promise<FileSelectionResult>,
+    selectGenreEvaluationManifest: () => ipcRenderer.invoke("file:selectGenreEvaluationManifest") as Promise<FileSelectionResult>,
     analyzeAudio: (audioPath: string, options?: AnalyzeAudioOptions) =>
         ipcRenderer.invoke("engine:analyzeAudio", {
             audioPath,
             forceRefresh: options?.forceRefresh === true
         }) as Promise<ChordAnalysisResult>,
+    evaluateGenreCorpus: (manifestPath: string) =>
+        ipcRenderer.invoke("engine:evaluateGenreCorpus", { manifestPath }) as Promise<GenreEvaluationResult>,
     generateLyricsFromAudio: (audioPath: string, options?: GenerateLyricsOptions) =>
         ipcRenderer.invoke("engine:generateLyrics", { audioPath, model: options?.model }) as Promise<LyricsTranscriptionResult>,
     pitchShiftAudio: (audioPath: string, options: PitchShiftOptions) =>

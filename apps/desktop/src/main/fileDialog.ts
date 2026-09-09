@@ -20,6 +20,19 @@ export function buildAudioFileDialogOptions(): OpenDialogOptions {
     };
 }
 
+export function buildGenreEvaluationManifestDialogOptions(): OpenDialogOptions {
+    return {
+        title: "Open Genre Evaluation Manifest",
+        properties: ["openFile"],
+        filters: [
+            {
+                name: "JSON Manifest",
+                extensions: ["json"]
+            }
+        ]
+    };
+}
+
 export function toFileSelectionResult(filePaths: string[]): FileSelectionResult {
     const selected = filePaths[0];
     if (!selected) {

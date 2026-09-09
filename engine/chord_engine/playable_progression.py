@@ -51,6 +51,9 @@ from chord_engine.analysis_config import (
 	PLAYABLE_LEADSHEET_SPLIT_MIN_SECONDS,
 	PLAYABLE_LEADSHEET_SPLIT_RATIO,
 	PLAYABLE_INTRO_PICKUP_MAX_SECONDS,
+	PLAYABLE_INTRO_TONIC_EXTENSION_CONFIDENCE_MAX,
+	PLAYABLE_INTRO_TONIC_EXTENSION_MAX_SECONDS,
+	PLAYABLE_INTRO_TONIC_EXTENSION_TOTAL_MAX_SECONDS,
 	PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS,
 	PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS,
 	PLAYABLE_REPEAT_PATTERN_MAX_LENGTH,
@@ -144,6 +147,8 @@ def _apply_playable_progression_refinement(
 	events.extend(intro_events)
 	working, repeat_events = _apply_repeated_phrase_quality_consistency(working, detected_key)
 	events.extend(repeat_events)
+	working, intro_tonic_events = _stabilize_initial_tonic_pickup(working, detected_key)
+	events.extend(intro_tonic_events)
 
 	return _merge_adjacent_same_chord_segments(working), events
 
@@ -303,6 +308,59 @@ def _anchor_intro_pickup_to_tonic(
 	)
 	working = [replacement, *segments[1:]]
 	return _merge_adjacent_same_chord_segments(working), [_event(0, first, replacement, detected_key, score=0.62)]
+
+
+def _stabilize_initial_tonic_pickup(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 2:
+		return segments, []
+	first = segments[0]
+	if first.start > 0.15 or first.chord == "N" or _segment_duration(first) > PLAYABLE_INTRO_PICKUP_MAX_SECONDS:
+		return segments, []
+	tonic = _major_degree_chord(detected_key, 0)
+	if _early_tonic_duration(segments, tonic) < PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	if first.chord != tonic:
+		replacement = ChordSegment(
+			start=first.start,
+			end=first.end,
+			chord=tonic,
+			confidence=float(np.clip(max(first.confidence, 0.78), 0.0, 1.0)),
+		)
+		working[0] = replacement
+		events.append(_event(0, first, replacement, detected_key, score=0.62))
+
+	if len(working) < 2:
+		return _merge_adjacent_same_chord_segments(working), events
+	first = working[0]
+	second = working[1]
+	first_duration = _segment_duration(first)
+	second_duration = _segment_duration(second)
+	if (
+		first.chord == tonic
+		and second.chord != "N"
+		and second.chord != tonic
+		and first_duration <= PLAYABLE_INTRO_PICKUP_MAX_SECONDS
+		and second_duration <= PLAYABLE_INTRO_TONIC_EXTENSION_MAX_SECONDS
+		and second.confidence <= PLAYABLE_INTRO_TONIC_EXTENSION_CONFIDENCE_MAX
+		and second.end - first.start <= PLAYABLE_INTRO_TONIC_EXTENSION_TOTAL_MAX_SECONDS
+		and _functional_role(second.chord, detected_key) in {"dominant", "substitute"}
+	):
+		replacement = ChordSegment(
+			start=second.start,
+			end=second.end,
+			chord=tonic,
+			confidence=float(np.clip(max(first.confidence, second.confidence) * 0.98, 0.0, 1.0)),
+		)
+		working[1] = replacement
+		events.append(_event(1, second, replacement, detected_key, score=0.60))
+
+	return _merge_adjacent_same_chord_segments(working), events
 
 
 def _early_tonic_duration(segments: list[ChordSegment], tonic: str) -> float:

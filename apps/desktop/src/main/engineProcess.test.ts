@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
     analyzeAudioInEngine,
+    evaluateGenreCorpusInEngine,
     resolveDevelopmentEngineCommand,
+    resolveDevelopmentGenreEvaluationCommand,
     type EngineChildProcess,
     type SpawnEngineProcess
 } from "./engineProcess";
@@ -57,6 +59,16 @@ describe("resolveDevelopmentEngineCommand", () => {
         expect(command.pythonExecutable).toBe("/repo/.venv/bin/python");
         expect(command.cwd).toBe("/repo/engine");
         expect(command.args).toEqual(["-m", "chord_engine.cli", "analyze", "/tmp/song.wav"]);
+    });
+});
+
+describe("resolveDevelopmentGenreEvaluationCommand", () => {
+    it("uses the genre corpus CLI command", () => {
+        const command = resolveDevelopmentGenreEvaluationCommand("/repo/apps/desktop", "/tmp/manifest.json");
+
+        expect(command.pythonExecutable).toBe("/repo/.venv/bin/python");
+        expect(command.cwd).toBe("/repo/engine");
+        expect(command.args).toEqual(["-m", "chord_engine.cli", "evaluate-genre-corpus", "/tmp/manifest.json"]);
     });
 });
 
@@ -158,6 +170,39 @@ describe("analyzeAudioInEngine", () => {
         expect("error" in result).toBe(true);
         if ("error" in result) {
             expect(result.error.code).toBe("ENGINE_INVALID_INPUT");
+        }
+    });
+});
+
+describe("evaluateGenreCorpusInEngine", () => {
+    it("returns success JSON when genre evaluation exits zero", async () => {
+        const child = createFakeChild();
+        const spawnProcess: SpawnEngineProcess = vi.fn(() => {
+            queueMicrotask(() => {
+                child.emitStdout('{"version":"1","manifestPath":"/tmp/manifest.json","itemCount":1,"evaluatedItemCount":1,"failedItemCount":0,"status":"pass","metrics":{"itemCount":1,"evaluatedDuration":4,"timeWeightedChordAccuracy":100,"rootAccuracy":100,"qualityAccuracy":100,"falseTransitionCount":0,"missedTransitionCount":0,"boundaryTimingErrorSeconds":null},"genres":{"pop":{"itemCount":1,"evaluatedDuration":4,"timeWeightedChordAccuracy":100,"rootAccuracy":100,"qualityAccuracy":100,"falseTransitionCount":0,"missedTransitionCount":0,"boundaryTimingErrorSeconds":null}},"items":[]}');
+                child.emitClose(0);
+            });
+            return child;
+        });
+
+        const result = await evaluateGenreCorpusInEngine("/tmp/manifest.json", { appPath: "/repo/apps/desktop" }, spawnProcess);
+
+        expect("error" in result).toBe(false);
+        if (!("error" in result)) {
+            expect(result.status).toBe("pass");
+            expect(result.genres.pop.timeWeightedChordAccuracy).toBe(100);
+        }
+    });
+
+    it("returns controlled error for empty manifest path", async () => {
+        const spawnProcess: SpawnEngineProcess = vi.fn(() => createFakeChild());
+
+        const result = await evaluateGenreCorpusInEngine(" ", { appPath: "/repo/apps/desktop" }, spawnProcess);
+
+        expect(spawnProcess).not.toHaveBeenCalled();
+        expect("error" in result).toBe(true);
+        if ("error" in result) {
+            expect(result.error.code).toBe("GENRE_EVALUATION_INVALID_INPUT");
         }
     });
 });

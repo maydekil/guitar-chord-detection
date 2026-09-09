@@ -177,6 +177,26 @@ Debug information tetap di log.
 
 ---
 
+## Multi-Genre Evaluation
+
+Desktop app boleh menyediakan workflow evaluasi corpus ground-truth lokal untuk
+quality tuning lintas genre.
+
+Aturan:
+
+- user memilih manifest `.json` lewat native dialog;
+- main process menjalankan Python engine command `evaluate-genre-corpus`;
+- renderer hanya menampilkan report JSON/summary, bukan menjalankan DSP;
+- report harus memperlihatkan confusion pairs item-level jika engine
+  mengembalikannya, supaya tuning bisa membedakan salah root, salah quality,
+  dan salah timing;
+- workflow ini tidak boleh mengubah lagu aktif, timeline aktif, cache analysis,
+  lyric, transition chord, atau saved library record;
+- jika API mode aktif, workflow ini tetap lokal kecuali API contract khusus
+  evaluasi corpus dibuat di masa depan.
+
+---
+
 ## Security
 
 Electron preload menggunakan:

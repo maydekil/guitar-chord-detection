@@ -4,6 +4,7 @@ import {
     buildLeadSheetAnalysis,
     selectPlayableChordSegments,
 } from "@gcd/shared/lyricChordLayout";
+import type { GenreEvaluationResult } from "@gcd/shared/genreEvaluation";
 import type { SongLibraryListResult, SongLibraryRecord, SongLibrarySummary, SongMetadataInput } from "@gcd/shared/library";
 import { normalizeLyricsText, type LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
@@ -13,6 +14,7 @@ import type { ApiHealthState, ApiJobProgressEvent, DetectorTab, ExportFormat, Ly
 import { ConfirmationModal } from "./components/ConfirmationModal.js";
 import { DetectorPanel } from "./components/DetectorPanel.js";
 import { ExportPreviewModal } from "./components/ExportPreviewModal.js";
+import { GenreEvaluationPanel } from "./components/GenreEvaluationPanel.js";
 import { ShellHeader } from "./components/ShellHeader.js";
 import { SongLibraryPanel } from "./components/SongLibraryPanel.js";
 import { toAudioSourceUrl, toFileUrl } from "./lib/audioSources.js";
@@ -83,6 +85,11 @@ export function App() {
     const [isUsingInstrumentalAudio, setIsUsingInstrumentalAudio] = useState<boolean>(false);
     const [isPitchShiftingAudio, setIsPitchShiftingAudio] = useState<boolean>(false);
     const [apiJobProgress, setApiJobProgress] = useState<ApiJobProgressEvent | null>(null);
+    const [genreManifestFileName, setGenreManifestFileName] = useState<string>("No manifest selected");
+    const [genreManifestPath, setGenreManifestPath] = useState<string | null>(null);
+    const [genreEvaluationResult, setGenreEvaluationResult] = useState<GenreEvaluationResult | null>(null);
+    const [genreEvaluationStatus, setGenreEvaluationStatus] = useState<string>("No evaluation yet");
+    const [isEvaluatingGenreCorpus, setIsEvaluatingGenreCorpus] = useState<boolean>(false);
     const activeRequestIdRef = useRef<number>(0);
     const timelineRef = useRef<HTMLElement | null>(null);
     const chordEditorRef = useRef<HTMLDivElement | null>(null);
@@ -525,6 +532,49 @@ export function App() {
         setInstrumentalAudioStreamUrl(null);
         setViewMode("detail");
     };
+    const handleOpenEvaluation = (): void => {
+        setViewMode("evaluation");
+    };
+    const handleSelectGenreManifest = async (): Promise<void> => {
+        if (!bridge?.selectGenreEvaluationManifest) {
+            setGenreEvaluationStatus("Genre evaluation belum tersedia. Restart aplikasi lalu coba lagi.");
+            return;
+        }
+        const result = await bridge.selectGenreEvaluationManifest();
+        if (result.canceled || !result.path || !result.fileName) {
+            return;
+        }
+        setGenreManifestPath(result.path);
+        setGenreManifestFileName(result.fileName);
+        setGenreEvaluationResult(null);
+        setGenreEvaluationStatus("Manifest ready.");
+    };
+    const handleRunGenreEvaluation = async (): Promise<void> => {
+        if (!genreManifestPath) {
+            setGenreEvaluationStatus("Pilih manifest JSON dulu.");
+            return;
+        }
+        if (!bridge?.evaluateGenreCorpus) {
+            setGenreEvaluationStatus("Genre evaluation engine belum tersedia. Restart aplikasi lalu coba lagi.");
+            return;
+        }
+        setIsEvaluatingGenreCorpus(true);
+        setGenreEvaluationStatus("Evaluating genre corpus...");
+        try {
+            const result = await bridge.evaluateGenreCorpus(genreManifestPath);
+            setGenreEvaluationResult(result);
+            if ("error" in result) {
+                setGenreEvaluationStatus(result.error.message);
+            } else {
+                setGenreEvaluationStatus(`Evaluation complete: ${result.evaluatedItemCount}/${result.itemCount} item(s), ${result.failedItemCount} failed.`);
+            }
+        } catch {
+            setGenreEvaluationStatus("Gagal menjalankan genre evaluation.");
+            setGenreEvaluationResult(null);
+        } finally {
+            setIsEvaluatingGenreCorpus(false);
+        }
+    };
     const handleOpenLibrarySong = async (summary: SongLibrarySummary): Promise<void> => {
         resetPlaybackState();
         const song = bridge?.getSong ? await bridge.getSong(summary.id) : null;
@@ -863,6 +913,7 @@ export function App() {
                     widthPx={libraryPanelWidthPx}
                     canAddSong={Boolean(bridge)}
                     onAddSong={handleAddSong}
+                    onOpenEvaluation={handleOpenEvaluation}
                     onQueryChange={(value) => {
                         setLibraryQuery(value);
                         setLibraryPage(1);
@@ -882,7 +933,18 @@ export function App() {
                     aria-orientation="vertical"
                     onMouseDown={handlePanelResizeStart}
                 />
-                <DetectorPanel
+                {viewMode === "evaluation" ? (
+                    <GenreEvaluationPanel
+                        manifestFileName={genreManifestFileName}
+                        manifestPath={genreManifestPath}
+                        result={genreEvaluationResult}
+                        isEvaluating={isEvaluatingGenreCorpus}
+                        status={genreEvaluationStatus}
+                        onSelectManifest={() => void handleSelectGenreManifest()}
+                        onRunEvaluation={() => void handleRunGenreEvaluation()}
+                    />
+                ) : (
+                    <DetectorPanel
                     viewMode={viewMode}
                     state={state}
                     selectedFileName={selectedFileName}
@@ -961,7 +1023,8 @@ export function App() {
                     onAutoSyncLyrics={handleAutoSyncLyrics}
                     onLyricsTextChange={setLyricsText}
                     onLyricsModelChange={setLyricsModel}
-                />
+                    />
+                )}
             </div>
             {exportPreviewFormat ? (
                 <ExportPreviewModal

@@ -20,3 +20,7 @@ __pycache__/
 
 # Logs
 *.log
+
+# Local user-owned evaluation data
+.local/
+local-genre-evaluation/

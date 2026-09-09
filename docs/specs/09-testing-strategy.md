@@ -240,6 +240,49 @@ Aturan scope:
 - file anotasi user-owned bersifat lokal dan tidak wajib di-commit;
 - public engine API dan regression tests existing harus tetap terjaga.
 
+### Task 7.1A Subtask tests: Multi-Genre Ground-Truth Corpus Evaluation
+
+Tambahkan workflow evaluasi corpus lokal supaya tuning chord detector dapat
+dibandingkan lintas jenis lagu, tempo, dan style tanpa hardcode lagu tertentu.
+
+Format manifest corpus lokal minimal wajib memuat:
+
+- `items`, array non-empty;
+- `id`, nama stabil sample lokal;
+- `genre`, label bebas seperti `rock`, `ska`, `reggae`, `pop`, `jazz`, `folk`;
+- `audioPath`, path audio lokal;
+- `annotationPath`, path anotasi ground-truth lokal.
+
+`audioPath` dan `annotationPath` boleh relatif terhadap lokasi manifest,
+atau absolute/local-env path. Manifest boleh menambahkan `clipStart` dan
+`clipEnd` per item untuk evaluasi partial-song.
+
+Workflow harus:
+
+- menjalankan evaluasi ground-truth yang sama untuk setiap item;
+- mengagregasi metrik per genre dan seluruh corpus;
+- melaporkan item gagal secara terkontrol tanpa menyembunyikan item lain;
+- menghasilkan JSON deterministik dari CLI;
+- tidak mengubah chord detector threshold/heuristic hanya karena manifest ada;
+- tidak menyimpan audio user-owned atau anotasi privat ke repository.
+
+Metrik agregat minimum wajib:
+
+- item count, evaluated item count, failed item count;
+- weighted time-weighted chord accuracy;
+- weighted root accuracy;
+- weighted quality accuracy;
+- total false transition count;
+- total missed transition count;
+- mean boundary timing error jika tersedia.
+
+Aturan scope:
+
+- subtask ini adalah alat evaluasi dan guardrail tuning, bukan perubahan
+  musical decision engine;
+- tidak boleh hardcode genre-specific progression;
+- tidak boleh menjadikan lyric sebagai sumber kebenaran chord/timing.
+
 ### Task 7.1A Subtask tests: Harmonic Change-Point Segmentation and Global Chord Decoding
 
 Tambahkan test deterministik yang memverifikasi boundary-first harmonic segmentation dan global decoding.

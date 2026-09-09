@@ -78,6 +78,12 @@ major/minor disagreements, the engine may normalize the weaker occurrence to
 the duration/confidence-supported quality. Strong sustained quality changes must
 remain valid.
 
+Major-key intro/pickup stabilization may align a weak opening substitute or
+dominant chord to the tonic when the song has sufficient early tonic support.
+This is an audio-derived playable-timeline correction only; it must preserve
+strong relative-minor, substitute, or dominant chords and must not read lyrics
+or hardcode a song progression.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

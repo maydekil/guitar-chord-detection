@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 import type { ChordAnalysisResult } from "@gcd/shared/analysis";
+import type { GenreEvaluationResult } from "@gcd/shared/genreEvaluation";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
@@ -10,6 +11,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const LYRICS_TIMEOUT_MS = 10 * 60_000;
 const VOCAL_REMOVAL_TIMEOUT_MS = 20 * 60_000;
 const PITCH_SHIFT_TIMEOUT_MS = 5 * 60_000;
+const GENRE_EVALUATION_TIMEOUT_MS = 30 * 60_000;
 
 export interface EngineProcessConfig {
     appPath: string;
@@ -103,6 +105,18 @@ export function resolveDevelopmentPitchShiftCommand(
     };
 }
 
+export function resolveDevelopmentGenreEvaluationCommand(appPath: string, manifestPath: string): EngineCommand {
+    const repositoryRoot = path.resolve(appPath, "../..");
+    const engineCwd = path.resolve(repositoryRoot, "engine");
+    const pythonExecutable = path.resolve(repositoryRoot, ".venv", "bin", "python");
+
+    return {
+        pythonExecutable,
+        cwd: engineCwd,
+        args: ["-m", "chord_engine.cli", "evaluate-genre-corpus", manifestPath]
+    };
+}
+
 export async function analyzeAudioInEngine(
     audioPath: string,
     config: EngineProcessConfig,
@@ -167,6 +181,74 @@ export async function analyzeAudioInEngine(
                     return;
                 }
                 finish(toProcessError("ENGINE_EXIT_NONZERO", "Engine failed with non-zero exit code"));
+                return;
+            }
+
+            finish(parsed);
+        });
+    });
+}
+
+export async function evaluateGenreCorpusInEngine(
+    manifestPath: string,
+    config: EngineProcessConfig,
+    spawnProcess: SpawnEngineProcess = defaultSpawnProcess
+): Promise<GenreEvaluationResult> {
+    if (!manifestPath || manifestPath.trim().length === 0) {
+        return toGenreEvaluationProcessError("GENRE_EVALUATION_INVALID_INPUT", "Manifest path is required");
+    }
+
+    const timeoutMs = config.timeoutMs ?? GENRE_EVALUATION_TIMEOUT_MS;
+    const command = resolveDevelopmentGenreEvaluationCommand(config.appPath, manifestPath);
+
+    return await new Promise<GenreEvaluationResult>((resolve) => {
+        let settled = false;
+        let stdout = "";
+        let stderr = "";
+
+        const child = spawnProcess(command.pythonExecutable, command.args, {
+            cwd: command.cwd,
+            env: process.env
+        });
+
+        const finish = (result: GenreEvaluationResult): void => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            clearTimeout(timeoutId);
+            if (stderr.trim().length > 0) {
+                console.error(`[genre evaluation engine stderr] ${stderr.trim()}`);
+            }
+            resolve(result);
+        };
+
+        const timeoutId = setTimeout(() => {
+            child.kill("SIGKILL");
+            finish(toGenreEvaluationProcessError("GENRE_EVALUATION_TIMEOUT", "Genre evaluation timed out"));
+        }, timeoutMs);
+
+        child.stdout.on("data", (chunk: Buffer | string) => {
+            stdout += String(chunk);
+        });
+
+        child.stderr.on("data", (chunk: Buffer | string) => {
+            stderr += String(chunk);
+        });
+
+        child.on("error", () => {
+            finish(toGenreEvaluationProcessError("GENRE_EVALUATION_SPAWN_FAILED", "Could not start genre evaluation engine"));
+        });
+
+        child.on("close", (code) => {
+            const parsed = parseGenreEvaluationStdout(stdout);
+            if (!parsed) {
+                finish(toGenreEvaluationProcessError("GENRE_EVALUATION_INVALID_JSON", "Genre evaluation returned invalid JSON output"));
+                return;
+            }
+
+            if (code !== 0 && "error" in parsed) {
+                finish(parsed);
                 return;
             }
 
@@ -476,6 +558,23 @@ function parsePitchShiftStdout(stdout: string): PitchShiftResult | null {
     }
 }
 
+function parseGenreEvaluationStdout(stdout: string): GenreEvaluationResult | null {
+    const trimmed = stdout.trim();
+    if (trimmed.length === 0) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (!isGenreEvaluationContractResult(parsed)) {
+            return null;
+        }
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
 function isContractResult(value: unknown): value is ChordAnalysisResult {
     if (!value || typeof value !== "object") {
         return false;
@@ -489,6 +588,21 @@ function isContractResult(value: unknown): value is ChordAnalysisResult {
         return true;
     }
     return Boolean(candidate.source && candidate.analysis);
+}
+
+function isGenreEvaluationContractResult(value: unknown): value is GenreEvaluationResult {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const candidate = value as { version?: unknown; error?: unknown; metrics?: unknown; genres?: unknown; items?: unknown };
+    if (candidate.version !== "1") {
+        return false;
+    }
+    if (candidate.error && typeof candidate.error === "object") {
+        return true;
+    }
+    return Boolean(candidate.metrics && candidate.genres && Array.isArray(candidate.items));
 }
 
 function isLyricsContractResult(value: unknown): value is LyricsTranscriptionResult {
@@ -567,6 +681,16 @@ function toVocalRemovalProcessError(code: string, message: string): VocalRemoval
 }
 
 function toPitchShiftProcessError(code: string, message: string): PitchShiftResult {
+    return {
+        version: "1",
+        error: {
+            code,
+            message
+        }
+    };
+}
+
+function toGenreEvaluationProcessError(code: string, message: string): GenreEvaluationResult {
     return {
         version: "1",
         error: {

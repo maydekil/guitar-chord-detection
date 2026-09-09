@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAudioFileDialogOptions, toFileSelectionResult } from "./fileDialog";
+import { buildAudioFileDialogOptions, buildGenreEvaluationManifestDialogOptions, toFileSelectionResult } from "./fileDialog";
 
 describe("buildAudioFileDialogOptions", () => {
     it("limits file selection to mp3 and wav via native filter", () => {
@@ -11,6 +11,20 @@ describe("buildAudioFileDialogOptions", () => {
             {
                 name: "Audio Files",
                 extensions: ["mp3", "wav"]
+            }
+        ]);
+    });
+});
+
+describe("buildGenreEvaluationManifestDialogOptions", () => {
+    it("limits genre evaluation manifest selection to json", () => {
+        const options = buildGenreEvaluationManifestDialogOptions();
+
+        expect(options.properties).toEqual(["openFile"]);
+        expect(options.filters).toEqual([
+            {
+                name: "JSON Manifest",
+                extensions: ["json"]
             }
         ]);
     });

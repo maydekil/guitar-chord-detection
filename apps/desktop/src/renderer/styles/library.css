@@ -88,6 +88,13 @@
     align-items: center;
 }
 
+.library-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.38rem;
+}
+
 .library-toolbar h2 {
     margin: 0;
     font-size: 1.1rem;

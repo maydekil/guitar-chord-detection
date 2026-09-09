@@ -10,6 +10,7 @@ import sys
 from chord_engine.analyze import CONTRACT_VERSION, AnalysisError, analyze_audio
 from chord_engine.evaluation import EvaluationError, evaluate_against_ground_truth
 from chord_engine.external_backends import SUPPORTED_EXTERNAL_BACKENDS
+from chord_engine.genre_evaluation import GenreEvaluationError, evaluate_genre_corpus
 from chord_engine.lyrics import LyricsError, transcribe_lyrics
 from chord_engine.pitch import PitchShiftError, pitch_shift_audio
 from chord_engine.regression import RegressionEvaluationError, evaluate_regression_set
@@ -49,6 +50,10 @@ def _build_parser() -> argparse.ArgumentParser:
 	eval_set_parser.add_argument("--baseline", default=None)
 	eval_set_parser.add_argument("--output", default=None)
 
+	genre_eval_parser = subparsers.add_parser("evaluate-genre-corpus")
+	genre_eval_parser.add_argument("manifest_path")
+	genre_eval_parser.add_argument("--output", default=None)
+
 	return parser
 
 
@@ -77,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
 		)
 	if args.command == "evaluate-set":
 		return _run_evaluate_set(args.manifest_path, baseline_path=args.baseline, output_path=args.output)
+	if args.command == "evaluate-genre-corpus":
+		return _run_evaluate_genre_corpus(args.manifest_path, output_path=args.output)
 
 	parser.print_usage(sys.stderr)
 	return 2
@@ -218,6 +225,37 @@ def _run_evaluate_set(
 				"error": {
 					"code": "EVALUATION_FAILED",
 					"message": "Failed to evaluate against ground truth",
+				},
+			}
+		)
+		return 1
+
+
+def _run_evaluate_genre_corpus(
+	manifest_path: str,
+	*,
+	output_path: str | None,
+) -> int:
+	try:
+		payload = evaluate_genre_corpus(manifest_path)
+		if output_path:
+			from pathlib import Path
+
+			Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+			Path(output_path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+		_print_json(payload)
+		return 0 if payload.get("status") == "pass" else 1
+	except GenreEvaluationError as exc:
+		_print_json(exc.to_dict(version=CONTRACT_VERSION))
+		return 1
+	except Exception as exc:  # pragma: no cover - boundary safeguard
+		print(f"Unexpected genre evaluation CLI failure: {exc}", file=sys.stderr)
+		_print_json(
+			{
+				"version": CONTRACT_VERSION,
+				"error": {
+					"code": "GENRE_EVALUATION_FAILED",
+					"message": "Failed to evaluate genre corpus",
 				},
 			}
 		)

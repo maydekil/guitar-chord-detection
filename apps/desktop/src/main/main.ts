@@ -5,14 +5,15 @@ import electronMain from "electron/main";
 import type { BrowserWindow as ElectronBrowserWindow } from "electron/main";
 import type { IpcMainInvokeEvent } from "electron";
 import type { ChordAnalysisResult, ChordAnalysisSuccess } from "@gcd/shared/analysis";
+import type { GenreEvaluationResult } from "@gcd/shared/genreEvaluation";
 import type { LyricsTranscriptionResult } from "@gcd/shared/lyrics";
 import type { PitchShiftResult } from "@gcd/shared/pitch";
 import type { SaveSongAnalysisRequest, SongLibrarySearchOptions, SongMetadataInput } from "@gcd/shared/library";
 import type { VocalRemovalResult } from "@gcd/shared/vocals";
 
 import { AnalysisCache, resolveAnalysisCachePath } from "./analysisCache.js";
-import { analyzeAudioInEngine, pitchShiftAudioInEngine, removeVocalsInEngine, transcribeLyricsInEngine } from "./engineProcess.js";
-import { buildAudioFileDialogOptions, toFileSelectionResult } from "./fileDialog.js";
+import { analyzeAudioInEngine, evaluateGenreCorpusInEngine, pitchShiftAudioInEngine, removeVocalsInEngine, transcribeLyricsInEngine } from "./engineProcess.js";
+import { buildAudioFileDialogOptions, buildGenreEvaluationManifestDialogOptions, toFileSelectionResult } from "./fileDialog.js";
 import { SongLibraryStore, resolveSongLibraryPath } from "./songLibrary.js";
 import { buildMainWindowOptions } from "./window.js";
 
@@ -48,6 +49,10 @@ interface RemoveVocalsRequest {
 interface PitchShiftAudioRequest {
     audioPath: string;
     semitones: number;
+}
+
+interface EvaluateGenreCorpusRequest {
+    manifestPath: string;
 }
 
 interface AudioUploadResult {
@@ -229,6 +234,9 @@ function registerIpcHandlers(): void {
             { appPath: app.getAppPath() }
         );
     });
+    ipcMain.handle("engine:evaluateGenreCorpus", async (_event, request: EvaluateGenreCorpusRequest): Promise<GenreEvaluationResult> => {
+        return await evaluateGenreCorpusInEngine(request.manifestPath, { appPath: app.getAppPath() });
+    });
     ipcMain.handle("library:saveAnalysis", async (_event, request: SaveSongAnalysisRequest) => {
         const metadata = normalizeSongMetadata(request.metadata);
         if (!metadata) {
@@ -313,6 +321,13 @@ function registerIpcHandlers(): void {
     });
     ipcMain.handle("file:selectAudio", async () => {
         const response = await dialog.showOpenDialog(buildAudioFileDialogOptions());
+        if (response.canceled) {
+            return toFileSelectionResult([]);
+        }
+        return toFileSelectionResult(response.filePaths);
+    });
+    ipcMain.handle("file:selectGenreEvaluationManifest", async () => {
+        const response = await dialog.showOpenDialog(buildGenreEvaluationManifestDialogOptions());
         if (response.canceled) {
             return toFileSelectionResult([]);
         }

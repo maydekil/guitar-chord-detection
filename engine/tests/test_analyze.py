@@ -23,7 +23,10 @@ from chord_engine.analyze import (
 )
 from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
-from chord_engine.playable_progression import _apply_repeated_phrase_quality_consistency
+from chord_engine.playable_progression import (
+    _apply_repeated_phrase_quality_consistency,
+    _stabilize_initial_tonic_pickup,
+)
 from chord_engine.segmentation import ChordSegment
 
 
@@ -262,6 +265,86 @@ def test_playable_progression_preserves_strong_repeated_quality_change() -> None
 
     assert "Gm" in [segment.chord for segment in refined]
     assert not any(event.replaced_chord == "Gm" and event.new_chord == "G" for event in events)
+
+
+def test_initial_tonic_pickup_can_absorb_weak_relative_minor_substitute() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=1.0, chord="C", confidence=0.82),
+        ChordSegment(start=1.0, end=5.2, chord="Am", confidence=0.76),
+        ChordSegment(start=5.2, end=8.0, chord="Em", confidence=0.82),
+        ChordSegment(start=8.0, end=11.0, chord="C", confidence=0.86),
+    ]
+
+    refined, events = _stabilize_initial_tonic_pickup(segments, key)
+
+    assert [segment.chord for segment in refined[:3]] == ["C", "Em", "C"]
+    assert refined[0].start == 0.0
+    assert refined[0].end == 5.2
+    assert any(event.replaced_chord == "Am" and event.new_chord == "C" for event in events)
+
+
+def test_initial_tonic_pickup_preserves_strong_relative_minor() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=1.0, chord="C", confidence=0.84),
+        ChordSegment(start=1.0, end=5.2, chord="Am", confidence=0.91),
+        ChordSegment(start=5.2, end=8.0, chord="F", confidence=0.82),
+        ChordSegment(start=8.0, end=11.0, chord="C", confidence=0.86),
+    ]
+
+    refined, events = _stabilize_initial_tonic_pickup(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Am", "F", "C"]
+    assert not events
+
+
+def test_initial_tonic_pickup_can_correct_weak_off_tonic_opening() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=0.9, chord="F#m", confidence=0.66),
+        ChordSegment(start=0.9, end=3.4, chord="D", confidence=0.80),
+        ChordSegment(start=3.4, end=6.0, chord="G", confidence=0.84),
+        ChordSegment(start=6.0, end=8.5, chord="A", confidence=0.84),
+    ]
+
+    refined, events = _stabilize_initial_tonic_pickup(segments, key)
+
+    assert [segment.chord for segment in refined[:3]] == ["D", "G", "A"]
+    assert refined[0].start == 0.0
+    assert refined[0].end == 3.4
+    assert any(event.replaced_chord == "F#m" and event.new_chord == "D" for event in events)
+
+
+def test_initial_tonic_pickup_can_absorb_weak_opening_dominant() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=1.0, chord="D", confidence=0.82),
+        ChordSegment(start=1.0, end=4.0, chord="A", confidence=0.76),
+        ChordSegment(start=4.0, end=6.8, chord="G", confidence=0.84),
+        ChordSegment(start=6.8, end=9.4, chord="D", confidence=0.86),
+    ]
+
+    refined, events = _stabilize_initial_tonic_pickup(segments, key)
+
+    assert [segment.chord for segment in refined[:3]] == ["D", "G", "D"]
+    assert refined[0].end == 4.0
+    assert any(event.replaced_chord == "A" and event.new_chord == "D" for event in events)
+
+
+def test_initial_tonic_pickup_preserves_strong_opening_dominant() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=1.0, chord="D", confidence=0.82),
+        ChordSegment(start=1.0, end=4.0, chord="A", confidence=0.91),
+        ChordSegment(start=4.0, end=6.8, chord="G", confidence=0.84),
+        ChordSegment(start=6.8, end=9.4, chord="D", confidence=0.86),
+    ]
+
+    refined, events = _stabilize_initial_tonic_pickup(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "A", "G", "D"]
+    assert not events
 
 
 def test_analysis_contract_shape_is_preserved(tmp_path: Path) -> None:

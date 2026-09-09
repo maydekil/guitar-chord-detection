@@ -270,3 +270,51 @@ def test_cli_evaluate_ground_truth_invalid_annotation_returns_controlled_error(t
     payload = _parse_json_stdout(proc.stdout)
     assert payload["version"] == "1"
     assert payload["error"]["code"] == "GROUND_TRUTH_PARSE_FAILED"  # type: ignore[index]
+
+
+def test_cli_evaluate_genre_corpus_outputs_json(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def fake_evaluate(_manifest_path: str) -> dict[str, object]:
+        return {
+            "version": "1",
+            "status": "pass",
+            "itemCount": 1,
+            "evaluatedItemCount": 1,
+            "failedItemCount": 0,
+            "metrics": {"timeWeightedChordAccuracy": 100.0},
+            "genres": {"pop": {"timeWeightedChordAccuracy": 100.0}},
+            "items": [],
+        }
+
+    monkeypatch.setattr(cli_module, "evaluate_genre_corpus", fake_evaluate)
+
+    code = cli_module.main(["evaluate-genre-corpus", "genre-manifest.json"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    payload = _parse_json_stdout(captured.out)
+    assert payload["version"] == "1"
+    assert payload["status"] == "pass"
+    assert payload["genres"]["pop"]["timeWeightedChordAccuracy"] == 100.0  # type: ignore[index]
+
+
+def test_cli_evaluate_genre_corpus_invalid_manifest_returns_controlled_error(tmp_path: Path) -> None:
+    manifest = tmp_path / "invalid-genre-manifest.json"
+    manifest.write_text("{invalid-json", encoding="utf-8")
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "chord_engine.cli",
+            "evaluate-genre-corpus",
+            str(manifest),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert proc.returncode != 0
+    payload = _parse_json_stdout(proc.stdout)
+    assert payload["version"] == "1"
+    assert payload["error"]["code"] == "GENRE_EVAL_MANIFEST_PARSE_FAILED"  # type: ignore[index]

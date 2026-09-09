@@ -16,6 +16,7 @@ type SongLibraryPanelProps = {
     widthPx: number;
     canAddSong: boolean;
     onAddSong: () => void;
+    onOpenEvaluation: () => void;
     onQueryChange: (value: string) => void;
     onPageChange: (page: number) => void;
     onPageSizeChange: (pageSize: number) => void;
@@ -34,6 +35,7 @@ export function SongLibraryPanel({
     widthPx,
     canAddSong,
     onAddSong,
+    onOpenEvaluation,
     onQueryChange,
     onPageChange,
     onPageSizeChange,
@@ -47,9 +49,14 @@ export function SongLibraryPanel({
                     <h2>Song Library</h2>
                     <p>{total} analyzed song(s)</p>
                 </div>
-                <button type="button" className="add-song-btn" onClick={onAddSong} disabled={!canAddSong}>
-                    Add Song
-                </button>
+                <div className="library-toolbar-actions">
+                    <button type="button" className="add-song-btn" onClick={onAddSong} disabled={!canAddSong}>
+                        Add Song
+                    </button>
+                    <button type="button" className="add-song-btn secondary-btn" onClick={onOpenEvaluation} disabled={!canAddSong}>
+                        Evaluate
+                    </button>
+                </div>
                 <input
                     type="search"
                     value={query}
