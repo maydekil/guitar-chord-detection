@@ -25,6 +25,7 @@ from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
 from chord_engine.playable_progression import (
     _absorb_tonic_predominant_mediant_approach,
+    _apply_major_section_pattern_arranger,
     _apply_major_repeated_tonic_phrase_answer,
     _apply_repeated_phrase_quality_consistency,
     _recover_repeated_opening_cycle_tail,
@@ -690,6 +691,54 @@ def test_repeated_cycle_overlong_dominant_splits_turnaround() -> None:
     assert refined[-4].start == 45.0
     assert refined[-1].end == 57.0
     assert any(event.replaced_chord == "G" and event.new_chord == "C" for event in events)
+
+
+def test_section_pattern_arranger_recovers_intro_resolution_cycle() -> None:
+    key = KeyEstimate(tonic_pc=9, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=6.0, chord="A", confidence=0.90),
+        ChordSegment(start=6.0, end=9.0, chord="C#m", confidence=0.78),
+        ChordSegment(start=9.0, end=12.0, chord="D", confidence=0.78),
+        ChordSegment(start=12.0, end=15.0, chord="E", confidence=0.78),
+        ChordSegment(start=15.0, end=18.0, chord="A", confidence=0.78),
+        ChordSegment(start=18.0, end=21.0, chord="C#m", confidence=0.78),
+        ChordSegment(start=21.0, end=26.0, chord="D", confidence=0.86),
+        ChordSegment(start=26.0, end=26.3, chord="E", confidence=0.88),
+        ChordSegment(start=26.3, end=29.0, chord="A", confidence=0.80),
+        ChordSegment(start=29.0, end=32.0, chord="C#m", confidence=0.80),
+        ChordSegment(start=32.0, end=35.0, chord="D", confidence=0.80),
+        ChordSegment(start=35.0, end=38.0, chord="A", confidence=0.80),
+        ChordSegment(start=38.0, end=41.0, chord="E", confidence=0.80),
+        ChordSegment(start=41.0, end=44.0, chord="F#m", confidence=0.80),
+        ChordSegment(start=44.0, end=47.0, chord="Bm", confidence=0.80),
+        ChordSegment(start=47.0, end=96.0, chord="E", confidence=0.80),
+    ]
+
+    refined, events = _apply_major_section_pattern_arranger(segments, key)
+
+    start_idx = next(idx for idx, segment in enumerate(refined) if segment.start == 26.0)
+    assert [segment.chord for segment in refined[start_idx : start_idx + 4]] == ["A", "C#m", "D", "A"]
+    assert any(event.replaced_chord == "E" and event.new_chord == "A" for event in events)
+
+
+def test_section_pattern_arranger_ignores_short_fixture_sequences() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.0, chord="C", confidence=0.86),
+        ChordSegment(start=4.0, end=8.0, chord="G", confidence=0.86),
+        ChordSegment(start=21.0, end=24.0, chord="C", confidence=0.78),
+        ChordSegment(start=24.0, end=27.0, chord="Em", confidence=0.76),
+        ChordSegment(start=27.0, end=30.0, chord="F", confidence=0.74),
+        ChordSegment(start=30.0, end=33.0, chord="C", confidence=0.77),
+        ChordSegment(start=33.0, end=36.0, chord="Em", confidence=0.76),
+        ChordSegment(start=36.0, end=39.0, chord="F", confidence=0.74),
+        ChordSegment(start=39.0, end=42.0, chord="C", confidence=0.77),
+    ]
+
+    refined, events = _apply_major_section_pattern_arranger(segments, key)
+
+    assert refined == segments
+    assert events == []
 
 
 def test_opening_answer_phrase_restart_requires_complete_cadence_context() -> None:

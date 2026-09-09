@@ -50,7 +50,10 @@ from chord_engine.post_refinement import (
 	_suppress_weak_diminished_passing_segments,
 	_suppress_weak_timeline_fragments,
 )
-from chord_engine.playable_progression import _apply_playable_progression_refinement
+from chord_engine.playable_progression import (
+	_apply_major_section_pattern_arranger,
+	_apply_playable_progression_refinement,
+)
 from chord_engine.musical_timing import summarize_musical_timing
 from chord_engine.music_theory import (
 	_chord_root_pc,
@@ -523,6 +526,13 @@ def _run_pipeline(
 			correction_events.extend(playable_events)
 		segments = _clamp_final_segment_end(segments, source_duration=audio.duration)
 		segments = _calibrate_output_confidence(segments)
+		if use_context_correction and audio.duration >= FULL_SONG_CONTEXT_CORRECTION_MIN_SECONDS:
+			segments, section_pattern_events = _apply_major_section_pattern_arranger(
+				segments,
+				detected_key=detected_key,
+			)
+			correction_events.extend(section_pattern_events)
+			segments = _calibrate_output_confidence(segments)
 		detected_segments = segments
 		musical_timing = summarize_musical_timing(
 			detected_segments,

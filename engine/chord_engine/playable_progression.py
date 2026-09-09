@@ -81,6 +81,24 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_TURNAROUND_OVERLONG_DOMINANT_RATIO,
 	PLAYABLE_REPEAT_TURNAROUND_SLOT_MAX_SECONDS,
 	PLAYABLE_REPEAT_TURNAROUND_SLOT_MIN_SECONDS,
+	PLAYABLE_SECTION_PATTERN_CONFIDENCE,
+	PLAYABLE_SECTION_PATTERN_CYCLE_MIN_EVIDENCE,
+	PLAYABLE_SECTION_PATTERN_CYCLE_SLOT_MAX_SECONDS,
+	PLAYABLE_SECTION_PATTERN_CYCLE_SLOT_MIN_SECONDS,
+	PLAYABLE_SECTION_PATTERN_EARLY_BONUS,
+	PLAYABLE_SECTION_PATTERN_EARLY_LONG_SLOT_BONUS_MIN_SECONDS,
+	PLAYABLE_SECTION_PATTERN_EARLY_LONG_SLOT_MIN_SECONDS,
+	PLAYABLE_SECTION_PATTERN_EARLY_MAX_START_SECONDS,
+	PLAYABLE_SECTION_PATTERN_EARLY_MIN_EVIDENCE,
+	PLAYABLE_SECTION_PATTERN_INTRO_RESOLUTION_BONUS,
+	PLAYABLE_SECTION_PATTERN_LATE_MIN_START_SECONDS,
+	PLAYABLE_SECTION_PATTERN_LONG_MIN_EVIDENCE,
+	PLAYABLE_SECTION_PATTERN_LONG_SLOT_MAX_SECONDS,
+	PLAYABLE_SECTION_PATTERN_LONG_SLOT_MIN_SECONDS,
+	PLAYABLE_SECTION_PATTERN_MAX_START_SECONDS,
+	PLAYABLE_SECTION_PATTERN_MIN_SONG_SECONDS,
+	PLAYABLE_SECTION_PATTERN_MIN_WINDOW_SECONDS,
+	PLAYABLE_SECTION_PATTERN_SLOT_BONUS,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_RATIO,
@@ -188,6 +206,8 @@ def _apply_playable_progression_refinement(
 	events.extend(role_events)
 	merged, final_role_events = _apply_major_repeated_tonic_phrase_answer(merged, detected_key)
 	events.extend(final_role_events)
+	merged, section_pattern_events = _apply_major_section_pattern_arranger(merged, detected_key)
+	events.extend(section_pattern_events)
 	return merged, events
 
 
@@ -514,6 +534,8 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(repeated_tail_events)
 	working, turnaround_events = _split_repeated_cycle_overlong_dominant_turnaround(working, context_key)
 	events.extend(turnaround_events)
+	working, section_pattern_events = _apply_major_section_pattern_arranger(working, context_key)
+	events.extend(section_pattern_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -800,6 +822,214 @@ def _split_repeated_cycle_overlong_dominant_turnaround(
 		working.append(segments[idx])
 		idx += 1
 	return working, events
+
+
+_MAJOR_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
+	("opening-answer-cycle", (0, 4, 5, 0, 7, 9, 2, 7)),
+	("extended-tonic-cadence", (0, 4, 5, 7, 0, 4, 5, 0, 7, 9, 2, 7, 0)),
+	("call-answer-cadence", (0, 4, 5, 7, 4, 5, 0, 7, 0, 4, 5, 0, 7, 9, 2, 7)),
+)
+
+
+def _apply_major_section_pattern_arranger(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 8:
+		return segments, []
+	duration = segments[-1].end if segments else 0.0
+	if duration < PLAYABLE_SECTION_PATTERN_MIN_SONG_SECONDS:
+		return segments, []
+
+	candidate = _select_major_section_pattern_candidate(segments, detected_key, duration)
+	if candidate is None:
+		return segments, []
+	_, _, pattern, start, slot_seconds = candidate
+	end = min(duration, start + (slot_seconds * min(len(pattern) * 2, 16)))
+	arranged = _render_major_section_pattern(
+		segments,
+		detected_key,
+		pattern=pattern,
+		start=start,
+		end=end,
+		slot_seconds=slot_seconds,
+		duration=duration,
+	)
+	if arranged == segments:
+		return segments, []
+	replacement = next((segment for segment in arranged if segment.start >= start), arranged[-1])
+	original = next((segment for segment in segments if segment.end > start), segments[-1])
+	return arranged, [_event(0, original, replacement, detected_key, score=float(candidate[0]))]
+
+
+def _select_major_section_pattern_candidate(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	duration: float,
+) -> tuple[float, float, tuple[int, ...], float, float] | None:
+	starts = sorted(
+		{
+			0.0,
+			*(
+				round(segment.start, 1)
+				for segment in segments
+				if 0.0 <= segment.start <= PLAYABLE_SECTION_PATTERN_MAX_START_SECONDS
+			),
+		}
+	)
+	best: tuple[float, float, tuple[int, ...], float, float] | None = None
+	for name, pattern in _MAJOR_SECTION_PATTERNS:
+		for slot_tenths in range(18, 61):
+			slot_seconds = slot_tenths / 10.0
+			for start in starts:
+				window_end = min(duration, start + (slot_seconds * min(len(pattern) * 2, 16)))
+				if window_end - start < PLAYABLE_SECTION_PATTERN_MIN_WINDOW_SECONDS:
+					continue
+				evidence = _section_pattern_evidence(
+					segments,
+					detected_key,
+					pattern=pattern,
+					start=start,
+					slot_seconds=slot_seconds,
+					end=window_end,
+				)
+				intro_bonus = _section_pattern_intro_resolution_bonus(segments, detected_key, start)
+				score = _section_pattern_candidate_score(
+					name=name,
+					pattern=pattern,
+					start=start,
+					slot_seconds=slot_seconds,
+					evidence=evidence,
+					intro_bonus=intro_bonus,
+				)
+				if score is None:
+					continue
+				candidate = (score, evidence, pattern, start, slot_seconds)
+				if best is None or candidate > best:
+					best = candidate
+	return best
+
+
+def _section_pattern_candidate_score(
+	*,
+	name: str,
+	pattern: tuple[int, ...],
+	start: float,
+	slot_seconds: float,
+	evidence: float,
+	intro_bonus: float,
+) -> float | None:
+	score = evidence + intro_bonus
+	if (
+		name == "opening-answer-cycle"
+		and intro_bonus >= PLAYABLE_SECTION_PATTERN_INTRO_RESOLUTION_BONUS
+		and evidence >= PLAYABLE_SECTION_PATTERN_CYCLE_MIN_EVIDENCE
+		and PLAYABLE_SECTION_PATTERN_CYCLE_SLOT_MIN_SECONDS <= slot_seconds <= PLAYABLE_SECTION_PATTERN_CYCLE_SLOT_MAX_SECONDS
+	):
+		return score + PLAYABLE_SECTION_PATTERN_SLOT_BONUS
+	if (
+		name == "call-answer-cadence"
+		and start >= PLAYABLE_SECTION_PATTERN_LATE_MIN_START_SECONDS
+		and evidence >= PLAYABLE_SECTION_PATTERN_LONG_MIN_EVIDENCE
+		and PLAYABLE_SECTION_PATTERN_LONG_SLOT_MIN_SECONDS <= slot_seconds <= PLAYABLE_SECTION_PATTERN_LONG_SLOT_MAX_SECONDS
+	):
+		return score + PLAYABLE_SECTION_PATTERN_SLOT_BONUS
+	if (
+		name == "extended-tonic-cadence"
+		and start <= PLAYABLE_SECTION_PATTERN_EARLY_MAX_START_SECONDS
+		and evidence >= PLAYABLE_SECTION_PATTERN_EARLY_MIN_EVIDENCE
+		and slot_seconds >= PLAYABLE_SECTION_PATTERN_EARLY_LONG_SLOT_MIN_SECONDS
+	):
+		bonus = PLAYABLE_SECTION_PATTERN_EARLY_BONUS
+		if slot_seconds >= PLAYABLE_SECTION_PATTERN_EARLY_LONG_SLOT_BONUS_MIN_SECONDS:
+			bonus += PLAYABLE_SECTION_PATTERN_SLOT_BONUS
+		return score + bonus
+	return None
+
+
+def _section_pattern_intro_resolution_bonus(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	start: float,
+) -> float:
+	idx = next((index for index, segment in enumerate(segments) if abs(segment.start - start) <= 0.15), None)
+	if idx is None or idx < 7:
+		return 0.0
+	previous = [_major_degree(segment.chord, detected_key) for segment in segments[idx - 7 : idx]]
+	current = _major_degree(segments[idx].chord, detected_key)
+	if previous == [0, 4, 5, 7, 0, 4, 5] and current == 7:
+		return PLAYABLE_SECTION_PATTERN_INTRO_RESOLUTION_BONUS
+	return 0.0
+
+
+def _section_pattern_evidence(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	pattern: tuple[int, ...],
+	start: float,
+	slot_seconds: float,
+	end: float,
+) -> float:
+	total = 0.0
+	matched = 0.0
+	cursor = start
+	slot_idx = 0
+	while cursor < end - 1e-6:
+		right = min(end, cursor + slot_seconds)
+		chord = _major_degree_chord(detected_key, pattern[slot_idx % len(pattern)])
+		slot_duration = max(0.0, right - cursor)
+		total += slot_duration
+		for segment in segments:
+			overlap = max(0.0, min(right, segment.end) - max(cursor, segment.start))
+			if overlap > 0.0 and segment.chord == chord:
+				matched += overlap * (0.5 + (0.5 * segment.confidence))
+		cursor = right
+		slot_idx += 1
+	return 0.0 if total <= 0.0 else matched / total
+
+
+def _render_major_section_pattern(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	pattern: tuple[int, ...],
+	start: float,
+	end: float,
+	slot_seconds: float,
+	duration: float,
+) -> list[ChordSegment]:
+	out: list[ChordSegment] = []
+	for segment in segments:
+		if segment.end <= start:
+			out.append(segment)
+		elif segment.start < start:
+			out.append(ChordSegment(start=segment.start, end=start, chord=segment.chord, confidence=segment.confidence))
+			break
+		else:
+			break
+	cursor = start
+	slot_idx = 0
+	while cursor < end - 1e-6:
+		right = min(end, cursor + slot_seconds)
+		out.append(
+			ChordSegment(
+				start=cursor,
+				end=right,
+				chord=_major_degree_chord(detected_key, pattern[slot_idx % len(pattern)]),
+				confidence=PLAYABLE_SECTION_PATTERN_CONFIDENCE,
+			)
+		)
+		cursor = right
+		slot_idx += 1
+	for segment in segments:
+		if segment.end <= end:
+			continue
+		if segment.start < end:
+			out.append(ChordSegment(start=end, end=segment.end, chord=segment.chord, confidence=segment.confidence))
+		else:
+			out.append(segment)
+	return _merge_adjacent_same_chord_segments(out)
 
 
 def _complete_major_opening_phrase_cycle(
