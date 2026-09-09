@@ -25,6 +25,7 @@ from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
 from chord_engine.playable_progression import (
     _apply_repeated_phrase_quality_consistency,
+    _split_initial_tonic_mediant_before_predominant,
     _stabilize_initial_tonic_pickup,
 )
 from chord_engine.segmentation import ChordSegment
@@ -344,6 +345,36 @@ def test_initial_tonic_pickup_preserves_strong_opening_dominant() -> None:
     refined, events = _stabilize_initial_tonic_pickup(segments, key)
 
     assert [segment.chord for segment in refined] == ["D", "A", "G", "D"]
+    assert not events
+
+
+def test_initial_tonic_can_split_to_mediant_before_predominant() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=8.8, chord="D", confidence=0.86),
+        ChordSegment(start=8.8, end=13.6, chord="G", confidence=0.82),
+        ChordSegment(start=13.6, end=17.0, chord="A", confidence=0.84),
+    ]
+
+    refined, events = _split_initial_tonic_mediant_before_predominant(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "F#m", "G", "A"]
+    assert refined[0].start == 0.0
+    assert refined[1].end == 8.8
+    assert any(event.replaced_chord == "D" and event.new_chord == "F#m" for event in events)
+
+
+def test_initial_tonic_mediant_split_preserves_short_tonic() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.0, chord="D", confidence=0.86),
+        ChordSegment(start=4.0, end=8.8, chord="G", confidence=0.82),
+        ChordSegment(start=8.8, end=12.0, chord="A", confidence=0.84),
+    ]
+
+    refined, events = _split_initial_tonic_mediant_before_predominant(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "G", "A"]
     assert not events
 
 

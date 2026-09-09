@@ -84,6 +84,12 @@ This is an audio-derived playable-timeline correction only; it must preserve
 strong relative-minor, substitute, or dominant chords and must not read lyrics
 or hardcode a song progression.
 
+When the stabilized major-key opening tonic becomes unusually long immediately
+before a predominant/subdominant chord, the playable timeline may split only
+that opening tonic into tonic then mediant-minor. This correction is limited to
+the initial pickup/intro position and must not become a global fixed progression
+rule.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

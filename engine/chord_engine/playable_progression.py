@@ -54,6 +54,8 @@ from chord_engine.analysis_config import (
 	PLAYABLE_INTRO_TONIC_EXTENSION_CONFIDENCE_MAX,
 	PLAYABLE_INTRO_TONIC_EXTENSION_MAX_SECONDS,
 	PLAYABLE_INTRO_TONIC_EXTENSION_TOTAL_MAX_SECONDS,
+	PLAYABLE_INTRO_TONIC_MEDIANT_SPLIT_EDGE_MIN_SECONDS,
+	PLAYABLE_INTRO_TONIC_MEDIANT_SPLIT_MIN_SECONDS,
 	PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS,
 	PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS,
 	PLAYABLE_REPEAT_PATTERN_MAX_LENGTH,
@@ -150,7 +152,43 @@ def _apply_playable_progression_refinement(
 	working, intro_tonic_events = _stabilize_initial_tonic_pickup(working, detected_key)
 	events.extend(intro_tonic_events)
 
-	return _merge_adjacent_same_chord_segments(working), events
+	merged = _merge_adjacent_same_chord_segments(working)
+	merged, split_events = _split_initial_tonic_mediant_before_predominant(merged, detected_key)
+	events.extend(split_events)
+	return merged, events
+
+
+def _split_initial_tonic_mediant_before_predominant(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 2:
+		return segments, []
+	first = segments[0]
+	second = segments[1]
+	if first.start > 0.15 or first.chord != _major_degree_chord(detected_key, 0):
+		return segments, []
+	duration = _segment_duration(first)
+	if duration < PLAYABLE_INTRO_TONIC_MEDIANT_SPLIT_MIN_SECONDS:
+		return segments, []
+	if _functional_role(second.chord, detected_key) != "predominant":
+		return segments, []
+	mediant = _major_degree_chord(detected_key, 4)
+	if mediant == first.chord or not _is_diatonic_chord(mediant, detected_key):
+		return segments, []
+	left_duration = duration * PLAYABLE_LEADSHEET_SPLIT_RATIO
+	right_duration = duration - left_duration
+	if min(left_duration, right_duration) < PLAYABLE_INTRO_TONIC_MEDIANT_SPLIT_EDGE_MIN_SECONDS:
+		return segments, []
+	mid = first.start + left_duration
+	left = ChordSegment(start=first.start, end=mid, chord=first.chord, confidence=first.confidence)
+	right = ChordSegment(
+		start=mid,
+		end=first.end,
+		chord=mediant,
+		confidence=float(np.clip(first.confidence * 0.92, 0.0, 1.0)),
+	)
+	return [left, right, *segments[1:]], [_event(0, first, right, detected_key, score=0.57)]
 
 
 def _split_long_segments_by_internal_chroma(
