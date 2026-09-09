@@ -24,6 +24,7 @@ from chord_engine.analyze import (
 from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
 from chord_engine.playable_progression import (
+    _absorb_tonic_predominant_mediant_approach,
     _apply_repeated_phrase_quality_consistency,
     _split_initial_tonic_mediant_before_predominant,
     _stabilize_initial_tonic_pickup,
@@ -375,6 +376,53 @@ def test_initial_tonic_mediant_split_preserves_short_tonic() -> None:
     refined, events = _split_initial_tonic_mediant_before_predominant(segments, key)
 
     assert [segment.chord for segment in refined] == ["D", "G", "A"]
+    assert not events
+
+
+def test_tonic_predominant_mediant_approach_absorbs_short_predominant() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.86),
+        ChordSegment(start=5.4, end=8.0, chord="Dm", confidence=0.72),
+        ChordSegment(start=8.0, end=10.6, chord="Em", confidence=0.80),
+        ChordSegment(start=10.6, end=13.0, chord="F", confidence=0.84),
+    ]
+
+    refined, events = _absorb_tonic_predominant_mediant_approach(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Em", "F"]
+    assert refined[1].start == 5.4
+    assert refined[1].end == 10.6
+    assert any(event.replaced_chord == "Dm" and event.new_chord == "Em" for event in events)
+
+
+def test_tonic_predominant_mediant_approach_preserves_strong_predominant() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.86),
+        ChordSegment(start=5.4, end=8.0, chord="Dm", confidence=0.91),
+        ChordSegment(start=8.0, end=10.6, chord="Em", confidence=0.80),
+        ChordSegment(start=10.6, end=13.0, chord="F", confidence=0.84),
+    ]
+
+    refined, events = _absorb_tonic_predominant_mediant_approach(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Dm", "Em", "F"]
+    assert not events
+
+
+def test_tonic_predominant_mediant_approach_preserves_predominant_to_dominant() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.86),
+        ChordSegment(start=5.4, end=8.0, chord="Dm", confidence=0.72),
+        ChordSegment(start=8.0, end=10.6, chord="G", confidence=0.80),
+        ChordSegment(start=10.6, end=13.0, chord="C", confidence=0.84),
+    ]
+
+    refined, events = _absorb_tonic_predominant_mediant_approach(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Dm", "G", "C"]
     assert not events
 
 

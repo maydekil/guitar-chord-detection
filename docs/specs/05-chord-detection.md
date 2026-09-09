@@ -90,6 +90,12 @@ that opening tonic into tonic then mediant-minor. This correction is limited to
 the initial pickup/intro position and must not become a global fixed progression
 rule.
 
+For major-key body phrases, a short weak predominant chord between tonic and
+mediant-minor may be treated as a passing full-mix artifact and absorbed into
+the mediant-minor when the mediant has stable duration support. This correction
+must preserve strong predominant chords and must preserve predominant-to-dominant
+motions such as `ii -> V`.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

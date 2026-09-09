@@ -58,6 +58,9 @@ from chord_engine.analysis_config import (
 	PLAYABLE_INTRO_TONIC_MEDIANT_SPLIT_MIN_SECONDS,
 	PLAYABLE_INTRO_TONIC_LOOKAHEAD_SECONDS,
 	PLAYABLE_INTRO_TONIC_MIN_TOTAL_SECONDS,
+	PLAYABLE_MEDIANT_APPROACH_CONFIDENCE_MAX,
+	PLAYABLE_MEDIANT_APPROACH_FRAGMENT_SECONDS,
+	PLAYABLE_MEDIANT_APPROACH_SUPPORT_MIN_SECONDS,
 	PLAYABLE_REPEAT_PATTERN_MAX_LENGTH,
 	PLAYABLE_REPEAT_PATTERN_MIN_LENGTH,
 	PLAYABLE_REPEAT_PATTERN_MIN_OCCURRENCES,
@@ -151,6 +154,8 @@ def _apply_playable_progression_refinement(
 	events.extend(repeat_events)
 	working, intro_tonic_events = _stabilize_initial_tonic_pickup(working, detected_key)
 	events.extend(intro_tonic_events)
+	working, mediant_events = _absorb_tonic_predominant_mediant_approach(working, detected_key)
+	events.extend(mediant_events)
 
 	merged = _merge_adjacent_same_chord_segments(working)
 	merged, split_events = _split_initial_tonic_mediant_before_predominant(merged, detected_key)
@@ -796,6 +801,42 @@ def _dominant_group_segment(group_segments: list[ChordSegment]) -> ChordSegment:
 			representative = segment
 		durations[segment.chord] = (next_duration, representative)
 	return sorted(durations.values(), key=lambda item: (-item[0], item[1].chord))[0][1]
+
+
+def _absorb_tonic_predominant_mediant_approach(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 3:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for idx in range(1, len(working) - 1):
+		current = working[idx]
+		if current.chord == "N":
+			continue
+		prev = working[idx - 1]
+		next_segment = working[idx + 1]
+		duration = _segment_duration(current)
+		if (
+			_major_degree(prev.chord, detected_key) != 0
+			or _major_degree(current.chord, detected_key) != 2
+			or _major_degree(next_segment.chord, detected_key) != 4
+			or duration > PLAYABLE_MEDIANT_APPROACH_FRAGMENT_SECONDS
+			or current.confidence > PLAYABLE_MEDIANT_APPROACH_CONFIDENCE_MAX
+			or _segment_duration(next_segment) < PLAYABLE_MEDIANT_APPROACH_SUPPORT_MIN_SECONDS
+		):
+			continue
+		replacement = ChordSegment(
+			start=current.start,
+			end=current.end,
+			chord=next_segment.chord,
+			confidence=float(np.clip(_weighted_confidence(current, next_segment) * 0.98, 0.0, 1.0)),
+		)
+		working[idx] = replacement
+		events.append(_event(idx, current, replacement, detected_key, score=0.56))
+	return _merge_adjacent_same_chord_segments(working), events
 
 
 def _insert_predominant_resolutions(
