@@ -68,6 +68,7 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_QUALITY_REPLACE_CONFIDENCE_MAX,
 	PLAYABLE_REPEAT_QUALITY_REPLACE_SECONDS_MAX,
 	PLAYABLE_REPEAT_ROLE_MIN_SEGMENT_SECONDS,
+	PLAYABLE_REPEAT_ROLE_CADENCE_MIN_SEGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_POST_CADENCE_FRAGMENT_SECONDS,
 	PLAYABLE_REPEAT_ROLE_SPLIT_MIN_SECONDS,
@@ -474,6 +475,8 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(answer_events)
 	working, cadence_events = _recover_post_cadence_tonic(working, detected_key)
 	events.extend(cadence_events)
+	working, cadence_answer_events = _answer_immediate_opening_cadence_phrase(working, detected_key)
+	events.extend(cadence_answer_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -538,6 +541,44 @@ def _answer_immediate_repeated_tonic_phrase(
 			)
 			working[idx] = replacement
 			events.append(_event(idx, original, replacement, detected_key, score=0.56))
+		break
+	return working, events
+
+
+def _answer_immediate_opening_cadence_phrase(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 8:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for start in range(0, len(working) - 7):
+		if working[start].start > PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS:
+			break
+		degrees = [_major_degree(segment.chord, detected_key) for segment in working[start : start + 8]]
+		if degrees != [0, 4, 5, 7, 0, 7, 5, 7]:
+			continue
+		if any(
+			_segment_duration(segment) < PLAYABLE_REPEAT_ROLE_CADENCE_MIN_SEGMENT_SECONDS
+			for segment in working[start : start + 8]
+		):
+			continue
+
+		mediant = _major_degree_chord(detected_key, 4)
+		tonic = _major_degree_chord(detected_key, 0)
+		for offset, chord in ((5, mediant), (7, tonic)):
+			idx = start + offset
+			original = working[idx]
+			replacement = ChordSegment(
+				start=original.start,
+				end=original.end,
+				chord=chord,
+				confidence=float(np.clip(original.confidence * 0.94, 0.0, 1.0)),
+			)
+			working[idx] = replacement
+			events.append(_event(idx, original, replacement, detected_key, score=0.57))
 		break
 	return working, events
 

@@ -105,6 +105,12 @@ must not read lyrics, song titles, folder names, manifest genres, or any fixed
 per-song timestamps. Later repeated sections must remain untouched unless a
 future recurrence model derives stronger audio evidence for them.
 
+When a major-key opening cadence phrase `I -> iii -> IV -> V` is immediately
+answered by `I -> V -> IV -> V`, the second phrase may be normalized to the
+opening phrase's mediant/tonic roles only when all participating regions are
+stable-duration, near-opening chord regions. This remains a constrained
+audio-derived recurrence correction, not a song-specific progression map.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

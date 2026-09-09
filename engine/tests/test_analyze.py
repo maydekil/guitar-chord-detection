@@ -467,6 +467,44 @@ def test_repeated_tonic_phrase_answer_ignores_late_repetition() -> None:
     assert not events
 
 
+def test_repeated_opening_cadence_can_form_mediant_tonic_answer() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.5, chord="D", confidence=0.88),
+        ChordSegment(start=4.5, end=9.0, chord="F#m", confidence=0.86),
+        ChordSegment(start=9.0, end=13.5, chord="G", confidence=0.82),
+        ChordSegment(start=13.5, end=18.0, chord="A", confidence=0.84),
+        ChordSegment(start=18.0, end=23.0, chord="D", confidence=0.83),
+        ChordSegment(start=23.0, end=28.0, chord="A", confidence=0.80),
+        ChordSegment(start=28.0, end=32.0, chord="G", confidence=0.78),
+        ChordSegment(start=32.0, end=38.0, chord="A", confidence=0.79),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "F#m", "G", "A", "D", "F#m", "G", "D"]
+    assert any(event.replaced_chord == "A" and event.new_chord == "F#m" for event in events)
+
+
+def test_repeated_opening_cadence_preserves_short_answer_motion() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.5, chord="D", confidence=0.88),
+        ChordSegment(start=4.5, end=9.0, chord="F#m", confidence=0.86),
+        ChordSegment(start=9.0, end=13.5, chord="G", confidence=0.82),
+        ChordSegment(start=13.5, end=18.0, chord="A", confidence=0.84),
+        ChordSegment(start=18.0, end=23.0, chord="D", confidence=0.83),
+        ChordSegment(start=23.0, end=24.5, chord="A", confidence=0.80),
+        ChordSegment(start=24.5, end=27.0, chord="G", confidence=0.78),
+        ChordSegment(start=27.0, end=30.0, chord="A", confidence=0.79),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == [segment.chord for segment in segments]
+    assert not events
+
+
 def test_post_cadence_tonic_recovery_preserves_long_subdominant() -> None:
     key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
     segments = [
