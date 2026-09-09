@@ -96,6 +96,15 @@ the mediant-minor when the mediant has stable duration support. This correction
 must preserve strong predominant chords and must preserve predominant-to-dominant
 motions such as `ii -> V`.
 
+For major-key opening phrases, when the stabilized chord timeline contains an
+immediate repeated tonic-start phrase whose second occurrence mirrors the first
+as relative/functional substitutes, the playable timeline may reinterpret only
+that second immediate occurrence as a dominant-answer phrase. This correction is
+limited to audio-derived chord/degree recurrence near the musical opening; it
+must not read lyrics, song titles, folder names, manifest genres, or any fixed
+per-song timestamps. Later repeated sections must remain untouched unless a
+future recurrence model derives stronger audio evidence for them.
+
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred
 musician-facing chord sheet when they conflict with stronger beat/bar/phrase

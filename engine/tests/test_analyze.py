@@ -25,6 +25,7 @@ from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
 from chord_engine.playable_progression import (
     _absorb_tonic_predominant_mediant_approach,
+    _apply_major_repeated_tonic_phrase_answer,
     _apply_repeated_phrase_quality_consistency,
     _split_initial_tonic_mediant_before_predominant,
     _stabilize_initial_tonic_pickup,
@@ -423,6 +424,63 @@ def test_tonic_predominant_mediant_approach_preserves_predominant_to_dominant() 
     refined, events = _absorb_tonic_predominant_mediant_approach(segments, key)
 
     assert [segment.chord for segment in refined] == ["C", "Dm", "G", "C"]
+    assert not events
+
+
+def test_repeated_tonic_phrase_can_form_dominant_answer_phrase() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.86),
+        ChordSegment(start=5.4, end=10.6, chord="Em", confidence=0.80),
+        ChordSegment(start=10.6, end=13.0, chord="F", confidence=0.78),
+        ChordSegment(start=13.0, end=16.1, chord="C", confidence=0.82),
+        ChordSegment(start=16.1, end=19.4, chord="Em", confidence=0.74),
+        ChordSegment(start=19.4, end=23.0, chord="F", confidence=0.72),
+        ChordSegment(start=23.0, end=27.8, chord="C", confidence=0.73),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Em", "F", "C", "G", "Am", "Dm", "G"]
+    assert refined[6].start == 23.0
+    assert refined[7].end == 27.8
+    assert any(event.replaced_chord == "Em" and event.new_chord == "G" for event in events)
+
+
+def test_repeated_tonic_phrase_answer_ignores_late_repetition() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.0, chord="C", confidence=0.86),
+        ChordSegment(start=4.0, end=8.0, chord="G", confidence=0.86),
+        ChordSegment(start=21.0, end=24.0, chord="C", confidence=0.78),
+        ChordSegment(start=24.0, end=27.0, chord="Em", confidence=0.76),
+        ChordSegment(start=27.0, end=30.0, chord="F", confidence=0.74),
+        ChordSegment(start=30.0, end=33.0, chord="C", confidence=0.77),
+        ChordSegment(start=33.0, end=36.0, chord="Em", confidence=0.76),
+        ChordSegment(start=36.0, end=39.0, chord="F", confidence=0.74),
+        ChordSegment(start=39.0, end=42.0, chord="C", confidence=0.77),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == [segment.chord for segment in segments]
+    assert not events
+
+
+def test_post_cadence_tonic_recovery_preserves_long_subdominant() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.5, chord="D", confidence=0.88),
+        ChordSegment(start=4.5, end=9.0, chord="F#m", confidence=0.86),
+        ChordSegment(start=9.0, end=13.5, chord="G", confidence=0.82),
+        ChordSegment(start=13.5, end=18.0, chord="A", confidence=0.84),
+        ChordSegment(start=18.0, end=22.2, chord="G", confidence=0.83),
+        ChordSegment(start=22.2, end=26.0, chord="A", confidence=0.84),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["D", "F#m", "G", "A", "G", "A"]
     assert not events
 
 
