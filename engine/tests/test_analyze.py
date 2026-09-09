@@ -25,6 +25,7 @@ from chord_engine.audio import TARGET_SAMPLE_RATE
 from chord_engine.detector import KeyEstimate
 from chord_engine.playable_progression import (
     _absorb_tonic_predominant_mediant_approach,
+    _apply_major_multi_section_pattern_arranger,
     _apply_major_section_pattern_arranger,
     _apply_major_repeated_tonic_phrase_answer,
     _apply_repeated_phrase_quality_consistency,
@@ -739,6 +740,64 @@ def test_section_pattern_arranger_ignores_short_fixture_sequences() -> None:
 
     assert refined == segments
     assert events == []
+
+
+def test_multi_section_pattern_arranger_recovers_repeated_windows() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=3.0, chord="C", confidence=0.88),
+        ChordSegment(start=3.0, end=6.0, chord="Em", confidence=0.88),
+        ChordSegment(start=6.0, end=9.0, chord="F", confidence=0.88),
+        ChordSegment(start=9.0, end=12.0, chord="G", confidence=0.88),
+        ChordSegment(start=12.0, end=18.0, chord="C", confidence=0.92),
+        ChordSegment(start=18.0, end=21.0, chord="Em", confidence=0.83),
+        ChordSegment(start=21.0, end=24.0, chord="F", confidence=0.83),
+        ChordSegment(start=24.0, end=27.0, chord="C", confidence=0.83),
+        ChordSegment(start=27.0, end=30.0, chord="G", confidence=0.83),
+        ChordSegment(start=30.0, end=33.0, chord="Am", confidence=0.83),
+        ChordSegment(start=33.0, end=36.0, chord="Dm", confidence=0.83),
+        ChordSegment(start=36.0, end=84.0, chord="G", confidence=0.90),
+        ChordSegment(start=84.0, end=87.0, chord="C", confidence=0.86),
+        ChordSegment(start=87.0, end=90.0, chord="Em", confidence=0.86),
+        ChordSegment(start=90.0, end=93.0, chord="F", confidence=0.86),
+        ChordSegment(start=93.0, end=96.0, chord="C", confidence=0.86),
+        ChordSegment(start=96.0, end=99.0, chord="G", confidence=0.86),
+        ChordSegment(start=99.0, end=102.0, chord="Am", confidence=0.86),
+        ChordSegment(start=102.0, end=105.0, chord="Dm", confidence=0.86),
+        ChordSegment(start=105.0, end=108.0, chord="G", confidence=0.86),
+        ChordSegment(start=108.0, end=111.0, chord="C", confidence=0.86),
+        ChordSegment(start=111.0, end=114.0, chord="Em", confidence=0.86),
+        ChordSegment(start=114.0, end=117.0, chord="F", confidence=0.86),
+        ChordSegment(start=117.0, end=120.0, chord="C", confidence=0.86),
+        ChordSegment(start=120.0, end=123.0, chord="G", confidence=0.86),
+        ChordSegment(start=123.0, end=126.0, chord="Am", confidence=0.86),
+        ChordSegment(start=126.0, end=129.0, chord="Dm", confidence=0.86),
+        ChordSegment(start=129.0, end=180.0, chord="Am", confidence=0.90),
+    ]
+
+    refined, events = _apply_major_multi_section_pattern_arranger(segments, key)
+
+    assert len(events) == 1
+    assert [segment.chord for segment in refined if 84.0 <= segment.start < 108.0] == [
+        "C",
+        "Em",
+        "F",
+        "C",
+        "G",
+        "Am",
+        "Dm",
+        "G",
+    ]
+    assert [segment.chord for segment in refined if 108.0 <= segment.start < 132.0] == [
+        "C",
+        "Em",
+        "F",
+        "C",
+        "G",
+        "Am",
+        "Dm",
+        "G",
+    ]
 
 
 def test_opening_answer_phrase_restart_requires_complete_cadence_context() -> None:

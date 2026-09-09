@@ -51,6 +51,7 @@ from chord_engine.post_refinement import (
 	_suppress_weak_timeline_fragments,
 )
 from chord_engine.playable_progression import (
+	_apply_major_multi_section_pattern_arranger,
 	_apply_major_section_pattern_arranger,
 	_apply_playable_progression_refinement,
 )
@@ -532,6 +533,14 @@ def _run_pipeline(
 				detected_key=detected_key,
 			)
 			correction_events.extend(section_pattern_events)
+			segments, multi_section_pattern_events = _apply_major_multi_section_pattern_arranger(
+				segments,
+				detected_key=detected_key,
+				chroma=features.chroma,
+				hop_length=features.hop_length,
+				sample_rate=features.sample_rate,
+			)
+			correction_events.extend(multi_section_pattern_events)
 			segments = _calibrate_output_confidence(segments)
 		detected_segments = segments
 		musical_timing = summarize_musical_timing(

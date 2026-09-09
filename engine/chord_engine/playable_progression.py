@@ -99,6 +99,20 @@ from chord_engine.analysis_config import (
 	PLAYABLE_SECTION_PATTERN_MIN_SONG_SECONDS,
 	PLAYABLE_SECTION_PATTERN_MIN_WINDOW_SECONDS,
 	PLAYABLE_SECTION_PATTERN_SLOT_BONUS,
+	PLAYABLE_MULTI_SECTION_PATTERN_CONFIDENCE,
+	PLAYABLE_MULTI_SECTION_PATTERN_MAX_CANDIDATES,
+	PLAYABLE_MULTI_SECTION_PATTERN_MAX_SLOT_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MAX_START_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MAX_WINDOW_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_CHROMA_EVIDENCE,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_EVIDENCE,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_GAIN,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_SCORE,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_SLOT_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_START_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_SONG_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_MIN_WINDOW_SECONDS,
+	PLAYABLE_MULTI_SECTION_PATTERN_SLOT_STEP_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_RATIO,
@@ -830,6 +844,10 @@ _MAJOR_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 	("call-answer-cadence", (0, 4, 5, 7, 4, 5, 0, 7, 0, 4, 5, 0, 7, 9, 2, 7)),
 )
 
+_MAJOR_MULTI_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
+	("opening-answer-cycle", (0, 4, 5, 0, 7, 9, 2, 7)),
+)
+
 
 def _apply_major_section_pattern_arranger(
 	segments: list[ChordSegment],
@@ -860,6 +878,288 @@ def _apply_major_section_pattern_arranger(
 	replacement = next((segment for segment in arranged if segment.start >= start), arranged[-1])
 	original = next((segment for segment in segments if segment.end > start), segments[-1])
 	return arranged, [_event(0, original, replacement, detected_key, score=float(candidate[0]))]
+
+
+def _apply_major_multi_section_pattern_arranger(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	chroma: np.ndarray | None = None,
+	hop_length: int | None = None,
+	sample_rate: int | None = None,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if detected_key.mode != "major" or len(segments) < 12:
+		return segments, []
+	duration = segments[-1].end if segments else 0.0
+	if duration < PLAYABLE_MULTI_SECTION_PATTERN_MIN_SONG_SECONDS:
+		return segments, []
+
+	candidates = _major_multi_section_candidates(
+		segments,
+		detected_key,
+		duration,
+		chroma=chroma,
+		hop_length=hop_length,
+		sample_rate=sample_rate,
+	)
+	if not candidates:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	occupied: list[tuple[float, float]] = []
+	for score, evidence, gain, _, pattern, start, end, slot_seconds in candidates:
+		if len(events) >= PLAYABLE_MULTI_SECTION_PATTERN_MAX_CANDIDATES:
+			break
+		if any(start < right + 0.15 and end > left - 0.15 for left, right in occupied):
+			continue
+		before = working
+		after = _render_major_section_pattern(
+			working,
+			detected_key,
+			pattern=pattern,
+			start=start,
+			end=end,
+			slot_seconds=slot_seconds,
+			duration=duration,
+			confidence=PLAYABLE_MULTI_SECTION_PATTERN_CONFIDENCE,
+		)
+		if after == before:
+			continue
+		working = after
+		occupied.append((start, end))
+		original = next((segment for segment in before if segment.end > start), before[-1])
+		replacement = next((segment for segment in after if segment.start >= start), after[-1])
+		events.append(_event(0, original, replacement, detected_key, score=float(score + evidence + gain)))
+	return _merge_adjacent_same_chord_segments(working), events
+
+
+def _major_multi_section_candidates(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	duration: float,
+	*,
+	chroma: np.ndarray | None,
+	hop_length: int | None,
+	sample_rate: int | None,
+) -> list[tuple[float, float, float, str, tuple[int, ...], float, float, float]]:
+	starts = sorted(
+		{
+			round(segment.start, 1)
+			for segment in segments
+			if PLAYABLE_MULTI_SECTION_PATTERN_MIN_START_SECONDS
+			<= segment.start
+			<= min(duration - PLAYABLE_MULTI_SECTION_PATTERN_MIN_WINDOW_SECONDS, PLAYABLE_MULTI_SECTION_PATTERN_MAX_START_SECONDS)
+		}
+	)
+	slot_candidates = _multi_section_slot_candidates(segments)
+	candidates: list[tuple[float, float, float, str, tuple[int, ...], float, float, float]] = []
+	for name, pattern in _MAJOR_MULTI_SECTION_PATTERNS:
+		for slot_seconds in slot_candidates:
+			min_cycles = max(1, int(np.ceil(PLAYABLE_MULTI_SECTION_PATTERN_MIN_WINDOW_SECONDS / (slot_seconds * len(pattern)))))
+			max_cycles = max(min_cycles, int(np.floor(PLAYABLE_MULTI_SECTION_PATTERN_MAX_WINDOW_SECONDS / (slot_seconds * len(pattern)))))
+			for cycles in range(min_cycles, max_cycles + 1):
+				window_seconds = slot_seconds * len(pattern) * cycles
+				if window_seconds < PLAYABLE_MULTI_SECTION_PATTERN_MIN_WINDOW_SECONDS:
+					continue
+				for start in starts:
+					end = min(duration, start + window_seconds)
+					if end - start < PLAYABLE_MULTI_SECTION_PATTERN_MIN_WINDOW_SECONDS:
+						continue
+					evidence = _section_pattern_evidence(
+						segments,
+						detected_key,
+						pattern=pattern,
+						start=start,
+						slot_seconds=slot_seconds,
+						end=end,
+					)
+					if evidence < PLAYABLE_MULTI_SECTION_PATTERN_MIN_EVIDENCE:
+						continue
+					chroma_evidence = _section_pattern_chroma_evidence(
+						detected_key,
+						pattern=pattern,
+						start=start,
+						slot_seconds=slot_seconds,
+						end=end,
+						chroma=chroma,
+						hop_length=hop_length,
+						sample_rate=sample_rate,
+					)
+					if chroma_evidence < PLAYABLE_MULTI_SECTION_PATTERN_MIN_CHROMA_EVIDENCE:
+						continue
+					supported_ratio = _section_pattern_supported_degree_ratio(
+						segments,
+						detected_key,
+						pattern=pattern,
+						start=start,
+						slot_seconds=slot_seconds,
+						end=end,
+					)
+					if supported_ratio < 0.50:
+						continue
+					gain = _section_pattern_arrangement_gain(
+						segments,
+						detected_key,
+						pattern=pattern,
+						start=start,
+						slot_seconds=slot_seconds,
+						end=end,
+					)
+					if gain < PLAYABLE_MULTI_SECTION_PATTERN_MIN_GAIN:
+						continue
+					score = (
+						(1.60 * evidence)
+						+ (0.60 * chroma_evidence)
+						+ (0.25 * gain)
+						+ (0.30 * supported_ratio)
+						+ _section_pattern_role_score(pattern)
+						+ _section_boundary_support(segments, start, end)
+					)
+					if score < PLAYABLE_MULTI_SECTION_PATTERN_MIN_SCORE:
+						continue
+					candidates.append((float(score), float(evidence), float(gain), name, pattern, start, end, slot_seconds))
+	return sorted(candidates, key=lambda item: (-item[0], -(item[6] - item[5]), item[5], item[3]))
+
+
+def _section_pattern_chroma_evidence(
+	detected_key: KeyEstimate,
+	*,
+	pattern: tuple[int, ...],
+	start: float,
+	slot_seconds: float,
+	end: float,
+	chroma: np.ndarray | None,
+	hop_length: int | None,
+	sample_rate: int | None,
+) -> float:
+	if chroma is None or hop_length is None or sample_rate is None or chroma.ndim != 2 or chroma.shape[0] != 12:
+		return 1.0
+	frame_seconds = frame_duration_seconds(hop_length=hop_length, sample_rate=sample_rate)
+	if frame_seconds <= 0.0:
+		return 1.0
+	templates = generate_chord_templates()
+	total = 0.0
+	matched = 0.0
+	cursor = start
+	slot_idx = 0
+	while cursor < end - 1e-6:
+		right = min(end, cursor + slot_seconds)
+		start_frame = max(0, int(np.floor(cursor / frame_seconds)))
+		end_frame = min(chroma.shape[1], max(start_frame + 1, int(np.ceil(right / frame_seconds))))
+		if end_frame <= start_frame:
+			cursor = right
+			slot_idx += 1
+			continue
+		vector = np.mean(chroma[:, start_frame:end_frame], axis=1)
+		if float(np.linalg.norm(vector)) <= 1e-7:
+			cursor = right
+			slot_idx += 1
+			continue
+		expected = _major_degree_chord(detected_key, pattern[slot_idx % len(pattern)])
+		template = templates.get(expected)
+		if template is not None:
+			score = _cosine_similarity(vector, template, min_norm=1e-7)
+			slot_duration = max(0.0, right - cursor)
+			total += slot_duration
+			matched += slot_duration * float(score)
+		cursor = right
+		slot_idx += 1
+	return 1.0 if total <= 0.0 else matched / total
+
+
+def _multi_section_slot_candidates(segments: list[ChordSegment]) -> list[float]:
+	durations = [
+		_segment_duration(segment)
+		for segment in segments
+		if segment.chord != "N"
+		and PLAYABLE_MULTI_SECTION_PATTERN_MIN_SLOT_SECONDS <= _segment_duration(segment) <= PLAYABLE_MULTI_SECTION_PATTERN_MAX_SLOT_SECONDS
+	]
+	seeds = {2.5, 3.0, 3.5, 4.0}
+	if durations:
+		median_duration = float(np.median(durations))
+		seeds.update({median_duration - 0.4, median_duration - 0.2, median_duration, median_duration + 0.2, median_duration + 0.4})
+	step = PLAYABLE_MULTI_SECTION_PATTERN_SLOT_STEP_SECONDS
+	return sorted(
+		{
+			round(float(np.clip(round(seed / step) * step, PLAYABLE_MULTI_SECTION_PATTERN_MIN_SLOT_SECONDS, PLAYABLE_MULTI_SECTION_PATTERN_MAX_SLOT_SECONDS)), 1)
+			for seed in seeds
+		}
+	)
+
+
+def _section_pattern_arrangement_gain(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	pattern: tuple[int, ...],
+	start: float,
+	slot_seconds: float,
+	end: float,
+) -> float:
+	total = 0.0
+	changed = 0.0
+	cursor = start
+	slot_idx = 0
+	while cursor < end - 1e-6:
+		right = min(end, cursor + slot_seconds)
+		expected = _major_degree_chord(detected_key, pattern[slot_idx % len(pattern)])
+		for segment in segments:
+			overlap = max(0.0, min(right, segment.end) - max(cursor, segment.start))
+			if overlap <= 0.0:
+				continue
+			total += overlap
+			if segment.chord != expected:
+				relationship = _harmonic_relationship_strength(segment.chord, expected, detected_key)
+				changed += overlap * (0.65 + (0.35 * relationship))
+		cursor = right
+		slot_idx += 1
+	return 0.0 if total <= 0.0 else changed / total
+
+
+def _section_pattern_supported_degree_ratio(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+	*,
+	pattern: tuple[int, ...],
+	start: float,
+	slot_seconds: float,
+	end: float,
+) -> float:
+	expected_degrees = set(pattern)
+	if not expected_degrees:
+		return 0.0
+	supported: set[int] = set()
+	cursor = start
+	slot_idx = 0
+	while cursor < end - 1e-6:
+		right = min(end, cursor + slot_seconds)
+		degree = pattern[slot_idx % len(pattern)]
+		expected = _major_degree_chord(detected_key, degree)
+		slot_duration = max(0.0, right - cursor)
+		matched = 0.0
+		for segment in segments:
+			overlap = max(0.0, min(right, segment.end) - max(cursor, segment.start))
+			if overlap > 0.0 and segment.chord == expected:
+				matched += overlap
+		if slot_duration > 0.0 and matched / slot_duration >= 0.45:
+			supported.add(degree)
+		cursor = right
+		slot_idx += 1
+	return len(supported) / len(expected_degrees)
+
+
+def _section_pattern_role_score(pattern: tuple[int, ...]) -> float:
+	primary_degrees = {0, 2, 5, 7}
+	if not pattern:
+		return 0.0
+	return 0.10 * (sum(1 for degree in pattern if degree in primary_degrees) / len(pattern))
+
+
+def _section_boundary_support(segments: list[ChordSegment], start: float, end: float) -> float:
+	start_support = 0.04 if any(abs(segment.start - start) <= 0.25 for segment in segments) else 0.0
+	end_support = 0.03 if any(abs(segment.end - end) <= 0.35 or abs(segment.start - end) <= 0.35 for segment in segments) else 0.0
+	return start_support + end_support
 
 
 def _select_major_section_pattern_candidate(
@@ -998,6 +1298,7 @@ def _render_major_section_pattern(
 	end: float,
 	slot_seconds: float,
 	duration: float,
+	confidence: float = PLAYABLE_SECTION_PATTERN_CONFIDENCE,
 ) -> list[ChordSegment]:
 	out: list[ChordSegment] = []
 	for segment in segments:
@@ -1017,7 +1318,7 @@ def _render_major_section_pattern(
 				start=cursor,
 				end=right,
 				chord=_major_degree_chord(detected_key, pattern[slot_idx % len(pattern)]),
-				confidence=PLAYABLE_SECTION_PATTERN_CONFIDENCE,
+				confidence=confidence,
 			)
 		)
 		cursor = right
