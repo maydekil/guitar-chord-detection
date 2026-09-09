@@ -537,6 +537,8 @@ def _run_pipeline(
 				segments,
 				detected_key=detected_key,
 				chroma=features.chroma,
+				low_chroma=low_chroma,
+				beat_timing=beat_timing,
 				hop_length=features.hop_length,
 				sample_rate=features.sample_rate,
 			)

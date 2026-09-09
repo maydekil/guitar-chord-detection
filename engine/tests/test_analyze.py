@@ -800,6 +800,57 @@ def test_multi_section_pattern_arranger_recovers_repeated_windows() -> None:
     ]
 
 
+def test_dsp_multi_section_pattern_arranger_arranges_cycle_when_supported() -> None:
+    from chord_engine.features import BeatTiming
+    from chord_engine.templates import generate_chord_templates
+
+    templates = generate_chord_templates()
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.85)
+
+    tempo = 120.0
+    hop_length = 512
+    sample_rate = 22050
+    frame_sec = hop_length / sample_rate
+    n_frames = int(np.ceil(180.0 / frame_sec))
+    chroma = np.zeros((12, n_frames), dtype=np.float32)
+    low_chroma = np.zeros((12, n_frames), dtype=np.float32)
+
+    cycle = ["C", "Em", "F", "C", "G", "Am", "Dm", "G"]
+    for b in range(37, 53):
+        b_start = b * 2.0
+        b_end = (b + 1) * 2.0
+        sf = int(b_start / frame_sec)
+        ef = min(n_frames, int(b_end / frame_sec))
+        ch = cycle[(b - 37) % 8]
+        tmpl = templates[ch]
+        chroma[:, sf:ef] = tmpl[:, None]
+        low_chroma[:, sf:ef] = tmpl[:, None]
+
+    beat_bounds = np.array([int((i * 0.5) / frame_sec) for i in range(360)], dtype=np.int32)
+    timing = BeatTiming(boundaries=beat_bounds, tempo_bpm=tempo, beat_count=360, is_reliable=True)
+
+    segments = [
+        ChordSegment(start=0.0, end=74.0, chord="N", confidence=0.90),
+        ChordSegment(start=74.0, end=90.0, chord="C", confidence=0.60),
+        ChordSegment(start=90.0, end=106.0, chord="G", confidence=0.60),
+        ChordSegment(start=106.0, end=180.0, chord="N", confidence=0.90),
+    ]
+
+    refined, events = _apply_major_multi_section_pattern_arranger(
+        segments,
+        key,
+        chroma=chroma,
+        low_chroma=low_chroma,
+        beat_timing=timing,
+        hop_length=hop_length,
+        sample_rate=sample_rate,
+    )
+
+    assert len(events) >= 1
+    arranged_chords = [s.chord for s in refined if 73.5 <= s.start < 106.0]
+    assert arranged_chords == cycle * 2
+
+
 def test_opening_answer_phrase_restart_requires_complete_cadence_context() -> None:
     key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
     segments = [
