@@ -75,6 +75,12 @@ from chord_engine.analysis_config import (
 	PLAYABLE_REPEAT_ROLE_CONTINUATION_SPLIT_RATIO,
 	PLAYABLE_REPEAT_ROLE_DEGRADED_OPENING_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_DEGRADED_OPENING_SPLIT_RATIO,
+	PLAYABLE_REPEAT_CYCLE_TAIL_MIN_SEGMENT_SECONDS,
+	PLAYABLE_REPEAT_CYCLE_TAIL_MIN_TOTAL_SECONDS,
+	PLAYABLE_REPEAT_TURNAROUND_OVERLONG_DOMINANT_MIN_SECONDS,
+	PLAYABLE_REPEAT_TURNAROUND_OVERLONG_DOMINANT_RATIO,
+	PLAYABLE_REPEAT_TURNAROUND_SLOT_MAX_SECONDS,
+	PLAYABLE_REPEAT_TURNAROUND_SLOT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_MAX_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_MIN_SECONDS,
 	PLAYABLE_REPEAT_ROLE_OPENING_DOMINANT_SPLIT_RATIO,
@@ -504,6 +510,10 @@ def _apply_major_repeated_tonic_phrase_answer(
 	events.extend(opening_cycle_events)
 	working, opening_cycle_restart_events = _recover_completed_opening_cycle_restart(working, context_key)
 	events.extend(opening_cycle_restart_events)
+	working, repeated_tail_events = _recover_repeated_opening_cycle_tail(working, context_key)
+	events.extend(repeated_tail_events)
+	working, turnaround_events = _split_repeated_cycle_overlong_dominant_turnaround(working, context_key)
+	events.extend(turnaround_events)
 	return _merge_adjacent_same_chord_segments(working), events
 
 
@@ -680,6 +690,115 @@ def _recover_completed_opening_cycle_restart(
 		working[start + 8 : start + 9] = [left, right]
 		events.append(_event(start + 8, restart, left, detected_key, score=0.56))
 		break
+	return working, events
+
+
+def _recover_repeated_opening_cycle_tail(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 16:
+		return segments, []
+
+	full_cycle = [0, 4, 5, 0, 7, 9, 2, 7]
+	if [_major_degree(segment.chord, detected_key) for segment in segments[:8]] != full_cycle:
+		return segments, []
+
+	working = list(segments)
+	events: list[CorrectionEvent] = []
+	for start in range(8, len(working) - 7):
+		head = [_major_degree(segment.chord, detected_key) for segment in working[start : start + 4]]
+		if head != full_cycle[:4]:
+			continue
+		tail = working[start + 4 : start + 8]
+		tail_degrees = [_major_degree(segment.chord, detected_key) for segment in tail]
+		if tail_degrees == full_cycle[4:]:
+			continue
+		if any(degree is None for degree in tail_degrees):
+			continue
+		if any(_segment_duration(segment) < PLAYABLE_REPEAT_CYCLE_TAIL_MIN_SEGMENT_SECONDS for segment in tail):
+			continue
+		if sum(_segment_duration(segment) for segment in tail) < PLAYABLE_REPEAT_CYCLE_TAIL_MIN_TOTAL_SECONDS:
+			continue
+
+		# The opening has already established a playable answer phrase. When
+		# the next cycle repeats its tonic half but collapses the answer into
+		# nearby diatonic substitutes, restore the same functional cadence.
+		for offset, degree in enumerate(full_cycle[4:]):
+			idx = start + 4 + offset
+			original = working[idx]
+			replacement = ChordSegment(
+				start=original.start,
+				end=original.end,
+				chord=_major_degree_chord(detected_key, degree),
+				confidence=float(np.clip(original.confidence * 0.94, 0.0, 1.0)),
+			)
+			working[idx] = replacement
+			events.append(_event(idx, original, replacement, detected_key, score=0.57))
+		break
+	return working, events
+
+
+def _split_repeated_cycle_overlong_dominant_turnaround(
+	segments: list[ChordSegment],
+	detected_key: KeyEstimate,
+) -> tuple[list[ChordSegment], list[CorrectionEvent]]:
+	if len(segments) < 16:
+		return segments, []
+
+	full_cycle = [0, 4, 5, 0, 7, 9, 2, 7]
+	degrees = [_major_degree(segment.chord, detected_key) for segment in segments]
+	working: list[ChordSegment] = []
+	events: list[CorrectionEvent] = []
+	idx = 0
+	while idx < len(segments):
+		if idx >= 15 and degrees[idx - 7 : idx + 1] == full_cycle:
+			current = segments[idx]
+			duration = _segment_duration(current)
+			recent_durations = [
+				_segment_duration(segment)
+				for segment in segments[idx - 7 : idx]
+				if segment.chord != "N" and _segment_duration(segment) > 0.0
+			]
+			typical = float(np.median(recent_durations)) if recent_durations else 0.0
+			if (
+				duration >= PLAYABLE_REPEAT_TURNAROUND_OVERLONG_DOMINANT_MIN_SECONDS
+				and typical > 0.0
+				and duration >= typical * PLAYABLE_REPEAT_TURNAROUND_OVERLONG_DOMINANT_RATIO
+			):
+				slot = float(
+					np.clip(
+						typical,
+						PLAYABLE_REPEAT_TURNAROUND_SLOT_MIN_SECONDS,
+						PLAYABLE_REPEAT_TURNAROUND_SLOT_MAX_SECONDS,
+					)
+				)
+				turnaround_degrees = [0, 9, 4]
+				if duration >= slot * (len(turnaround_degrees) + 1):
+					start = current.start
+					for offset, degree in enumerate(turnaround_degrees):
+						end = start + slot
+						replacement = ChordSegment(
+							start=start,
+							end=end,
+							chord=_major_degree_chord(detected_key, degree),
+							confidence=float(np.clip(current.confidence * 0.90, 0.0, 1.0)),
+						)
+						working.append(replacement)
+						events.append(_event(idx, current, replacement, detected_key, score=0.54 - (offset * 0.01)))
+						start = end
+					working.append(
+						ChordSegment(
+							start=start,
+							end=current.end,
+							chord=current.chord,
+							confidence=current.confidence,
+						)
+					)
+					idx += 1
+					continue
+		working.append(segments[idx])
+		idx += 1
 	return working, events
 
 
