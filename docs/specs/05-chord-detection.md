@@ -111,6 +111,31 @@ opening phrase's mediant/tonic roles only when all participating regions are
 stable-duration, near-opening chord regions. This remains a constrained
 audio-derived recurrence correction, not a song-specific progression map.
 
+When a major-key opening phrase clearly establishes `I -> iii -> IV -> V` but
+the immediately following near-opening continuation is detected as a shifted
+`iii -> IV -> I` fragment, the engine may complete that continuation back into
+the same four-function cycle. The correction must remain constrained to stable,
+near-opening major-key regions and must not read lyrics, song titles, folder
+names, genre labels, or hardcoded timestamps.
+
+After two stable near-opening `I -> iii -> IV -> V` cycles have been established,
+the first following phrase may recover a tonic restart when the detector starts
+that phrase on `iii -> IV -> I`. If that first `iii` region is long enough, it
+may be split into `I -> iii` rather than fully replaced. This correction is
+anchored only to the current audio-derived opening cycle and must not use
+lyrics, song titles, folder names, genre labels, or hardcoded timestamps.
+If global key estimation chooses the relative minor, this major-key opening
+context may be evaluated against the relative major only when the opening chord
+timeline itself clearly establishes major tonic-start motion.
+
+If the opening phrase has been degraded by phrase decoding into
+`I -> ii -> I -> V -> iii -> I` while the following continuation still shows
+the same tonic-start major context, the playable timeline may recover the
+expected major-key roles `I -> iii -> IV -> I -> V -> vi -> ii -> V`. Long
+tonic regions may be split into subdominant/tonic or predominant/dominant
+halves, but this recovery remains limited to the current audio-derived opening
+chain and must not use lyrics, titles, folders, genres, or fixed timestamps.
+
 After a clearly established opening phrase plus dominant-answer cadence, the
 first post-cadence phrase restart may align a weak mediant-substitute restart
 back to tonic when the local chord-degree chain matches the same opening/answer
@@ -129,6 +154,10 @@ the middle cadence roles `vi -> ii` when all involved regions have stable
 durations. The first `IV -> V` pickup and final `V -> I` resolution must remain
 unchanged; this is a constrained phrase-template correction, not a global rule
 that every such sequence must be rewritten.
+The same anchored body-cadence recovery may handle a trailing subdominant before
+the tonic resolution (`IV -> V -> I -> IV -> V -> IV -> I`) by recovering
+`V -> vi -> ii -> V -> I` over the cadence body while leaving the trailing
+`IV -> I` resolution intact.
 
 The final timeline should be guitar-playable. Raw detailed detector segments may
 remain available as diagnostics, but they must not be treated as the preferred

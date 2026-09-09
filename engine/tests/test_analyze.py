@@ -486,6 +486,96 @@ def test_repeated_opening_cadence_can_form_mediant_tonic_answer() -> None:
     assert any(event.replaced_chord == "A" and event.new_chord == "F#m" for event in events)
 
 
+def test_opening_cycle_completion_recovers_shifted_second_major_phrase() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.90),
+        ChordSegment(start=5.4, end=8.8, chord="Em", confidence=0.86),
+        ChordSegment(start=8.8, end=11.6, chord="F", confidence=0.84),
+        ChordSegment(start=11.6, end=17.1, chord="G", confidence=0.88),
+        ChordSegment(start=17.1, end=20.2, chord="Em", confidence=0.78),
+        ChordSegment(start=20.2, end=22.7, chord="F", confidence=0.76),
+        ChordSegment(start=22.7, end=28.4, chord="C", confidence=0.80),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Em", "F", "G", "C", "Em", "F", "G"]
+    assert refined[4].start > 11.6
+    assert refined[4].end == 17.1
+    assert refined[6].start == 20.2
+    assert refined[7].end == 28.4
+    assert any(event.replaced_chord == "G" and event.new_chord == "C" for event in events)
+
+
+def test_completed_opening_cycle_can_recover_post_cycle_tonic_restart() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.90),
+        ChordSegment(start=5.4, end=8.8, chord="Em", confidence=0.86),
+        ChordSegment(start=8.8, end=11.6, chord="F", confidence=0.84),
+        ChordSegment(start=11.6, end=14.2, chord="G", confidence=0.88),
+        ChordSegment(start=14.2, end=17.1, chord="C", confidence=0.84),
+        ChordSegment(start=17.1, end=20.2, chord="Em", confidence=0.78),
+        ChordSegment(start=20.2, end=25.8, chord="F", confidence=0.76),
+        ChordSegment(start=25.8, end=28.4, chord="G", confidence=0.80),
+        ChordSegment(start=28.4, end=31.6, chord="Em", confidence=0.76),
+        ChordSegment(start=31.6, end=34.9, chord="F", confidence=0.76),
+        ChordSegment(start=34.9, end=37.2, chord="C", confidence=0.82),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Em", "F", "G", "C", "Em", "F", "G", "C", "Em", "F", "C"]
+    assert refined[8].start == 28.4
+    assert refined[8].end == pytest.approx(29.872)
+    assert refined[9].start == pytest.approx(29.872)
+    assert any(event.replaced_chord == "Em" and event.new_chord == "C" for event in events)
+
+
+def test_degraded_major_opening_answer_recovers_playable_roles() -> None:
+    key = KeyEstimate(tonic_pc=0, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="C", confidence=0.90),
+        ChordSegment(start=5.4, end=10.6, chord="Dm", confidence=0.74),
+        ChordSegment(start=10.6, end=13.1, chord="C", confidence=0.74),
+        ChordSegment(start=13.1, end=16.1, chord="G", confidence=0.78),
+        ChordSegment(start=16.1, end=21.2, chord="Em", confidence=0.72),
+        ChordSegment(start=21.2, end=27.8, chord="C", confidence=0.72),
+        ChordSegment(start=27.8, end=31.4, chord="Em", confidence=0.78),
+        ChordSegment(start=31.4, end=34.8, chord="F", confidence=0.78),
+        ChordSegment(start=34.8, end=39.8, chord="C", confidence=0.84),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["C", "Em", "F", "C", "G", "Am", "Dm", "G", "C", "Em", "F", "C"]
+    assert any(event.replaced_chord == "Dm" and event.new_chord == "Em" for event in events)
+    assert any(event.replaced_chord == "Em" and event.new_chord == "Am" for event in events)
+
+
+def test_relative_minor_key_can_use_clear_relative_major_opening_context() -> None:
+    key = KeyEstimate(tonic_pc=6, mode="minor", confidence=0.74)
+    segments = [
+        ChordSegment(start=0.0, end=5.4, chord="A", confidence=0.90),
+        ChordSegment(start=5.4, end=8.8, chord="C#m", confidence=0.86),
+        ChordSegment(start=8.8, end=11.6, chord="D", confidence=0.84),
+        ChordSegment(start=11.6, end=14.2, chord="E", confidence=0.88),
+        ChordSegment(start=14.2, end=17.1, chord="A", confidence=0.84),
+        ChordSegment(start=17.1, end=20.2, chord="C#m", confidence=0.78),
+        ChordSegment(start=20.2, end=25.8, chord="D", confidence=0.76),
+        ChordSegment(start=25.8, end=28.4, chord="E", confidence=0.80),
+        ChordSegment(start=28.4, end=31.6, chord="C#m", confidence=0.76),
+        ChordSegment(start=31.6, end=34.9, chord="D", confidence=0.76),
+        ChordSegment(start=34.9, end=37.2, chord="A", confidence=0.82),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == ["A", "C#m", "D", "E", "A", "C#m", "D", "E", "A", "C#m", "D", "A"]
+    assert any(event.replaced_chord == "C#m" and event.new_chord == "A" for event in events)
+
+
 def test_repeated_opening_cadence_preserves_short_answer_motion() -> None:
     key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
     segments = [
@@ -634,6 +724,49 @@ def test_body_cadence_recovery_uses_opening_answer_context() -> None:
     ]
     assert any(event.replaced_chord == "D" and event.new_chord == "Bm" for event in events)
     assert any(event.replaced_chord == "G" and event.new_chord == "Em" for event in events)
+
+
+def test_body_cadence_recovery_handles_subdominant_tail_resolution() -> None:
+    key = KeyEstimate(tonic_pc=2, mode="major", confidence=0.82)
+    segments = [
+        ChordSegment(start=0.0, end=4.5, chord="D", confidence=0.88),
+        ChordSegment(start=4.5, end=9.0, chord="F#m", confidence=0.86),
+        ChordSegment(start=9.0, end=13.5, chord="G", confidence=0.82),
+        ChordSegment(start=13.5, end=18.0, chord="A", confidence=0.84),
+        ChordSegment(start=18.0, end=23.0, chord="D", confidence=0.83),
+        ChordSegment(start=23.0, end=28.0, chord="F#m", confidence=0.80),
+        ChordSegment(start=28.0, end=32.0, chord="G", confidence=0.78),
+        ChordSegment(start=32.0, end=38.0, chord="D", confidence=0.79),
+        ChordSegment(start=38.0, end=43.0, chord="G", confidence=0.78),
+        ChordSegment(start=43.0, end=48.0, chord="A", confidence=0.78),
+        ChordSegment(start=48.0, end=52.0, chord="D", confidence=0.76),
+        ChordSegment(start=52.0, end=56.0, chord="G", confidence=0.76),
+        ChordSegment(start=56.0, end=60.0, chord="A", confidence=0.80),
+        ChordSegment(start=60.0, end=64.0, chord="G", confidence=0.78),
+        ChordSegment(start=64.0, end=68.0, chord="D", confidence=0.82),
+    ]
+
+    refined, events = _apply_major_repeated_tonic_phrase_answer(segments, key)
+
+    assert [segment.chord for segment in refined] == [
+        "D",
+        "F#m",
+        "G",
+        "A",
+        "D",
+        "F#m",
+        "G",
+        "D",
+        "A",
+        "Bm",
+        "Em",
+        "A",
+        "D",
+        "G",
+        "D",
+    ]
+    assert any(event.replaced_chord == "G" and event.new_chord == "A" for event in events)
+    assert any(event.replaced_chord == "D" and event.new_chord == "Em" for event in events)
 
 
 def test_body_cadence_recovery_ignores_unanchored_progression() -> None:
