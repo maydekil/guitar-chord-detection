@@ -99,6 +99,10 @@ from chord_engine.analysis_config import (
 	PLAYABLE_SECTION_PATTERN_MIN_SONG_SECONDS,
 	PLAYABLE_SECTION_PATTERN_MIN_WINDOW_SECONDS,
 	PLAYABLE_SECTION_PATTERN_SLOT_BONUS,
+	PLAYABLE_DSP_MULTI_SECTION_MAX_CANDIDATES,
+	PLAYABLE_DSP_MULTI_SECTION_MIN_EVIDENCE,
+	PLAYABLE_DSP_MULTI_SECTION_MIN_GAIN,
+	PLAYABLE_DSP_MULTI_SECTION_MIN_SUPPORT,
 	PLAYABLE_MULTI_SECTION_PATTERN_CONFIDENCE,
 	PLAYABLE_MULTI_SECTION_PATTERN_MAX_BOUNDARY_OFFSET,
 	PLAYABLE_MULTI_SECTION_PATTERN_MAX_CANDIDATES,
@@ -672,7 +676,7 @@ def _major_playable_context_key(
 		confidence=detected_key.confidence,
 	)
 	degrees = [_major_degree(segment.chord, relative_major) for segment in segments[:4]]
-	if degrees in ([0, 4, 5, 7], [0, 4, 5, 0]):
+	if degrees in ([0, 4, 5, 7], [0, 4, 5, 0], [0, 7, 9, 5], [0, 7, 5, 7], [0, 0, 7, 7]):
 		return relative_major
 	return None
 
@@ -1030,70 +1034,34 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 	first_beat = beat_times[0]
 	templates = generate_chord_templates()
 
-	best_phase_score = -1e9
-	best_bar_windows: list[tuple[float, float]] = []
-	diatonic_degrees = [0, 2, 4, 5, 7, 9]
+	p_downbeat = first_beat
+	while p_downbeat > 0.0:
+		p_downbeat -= bar_len
+	while p_downbeat + bar_len <= 0.0:
+		p_downbeat += bar_len
 
-	for phase in range(4):
-		p_downbeat = first_beat + (phase * beat_interval)
-		while p_downbeat > 0.0:
-			p_downbeat -= bar_len
-		while p_downbeat + bar_len <= 0.0:
-			p_downbeat += bar_len
-		windows: list[tuple[float, float]] = []
-		cur = p_downbeat
-		while cur < duration:
-			nxt = cur + bar_len
-			if cur >= 0.0 and nxt <= duration:
-				windows.append((cur, nxt))
-			cur = nxt
-		if len(windows) < 8:
-			continue
-		phase_score = 0.0
-		for b_start, b_end in windows:
-			sf = max(0, int(np.floor(b_start / frame_sec)))
-			ef = min(chroma.shape[1], int(np.ceil(b_end / frame_sec)))
-			if ef <= sf + 2:
-				continue
-			cvec = np.mean(chroma[:, sf:ef], axis=1)
-			cnorm = float(np.linalg.norm(cvec))
-			if cnorm > 1e-7:
-				cvec = cvec / cnorm
-			lvec = None
-			if low_chroma is not None and low_chroma.ndim == 2 and low_chroma.shape[0] == 12:
-				lvec = np.mean(low_chroma[:, sf:ef], axis=1)
-				lnorm = float(np.linalg.norm(lvec))
-				if lnorm > 1e-7:
-					lvec = lvec / lnorm
-			best_c_score = max(
-				_score_bar_chord_dsp(cvec, lvec, _major_degree_chord(detected_key, deg), detected_key, templates)
-				for deg in diatonic_degrees
-			)
-			phase_score += best_c_score
-			for seg in segments:
-				if abs(seg.start - b_start) <= 0.35:
-					phase_score += 0.08 * seg.confidence
-		if phase_score > best_phase_score:
-			best_phase_score = phase_score
-			best_bar_windows = windows
+	best_bar_windows: list[tuple[float, float]] = []
+	cur = p_downbeat
+	while cur < duration:
+		nxt = cur + bar_len
+		if cur >= 0.0 and nxt <= duration:
+			best_bar_windows.append((cur, nxt))
+		cur = nxt
 
 	if not best_bar_windows or len(best_bar_windows) < 8:
 		return segments, []
 
+	diatonic_degrees = [0, 2, 4, 5, 7, 9]
 	bar_data: list[dict[str, object]] = []
 	for b_start, b_end in best_bar_windows:
-		sf = max(0, int(np.floor(b_start / frame_sec)))
-		ef = min(chroma.shape[1], int(np.ceil(b_end / frame_sec)))
+		sf = int(round(b_start / frame_sec))
+		ef = max(sf + 1, int(round(b_end / frame_sec)))
 		cvec = np.mean(chroma[:, sf:ef], axis=1)
-		cnorm = float(np.linalg.norm(cvec))
-		if cnorm > 1e-7:
-			cvec = cvec / cnorm
-		lvec = None
-		if low_chroma is not None and low_chroma.ndim == 2 and low_chroma.shape[0] == 12:
-			lvec = np.mean(low_chroma[:, sf:ef], axis=1)
-			lnorm = float(np.linalg.norm(lvec))
-			if lnorm > 1e-7:
-				lvec = lvec / lnorm
+		lvec = (
+			np.mean(low_chroma[:, sf:ef], axis=1)
+			if low_chroma is not None and low_chroma.ndim == 2 and low_chroma.shape[0] == 12
+			else None
+		)
 		degree_scores = {
 			deg: _score_bar_chord_dsp(cvec, lvec, _major_degree_chord(detected_key, deg), detected_key, templates)
 			for deg in diatonic_degrees
@@ -1159,9 +1127,9 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 				gain = mean_pattern_score - current_sec_score
 
 				if (
-					mean_pattern_score >= PLAYABLE_MULTI_SECTION_PATTERN_MIN_EVIDENCE
-					and gain >= PLAYABLE_MULTI_SECTION_PATTERN_MIN_GAIN
-					and support_ratio >= PLAYABLE_MULTI_SECTION_PATTERN_MIN_SUPPORT
+					mean_pattern_score >= PLAYABLE_DSP_MULTI_SECTION_MIN_EVIDENCE
+					and gain >= PLAYABLE_DSP_MULTI_SECTION_MIN_GAIN
+					and support_ratio >= PLAYABLE_DSP_MULTI_SECTION_MIN_SUPPORT
 				):
 					candidate_sections.append({
 						"start": sec_start,
@@ -1182,15 +1150,14 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 	def _rank_cand(s: dict[str, object]) -> float:
 		unique_deg_count = len(set(s["degrees"]))  # type: ignore[arg-type]
 		richness_bonus = 0.035 * unique_deg_count
-		span_bonus = 0.04 * min(2.0, float(s["sec_bars"]) / 8.0)  # type: ignore[arg-type]
-		return -(float(s["score"]) + richness_bonus + span_bonus + (0.25 * float(s["gain"])))
+		return -(float(s["score"]) + richness_bonus + (0.25 * float(s["gain"])))
 
 	candidate_sections.sort(key=_rank_cand)
 
 	occupied: list[tuple[float, float]] = []
 	accepted: list[dict[str, object]] = []
 	for cand in candidate_sections:
-		if len(accepted) >= PLAYABLE_MULTI_SECTION_PATTERN_MAX_CANDIDATES:
+		if len(accepted) >= PLAYABLE_DSP_MULTI_SECTION_MAX_CANDIDATES:
 			break
 		c_start = float(cand["start"])  # type: ignore[arg-type]
 		c_end = float(cand["end"])  # type: ignore[arg-type]
@@ -1203,49 +1170,33 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 		return segments, []
 
 	accepted.sort(key=lambda s: float(s["start"]))  # type: ignore[arg-type]
-	out_segments: list[ChordSegment] = []
+	working = list(segments)
 	events: list[CorrectionEvent] = []
-	cursor = 0.0
 
 	for cand in accepted:
-		c_start = float(cand["start"])  # type: ignore[arg-type]
-		c_end = float(cand["end"])  # type: ignore[arg-type]
-		for seg in segments:
-			if seg.end <= cursor:
-				continue
-			if seg.start >= c_start:
-				break
-			left = max(seg.start, cursor)
-			right = min(seg.end, c_start)
-			if right > left + 0.01:
-				out_segments.append(ChordSegment(start=left, end=right, chord=seg.chord, confidence=seg.confidence))
-
-		s_idx = int(cand["start_idx"])  # type: ignore[arg-type]
-		degs = cand["degrees"]  # type: ignore[assignment]
-		sec_bars = int(cand["sec_bars"])  # type: ignore[arg-type]
-		for b_offset in range(sec_bars):
-			b_info = bar_data[s_idx + b_offset]
-			chord = _major_degree_chord(detected_key, degs[b_offset % len(degs)])
-			out_segments.append(ChordSegment(
-				start=float(b_info["start"]),  # type: ignore[arg-type]
-				end=float(b_info["end"]),  # type: ignore[arg-type]
-				chord=chord,
-				confidence=PLAYABLE_MULTI_SECTION_PATTERN_CONFIDENCE,
-			))
-		original = next((seg for seg in segments if seg.end > c_start), segments[-1])
-		replacement = next((seg for seg in out_segments if seg.start >= c_start), out_segments[-1])
-		events.append(_event(0, original, replacement, detected_key, score=float(cand["score"]) + float(cand["gain"])))  # type: ignore[arg-type]
-		cursor = c_end
-
-	for seg in segments:
-		if seg.end <= cursor:
+		pat = cand["degrees"]  # type: ignore[assignment]
+		cs, ce = float(cand["start"]), float(cand["end"])  # type: ignore[arg-type]
+		sec_bars = float(cand["sec_bars"])  # type: ignore[arg-type]
+		slot_sec = (ce - cs) / sec_bars
+		before = working
+		after = _render_major_section_pattern(
+			working,
+			detected_key,
+			pattern=pat,
+			start=cs,
+			end=ce,
+			slot_seconds=slot_sec,
+			duration=duration,
+			confidence=PLAYABLE_MULTI_SECTION_PATTERN_CONFIDENCE,
+		)
+		if after == before:
 			continue
-		left = max(seg.start, cursor)
-		right = seg.end
-		if right > left + 0.01:
-			out_segments.append(ChordSegment(start=left, end=right, chord=seg.chord, confidence=seg.confidence))
+		working = after
+		original = next((seg for seg in before if seg.end > cs), before[-1])
+		replacement = next((seg for seg in after if seg.start >= cs), after[-1])
+		events.append(_event(0, original, replacement, detected_key, score=float(cand["score"]) + float(cand["gain"])))  # type: ignore[arg-type]
 
-	merged = _merge_adjacent_same_chord_segments(out_segments)
+	merged = _merge_adjacent_same_chord_segments(working)
 	return merged, events
 
 

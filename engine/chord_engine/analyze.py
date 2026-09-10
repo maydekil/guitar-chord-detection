@@ -543,6 +543,17 @@ def _run_pipeline(
 				sample_rate=features.sample_rate,
 			)
 			correction_events.extend(multi_section_pattern_events)
+			if multi_section_pattern_events:
+				segments, multi_section_pattern_events_p2 = _apply_major_multi_section_pattern_arranger(
+					segments,
+					detected_key=detected_key,
+					chroma=features.chroma,
+					low_chroma=low_chroma,
+					beat_timing=beat_timing,
+					hop_length=features.hop_length,
+					sample_rate=features.sample_rate,
+				)
+				correction_events.extend(multi_section_pattern_events_p2)
 			segments = _calibrate_output_confidence(segments)
 		detected_segments = segments
 		musical_timing = summarize_musical_timing(
