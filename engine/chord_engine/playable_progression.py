@@ -849,6 +849,9 @@ _MAJOR_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 
 _MAJOR_MULTI_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 	("opening-answer-cycle", (0, 4, 5, 0, 7, 9, 2, 7)),
+	("dominant-cadence-2bar", (0, 0, 4, 4, 5, 5, 7, 7)),
+	("pop-reggae-2bar", (0, 0, 7, 7, 9, 9, 5, 5)),
+	("pop-reggae-1bar", (0, 7, 9, 5)),
 )
 
 
@@ -1172,9 +1175,10 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 		return segments, []
 
 	def _rank_cand(s: dict[str, object]) -> float:
-		cycle_bonus = 0.12 if len(s["degrees"]) >= 8 else 0.0  # type: ignore[arg-type]
+		unique_deg_count = len(set(s["degrees"]))  # type: ignore[arg-type]
+		richness_bonus = 0.035 * unique_deg_count
 		span_bonus = 0.04 * min(2.0, float(s["sec_bars"]) / 8.0)  # type: ignore[arg-type]
-		return -(float(s["score"]) + cycle_bonus + span_bonus + (0.25 * float(s["gain"])))
+		return -(float(s["score"]) + richness_bonus + span_bonus + (0.25 * float(s["gain"])))
 
 	candidate_sections.sort(key=_rank_cand)
 
