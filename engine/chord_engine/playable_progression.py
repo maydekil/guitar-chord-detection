@@ -850,6 +850,10 @@ _MAJOR_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 _MAJOR_MULTI_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 	("opening-answer-cycle", (0, 4, 5, 0, 7, 9, 2, 7)),
 	("dominant-cadence-2bar", (0, 0, 4, 4, 5, 5, 7, 7)),
+	("dominant-cadence-1bar", (0, 4, 5, 7)),
+	("pop-ballad-chorus-8bar", (9, 2, 7, 0, 4, 5, 0, 7)),
+	("pop-reggae-verse-8bar", (0, 7, 9, 5, 0, 7, 5, 7)),
+	("pop-reggae-chorus-8bar", (0, 7, 9, 5, 2, 7, 0, 7)),
 	("pop-reggae-2bar", (0, 0, 7, 7, 9, 9, 5, 5)),
 	("pop-reggae-1bar", (0, 7, 9, 5)),
 )
@@ -1114,7 +1118,7 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 	num_bars = len(bar_data)
 	patterns = _MAJOR_MULTI_SECTION_PATTERNS
 
-	for sec_bars in [8, 12, 16]:
+	for sec_bars in [8]:
 		for start_idx in range(0, num_bars - sec_bars + 1, 1):
 			end_idx = start_idx + sec_bars
 			sec_start = float(bar_data[start_idx]["start"])  # type: ignore[arg-type]
@@ -1129,13 +1133,14 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 				d
 				for d, _ in sorted(bar_data[start_idx]["degree_scores"].items(), key=lambda x: -x[1])[:2]  # type: ignore[union-attr]
 			}
-			if 0 not in start_top2:
-				continue
 
 			current_sec_score = float(np.mean([bar_data[b]["current_score"] for b in range(start_idx, end_idx)]))  # type: ignore[arg-type]
 
 			for pat_name, pat_degrees in patterns:
 				if sec_bars % len(pat_degrees) != 0 and (sec_bars < len(pat_degrees) or len(pat_degrees) not in {2, 4, 8}):
+					continue
+				expected_start_deg = pat_degrees[0]
+				if expected_start_deg not in start_top2:
 					continue
 				pattern_scores = []
 				support_count = 0
