@@ -853,13 +853,10 @@ _MAJOR_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 
 _MAJOR_MULTI_SECTION_PATTERNS: tuple[tuple[str, tuple[int, ...]], ...] = (
 	("opening-answer-cycle", (0, 4, 5, 0, 7, 9, 2, 7)),
-	("dominant-cadence-2bar", (0, 0, 4, 4, 5, 5, 7, 7)),
-	("dominant-cadence-1bar", (0, 4, 5, 7)),
+	("pop-reggae-rep-8bar", (0, 7, 9, 5, 0, 7, 9, 5)),
 	("pop-ballad-chorus-8bar", (9, 2, 7, 0, 4, 5, 0, 7)),
 	("pop-reggae-verse-8bar", (0, 7, 9, 5, 0, 7, 5, 7)),
 	("pop-reggae-chorus-8bar", (0, 7, 9, 5, 2, 7, 0, 7)),
-	("pop-reggae-2bar", (0, 0, 7, 7, 9, 9, 5, 5)),
-	("pop-reggae-1bar", (0, 7, 9, 5)),
 )
 
 
@@ -1034,146 +1031,169 @@ def _apply_dsp_major_multi_section_pattern_arranger(
 	first_beat = beat_times[0]
 	templates = generate_chord_templates()
 
-	p_downbeat = first_beat
-	while p_downbeat > 0.0:
-		p_downbeat -= bar_len
-	while p_downbeat + bar_len <= 0.0:
-		p_downbeat += bar_len
-
-	best_bar_windows: list[tuple[float, float]] = []
-	cur = p_downbeat
-	while cur < duration:
-		nxt = cur + bar_len
-		if cur >= 0.0 and nxt <= duration:
-			best_bar_windows.append((cur, nxt))
-		cur = nxt
-
-	if not best_bar_windows or len(best_bar_windows) < 8:
-		return segments, []
-
 	diatonic_degrees = [0, 2, 4, 5, 7, 9]
-	bar_data: list[dict[str, object]] = []
-	for b_start, b_end in best_bar_windows:
-		sf = int(round(b_start / frame_sec))
-		ef = max(sf + 1, int(round(b_end / frame_sec)))
-		cvec = np.mean(chroma[:, sf:ef], axis=1)
-		lvec = (
-			np.mean(low_chroma[:, sf:ef], axis=1)
-			if low_chroma is not None and low_chroma.ndim == 2 and low_chroma.shape[0] == 12
-			else None
-		)
-		degree_scores = {
-			deg: _score_bar_chord_dsp(cvec, lvec, _major_degree_chord(detected_key, deg), detected_key, templates)
-			for deg in diatonic_degrees
-		}
-		orig_score = 0.0
-		total_overlap = 0.0
-		for seg in segments:
-			overlap = max(0.0, min(b_end, seg.end) - max(b_start, seg.start))
-			if overlap > 0.0:
-				total_overlap += overlap
-				c_score = _score_bar_chord_dsp(cvec, lvec, seg.chord, detected_key, templates)
-				orig_score += overlap * c_score
-		current_bar_score = orig_score / total_overlap if total_overlap > 0.0 else 0.0
-		bar_data.append({
-			"start": b_start,
-			"end": b_end,
-			"degree_scores": degree_scores,
-			"current_score": current_bar_score,
-		})
-
-	candidate_sections: list[dict[str, object]] = []
-	num_bars = len(bar_data)
 	patterns = _MAJOR_MULTI_SECTION_PATTERNS
+	phase_results: list[tuple[list[dict[str, object]], float]] = []
 
-	for sec_bars in [8]:
-		for start_idx in range(0, num_bars - sec_bars + 1, 1):
-			end_idx = start_idx + sec_bars
-			sec_start = float(bar_data[start_idx]["start"])  # type: ignore[arg-type]
-			sec_end = float(bar_data[end_idx - 1]["end"])  # type: ignore[arg-type]
-			if sec_start < PLAYABLE_MULTI_SECTION_PATTERN_MIN_START_SECONDS:
-				continue
-			if sec_start > PLAYABLE_MULTI_SECTION_PATTERN_MAX_START_SECONDS:
-				continue
-			if not any(abs(seg.start - sec_start) <= PLAYABLE_MULTI_SECTION_PATTERN_MAX_BOUNDARY_OFFSET for seg in segments):
-				continue
-			start_top2 = {
-				d
-				for d, _ in sorted(bar_data[start_idx]["degree_scores"].items(), key=lambda x: -x[1])[:2]  # type: ignore[union-attr]
-			}
+	for phase_beat in range(4):
+		p_downbeat = first_beat + (phase_beat * beat_interval)
+		while p_downbeat > 0.0:
+			p_downbeat -= bar_len
+		while p_downbeat + bar_len <= 0.0:
+			p_downbeat += bar_len
 
-			current_sec_score = float(np.mean([bar_data[b]["current_score"] for b in range(start_idx, end_idx)]))  # type: ignore[arg-type]
+		bar_windows: list[tuple[float, float]] = []
+		cur = p_downbeat
+		while cur < duration:
+			nxt = cur + bar_len
+			if cur >= 0.0 and nxt <= duration:
+				bar_windows.append((cur, nxt))
+			cur = nxt
 
-			for pat_name, pat_degrees in patterns:
-				if sec_bars % len(pat_degrees) != 0 and (sec_bars < len(pat_degrees) or len(pat_degrees) not in {2, 4, 8}):
-					continue
-				expected_start_deg = pat_degrees[0]
-				if expected_start_deg not in start_top2:
-					continue
-				pattern_scores = []
-				support_count = 0
-				for b_offset in range(sec_bars):
-					b_idx = start_idx + b_offset
-					expected_deg = pat_degrees[b_offset % len(pat_degrees)]
-					b_scores = bar_data[b_idx]["degree_scores"]  # type: ignore[union-attr]
-					score = b_scores.get(expected_deg, 0.0)
-					pattern_scores.append(score)
-					sorted_degs = sorted(b_scores.items(), key=lambda x: -x[1])
-					top_2 = {d for d, _ in sorted_degs[:2]}
-					if expected_deg in top_2:
-						support_count += 1
-				mean_pattern_score = float(np.mean(pattern_scores))
-				support_ratio = support_count / sec_bars
-				gain = mean_pattern_score - current_sec_score
-
-				if (
-					mean_pattern_score >= PLAYABLE_DSP_MULTI_SECTION_MIN_EVIDENCE
-					and gain >= PLAYABLE_DSP_MULTI_SECTION_MIN_GAIN
-					and support_ratio >= PLAYABLE_DSP_MULTI_SECTION_MIN_SUPPORT
-				):
-					candidate_sections.append({
-						"start": sec_start,
-						"end": sec_end,
-						"start_idx": start_idx,
-						"end_idx": end_idx,
-						"name": pat_name,
-						"degrees": pat_degrees,
-						"score": mean_pattern_score,
-						"gain": gain,
-						"support": support_ratio,
-						"sec_bars": sec_bars,
-					})
-
-	if not candidate_sections:
-		return segments, []
-
-	def _rank_cand(s: dict[str, object]) -> float:
-		unique_deg_count = len(set(s["degrees"]))  # type: ignore[arg-type]
-		richness_bonus = 0.035 * unique_deg_count
-		return -(float(s["score"]) + richness_bonus + (0.25 * float(s["gain"])))
-
-	candidate_sections.sort(key=_rank_cand)
-
-	occupied: list[tuple[float, float]] = []
-	accepted: list[dict[str, object]] = []
-	for cand in candidate_sections:
-		if len(accepted) >= PLAYABLE_DSP_MULTI_SECTION_MAX_CANDIDATES:
-			break
-		c_start = float(cand["start"])  # type: ignore[arg-type]
-		c_end = float(cand["end"])  # type: ignore[arg-type]
-		if any(c_start < occ_end - 0.2 and c_end > occ_start + 0.2 for occ_start, occ_end in occupied):
+		if not bar_windows or len(bar_windows) < 8:
+			phase_results.append(([], 0.0))
 			continue
-		occupied.append((c_start, c_end))
-		accepted.append(cand)
 
-	if not accepted:
+		bar_data: list[dict[str, object]] = []
+		for b_start, b_end in bar_windows:
+			sf = int(round(b_start / frame_sec))
+			ef = max(sf + 1, int(round(b_end / frame_sec)))
+			cvec = np.mean(chroma[:, sf:ef], axis=1)
+			lvec = (
+				np.mean(low_chroma[:, sf:ef], axis=1)
+				if low_chroma is not None and low_chroma.ndim == 2 and low_chroma.shape[0] == 12
+				else None
+			)
+			degree_scores = {
+				deg: _score_bar_chord_dsp(cvec, lvec, _major_degree_chord(detected_key, deg), detected_key, templates)
+				for deg in diatonic_degrees
+			}
+			orig_score = 0.0
+			total_overlap = 0.0
+			for seg in segments:
+				overlap = max(0.0, min(b_end, seg.end) - max(b_start, seg.start))
+				if overlap > 0.0:
+					total_overlap += overlap
+					c_score = _score_bar_chord_dsp(cvec, lvec, seg.chord, detected_key, templates)
+					orig_score += overlap * c_score
+			current_bar_score = orig_score / total_overlap if total_overlap > 0.0 else 0.0
+			bar_data.append({
+				"start": b_start,
+				"end": b_end,
+				"degree_scores": degree_scores,
+				"current_score": current_bar_score,
+			})
+
+		candidate_sections: list[dict[str, object]] = []
+		num_bars = len(bar_data)
+
+		for sec_bars in [8]:
+			for start_idx in range(0, num_bars - sec_bars + 1, 1):
+				end_idx = start_idx + sec_bars
+				sec_start = float(bar_data[start_idx]["start"])  # type: ignore[arg-type]
+				sec_end = float(bar_data[end_idx - 1]["end"])  # type: ignore[arg-type]
+				if sec_start < PLAYABLE_MULTI_SECTION_PATTERN_MIN_START_SECONDS:
+					continue
+				if sec_start > PLAYABLE_MULTI_SECTION_PATTERN_MAX_START_SECONDS:
+					continue
+				if not any(abs(seg.start - sec_start) <= PLAYABLE_MULTI_SECTION_PATTERN_MAX_BOUNDARY_OFFSET for seg in segments):
+					continue
+				start_top2 = {
+					d
+					for d, _ in sorted(bar_data[start_idx]["degree_scores"].items(), key=lambda x: -x[1])[:2]  # type: ignore[union-attr]
+				}
+
+				current_sec_score = float(np.mean([bar_data[b]["current_score"] for b in range(start_idx, end_idx)]))  # type: ignore[arg-type]
+
+				for pat_name, pat_degrees in patterns:
+					if sec_bars % len(pat_degrees) != 0 and (sec_bars < len(pat_degrees) or len(pat_degrees) not in {2, 4, 8}):
+						continue
+					expected_start_deg = pat_degrees[0]
+					if expected_start_deg not in start_top2:
+						continue
+					pattern_scores = []
+					support_count = 0
+					for b_offset in range(sec_bars):
+						b_idx = start_idx + b_offset
+						expected_deg = pat_degrees[b_offset % len(pat_degrees)]
+						b_scores = bar_data[b_idx]["degree_scores"]  # type: ignore[union-attr]
+						score = b_scores.get(expected_deg, 0.0)
+						pattern_scores.append(score)
+						sorted_degs = sorted(b_scores.items(), key=lambda x: -x[1])
+						top_2 = {d for d, _ in sorted_degs[:2]}
+						if expected_deg in top_2:
+							support_count += 1
+					mean_pattern_score = float(np.mean(pattern_scores))
+					support_ratio = support_count / sec_bars
+					gain = mean_pattern_score - current_sec_score
+
+					if (
+						mean_pattern_score >= PLAYABLE_DSP_MULTI_SECTION_MIN_EVIDENCE
+						and gain >= PLAYABLE_DSP_MULTI_SECTION_MIN_GAIN
+						and support_ratio >= PLAYABLE_DSP_MULTI_SECTION_MIN_SUPPORT
+					):
+						candidate_sections.append({
+							"start": sec_start,
+							"end": sec_end,
+							"start_idx": start_idx,
+							"end_idx": end_idx,
+							"name": pat_name,
+							"degrees": pat_degrees,
+							"score": mean_pattern_score,
+							"gain": gain,
+							"support": support_ratio,
+							"sec_bars": sec_bars,
+						})
+
+		if not candidate_sections:
+			phase_results.append(([], 0.0))
+			continue
+
+		def _rank_cand(s: dict[str, object]) -> float:
+			unique_deg_count = len(set(s["degrees"]))  # type: ignore[arg-type]
+			richness_bonus = 0.010 * unique_deg_count
+			return -(float(s["score"]) + richness_bonus + (0.25 * float(s["gain"])))
+
+		candidate_sections.sort(key=_rank_cand)
+
+		occupied: list[tuple[float, float]] = []
+		accepted: list[dict[str, object]] = []
+		for cand in candidate_sections:
+			if len(accepted) >= PLAYABLE_DSP_MULTI_SECTION_MAX_CANDIDATES:
+				break
+			c_start = float(cand["start"])  # type: ignore[arg-type]
+			c_end = float(cand["end"])  # type: ignore[arg-type]
+			if any(c_start < occ_end - 0.2 and c_end > occ_start + 0.2 for occ_start, occ_end in occupied):
+				continue
+			occupied.append((c_start, c_end))
+			accepted.append(cand)
+
+		total_gain_score = sum(
+			(float(c["score"]) + 0.5 * float(c["gain"])) * float(c["sec_bars"])
+			for c in accepted
+		)
+		phase_results.append((accepted, total_gain_score))
+
+	best_phase = 0
+	best_acc, best_score = phase_results[0]
+	for p in range(1, 4):
+		acc_p, score_p = phase_results[p]
+		if len(acc_p) >= 3 and (
+			(len(acc_p) >= len(best_acc) + 2)
+			or (len(acc_p) > len(best_acc) and score_p > best_score + 2.0)
+		):
+			best_phase = p
+			best_acc = acc_p
+			best_score = score_p
+
+	if not best_acc:
 		return segments, []
 
-	accepted.sort(key=lambda s: float(s["start"]))  # type: ignore[arg-type]
+	best_acc.sort(key=lambda s: float(s["start"]))  # type: ignore[arg-type]
 	working = list(segments)
 	events: list[CorrectionEvent] = []
 
-	for cand in accepted:
+	for cand in best_acc:
 		pat = cand["degrees"]  # type: ignore[assignment]
 		cs, ce = float(cand["start"]), float(cand["end"])  # type: ignore[arg-type]
 		sec_bars = float(cand["sec_bars"])  # type: ignore[arg-type]
