@@ -1,0 +1,300 @@
+{
+  "version": 4,
+  "key": "A# major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 281.68,
+  "notes": "Manual playable guitar rhythm reference v4 for Hari Minggu (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 1.04,
+      "chord": "A#"
+    },
+    {
+      "start": 1.04,
+      "end": 7.08,
+      "chord": "F"
+    },
+    {
+      "start": 7.08,
+      "end": 12.1,
+      "chord": "Cm"
+    },
+    {
+      "start": 12.1,
+      "end": 14.51,
+      "chord": "F"
+    },
+    {
+      "start": 14.51,
+      "end": 19.67,
+      "chord": "Dm"
+    },
+    {
+      "start": 19.67,
+      "end": 28.61,
+      "chord": "F"
+    },
+    {
+      "start": 28.61,
+      "end": 31.65,
+      "chord": "Gm"
+    },
+    {
+      "start": 31.65,
+      "end": 36.5,
+      "chord": "Dm"
+    },
+    {
+      "start": 36.5,
+      "end": 38.98,
+      "chord": "Gm"
+    },
+    {
+      "start": 38.98,
+      "end": 43.93,
+      "chord": "Cm"
+    },
+    {
+      "start": 43.93,
+      "end": 53.64,
+      "chord": "F"
+    },
+    {
+      "start": 53.64,
+      "end": 58.33,
+      "chord": "A#"
+    },
+    {
+      "start": 58.33,
+      "end": 63.16,
+      "chord": "Dm"
+    },
+    {
+      "start": 63.16,
+      "end": 70.01,
+      "chord": "F"
+    },
+    {
+      "start": 70.01,
+      "end": 72.86,
+      "chord": "Dm"
+    },
+    {
+      "start": 72.86,
+      "end": 78.32,
+      "chord": "F"
+    },
+    {
+      "start": 78.32,
+      "end": 82.59,
+      "chord": "Gm"
+    },
+    {
+      "start": 82.59,
+      "end": 87.45,
+      "chord": "F"
+    },
+    {
+      "start": 87.45,
+      "end": 91.05,
+      "chord": "Cm"
+    },
+    {
+      "start": 91.05,
+      "end": 94.27,
+      "chord": "F"
+    },
+    {
+      "start": 94.27,
+      "end": 101.96,
+      "chord": "Cm"
+    },
+    {
+      "start": 101.96,
+      "end": 104.44,
+      "chord": "F"
+    },
+    {
+      "start": 104.44,
+      "end": 106.97,
+      "chord": "Cm"
+    },
+    {
+      "start": 106.97,
+      "end": 113.06,
+      "chord": "F"
+    },
+    {
+      "start": 113.06,
+      "end": 115.94,
+      "chord": "Cm"
+    },
+    {
+      "start": 115.94,
+      "end": 121.39,
+      "chord": "F"
+    },
+    {
+      "start": 121.39,
+      "end": 123.81,
+      "chord": "A#"
+    },
+    {
+      "start": 123.81,
+      "end": 130.64,
+      "chord": "F"
+    },
+    {
+      "start": 130.64,
+      "end": 134.28,
+      "chord": "Dm"
+    },
+    {
+      "start": 134.28,
+      "end": 137.3,
+      "chord": "A#"
+    },
+    {
+      "start": 137.3,
+      "end": 140.3,
+      "chord": "F"
+    },
+    {
+      "start": 140.3,
+      "end": 144.99,
+      "chord": "Gm"
+    },
+    {
+      "start": 144.99,
+      "end": 147.4,
+      "chord": "Cm"
+    },
+    {
+      "start": 147.4,
+      "end": 149.82,
+      "chord": "F"
+    },
+    {
+      "start": 149.82,
+      "end": 152.23,
+      "chord": "A#"
+    },
+    {
+      "start": 152.23,
+      "end": 154.64,
+      "chord": "Dm"
+    },
+    {
+      "start": 154.64,
+      "end": 157.06,
+      "chord": "D#"
+    },
+    {
+      "start": 157.06,
+      "end": 159.47,
+      "chord": "A#"
+    },
+    {
+      "start": 159.47,
+      "end": 161.89,
+      "chord": "F"
+    },
+    {
+      "start": 161.89,
+      "end": 163.68,
+      "chord": "Cm"
+    },
+    {
+      "start": 163.68,
+      "end": 166.57,
+      "chord": "F"
+    },
+    {
+      "start": 166.57,
+      "end": 172.34,
+      "chord": "Cm"
+    },
+    {
+      "start": 172.34,
+      "end": 177.19,
+      "chord": "D#"
+    },
+    {
+      "start": 177.19,
+      "end": 182.02,
+      "chord": "A#"
+    },
+    {
+      "start": 182.02,
+      "end": 185.09,
+      "chord": "D#"
+    },
+    {
+      "start": 185.09,
+      "end": 191.29,
+      "chord": "Cm"
+    },
+    {
+      "start": 191.29,
+      "end": 194.17,
+      "chord": "F"
+    },
+    {
+      "start": 194.17,
+      "end": 199.81,
+      "chord": "A#"
+    },
+    {
+      "start": 199.81,
+      "end": 208.86,
+      "chord": "D#"
+    },
+    {
+      "start": 208.86,
+      "end": 220.84,
+      "chord": "A#"
+    },
+    {
+      "start": 220.84,
+      "end": 225.88,
+      "chord": "D#"
+    },
+    {
+      "start": 225.88,
+      "end": 230.55,
+      "chord": "A#"
+    },
+    {
+      "start": 230.55,
+      "end": 236.61,
+      "chord": "D#"
+    },
+    {
+      "start": 236.61,
+      "end": 241.46,
+      "chord": "A#"
+    },
+    {
+      "start": 241.46,
+      "end": 254.79,
+      "chord": "D#"
+    },
+    {
+      "start": 254.79,
+      "end": 258.0,
+      "chord": "A#"
+    },
+    {
+      "start": 258.0,
+      "end": 279.31,
+      "chord": "D#"
+    },
+    {
+      "start": 279.31,
+      "end": 281.68,
+      "chord": "A#"
+    }
+  ]
+}

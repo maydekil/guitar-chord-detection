@@ -1,0 +1,31 @@
+{
+  "version": 4,
+  "name": "SR Banyak Cerita 4 songs manual playable reference v4",
+  "notes": "Bar-aligned manual playable guitar rhythm reference for first 4 songs (full audio, not lyric-based).",
+  "items": [
+    {
+      "id": "album-lama-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
+      "annotationPath": "annotations/manual-reference-v4/album-lama.manual-v4.gt.json"
+    },
+    {
+      "id": "foto-kita-berdua-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
+      "annotationPath": "annotations/manual-reference-v4/foto-kita-berdua.manual-v4.gt.json"
+    },
+    {
+      "id": "mau-kenalan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/03. Mau Kenalan/Mau Kenalan.mp3",
+      "annotationPath": "annotations/manual-reference-v4/mau-kenalan.manual-v4.gt.json"
+    },
+    {
+      "id": "cuma-kebetulan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/04. Cuma Kebetulan/Cuma Kebetulan.wav",
+      "annotationPath": "annotations/manual-reference-v4/cuma-kebetulan.manual-v4.gt.json"
+    }
+  ]
+}

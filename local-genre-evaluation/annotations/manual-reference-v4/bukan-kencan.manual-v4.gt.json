@@ -1,0 +1,245 @@
+{
+  "version": 4,
+  "key": "D major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 230.36,
+  "notes": "Manual playable guitar rhythm reference v4 for Bukan Kencan (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 4.6,
+      "chord": "D"
+    },
+    {
+      "start": 4.6,
+      "end": 9.2,
+      "chord": "F#m"
+    },
+    {
+      "start": 9.2,
+      "end": 13.8,
+      "chord": "G"
+    },
+    {
+      "start": 13.8,
+      "end": 18.4,
+      "chord": "A"
+    },
+    {
+      "start": 18.4,
+      "end": 23.0,
+      "chord": "D"
+    },
+    {
+      "start": 23.0,
+      "end": 27.6,
+      "chord": "F#m"
+    },
+    {
+      "start": 27.6,
+      "end": 32.2,
+      "chord": "G"
+    },
+    {
+      "start": 32.2,
+      "end": 36.8,
+      "chord": "D"
+    },
+    {
+      "start": 36.8,
+      "end": 41.4,
+      "chord": "A"
+    },
+    {
+      "start": 41.4,
+      "end": 46.0,
+      "chord": "Bm"
+    },
+    {
+      "start": 46.0,
+      "end": 50.6,
+      "chord": "Em"
+    },
+    {
+      "start": 50.6,
+      "end": 55.2,
+      "chord": "A"
+    },
+    {
+      "start": 55.2,
+      "end": 64.4,
+      "chord": "D"
+    },
+    {
+      "start": 64.4,
+      "end": 69.0,
+      "chord": "F#m"
+    },
+    {
+      "start": 69.0,
+      "end": 76.77,
+      "chord": "G"
+    },
+    {
+      "start": 76.77,
+      "end": 80.55,
+      "chord": "D"
+    },
+    {
+      "start": 80.55,
+      "end": 86.73,
+      "chord": "A"
+    },
+    {
+      "start": 86.73,
+      "end": 91.67,
+      "chord": "G"
+    },
+    {
+      "start": 91.67,
+      "end": 95.39,
+      "chord": "A"
+    },
+    {
+      "start": 95.39,
+      "end": 99.87,
+      "chord": "Bm"
+    },
+    {
+      "start": 99.87,
+      "end": 102.82,
+      "chord": "Em"
+    },
+    {
+      "start": 102.82,
+      "end": 105.28,
+      "chord": "A"
+    },
+    {
+      "start": 105.28,
+      "end": 107.76,
+      "chord": "D"
+    },
+    {
+      "start": 107.76,
+      "end": 113.94,
+      "chord": "Bm"
+    },
+    {
+      "start": 113.94,
+      "end": 119.49,
+      "chord": "D"
+    },
+    {
+      "start": 119.49,
+      "end": 122.16,
+      "chord": "G"
+    },
+    {
+      "start": 122.16,
+      "end": 126.53,
+      "chord": "A"
+    },
+    {
+      "start": 126.53,
+      "end": 132.66,
+      "chord": "G"
+    },
+    {
+      "start": 132.66,
+      "end": 135.1,
+      "chord": "A"
+    },
+    {
+      "start": 135.1,
+      "end": 139.3,
+      "chord": "D"
+    },
+    {
+      "start": 139.3,
+      "end": 143.5,
+      "chord": "F#m"
+    },
+    {
+      "start": 143.5,
+      "end": 147.7,
+      "chord": "G"
+    },
+    {
+      "start": 147.7,
+      "end": 151.9,
+      "chord": "D"
+    },
+    {
+      "start": 151.9,
+      "end": 156.1,
+      "chord": "A"
+    },
+    {
+      "start": 156.1,
+      "end": 160.3,
+      "chord": "Bm"
+    },
+    {
+      "start": 160.3,
+      "end": 164.5,
+      "chord": "Em"
+    },
+    {
+      "start": 164.5,
+      "end": 170.3,
+      "chord": "A"
+    },
+    {
+      "start": 170.3,
+      "end": 172.73,
+      "chord": "G"
+    },
+    {
+      "start": 172.73,
+      "end": 177.08,
+      "chord": "Em"
+    },
+    {
+      "start": 177.08,
+      "end": 179.54,
+      "chord": "A"
+    },
+    {
+      "start": 179.54,
+      "end": 194.54,
+      "chord": "D"
+    },
+    {
+      "start": 194.54,
+      "end": 201.22,
+      "chord": "G"
+    },
+    {
+      "start": 201.22,
+      "end": 207.59,
+      "chord": "A"
+    },
+    {
+      "start": 207.59,
+      "end": 213.21,
+      "chord": "Em"
+    },
+    {
+      "start": 213.21,
+      "end": 219.73,
+      "chord": "G"
+    },
+    {
+      "start": 219.73,
+      "end": 226.37,
+      "chord": "A"
+    },
+    {
+      "start": 226.37,
+      "end": 230.36,
+      "chord": "F#m"
+    }
+  ]
+}

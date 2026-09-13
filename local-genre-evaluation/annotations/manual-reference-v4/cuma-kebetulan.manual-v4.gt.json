@@ -1,0 +1,370 @@
+{
+  "version": 4,
+  "key": "A major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 254.44,
+  "notes": "Manual playable guitar rhythm reference v4 for Cuma Kebetulan (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 4.27,
+      "chord": "A"
+    },
+    {
+      "start": 4.27,
+      "end": 7.66,
+      "chord": "Bm"
+    },
+    {
+      "start": 7.66,
+      "end": 10.55,
+      "chord": "E"
+    },
+    {
+      "start": 10.55,
+      "end": 13.21,
+      "chord": "A"
+    },
+    {
+      "start": 13.21,
+      "end": 16.86,
+      "chord": "C#m"
+    },
+    {
+      "start": 16.86,
+      "end": 20.22,
+      "chord": "D"
+    },
+    {
+      "start": 20.22,
+      "end": 24.49,
+      "chord": "E"
+    },
+    {
+      "start": 24.49,
+      "end": 28.42,
+      "chord": "C#m"
+    },
+    {
+      "start": 28.42,
+      "end": 31.42,
+      "chord": "Bm"
+    },
+    {
+      "start": 31.42,
+      "end": 35.92,
+      "chord": "E"
+    },
+    {
+      "start": 35.92,
+      "end": 42.26,
+      "chord": "D"
+    },
+    {
+      "start": 42.26,
+      "end": 45.65,
+      "chord": "Bm"
+    },
+    {
+      "start": 45.65,
+      "end": 48.2,
+      "chord": "F#m"
+    },
+    {
+      "start": 48.2,
+      "end": 53.24,
+      "chord": "E"
+    },
+    {
+      "start": 53.24,
+      "end": 58.82,
+      "chord": "A"
+    },
+    {
+      "start": 58.82,
+      "end": 63.83,
+      "chord": "E"
+    },
+    {
+      "start": 63.83,
+      "end": 66.87,
+      "chord": "D"
+    },
+    {
+      "start": 66.87,
+      "end": 71.49,
+      "chord": "E"
+    },
+    {
+      "start": 71.49,
+      "end": 78.88,
+      "chord": "A"
+    },
+    {
+      "start": 78.88,
+      "end": 84.59,
+      "chord": "E"
+    },
+    {
+      "start": 84.59,
+      "end": 87.21,
+      "chord": "D"
+    },
+    {
+      "start": 87.21,
+      "end": 90.06,
+      "chord": "A"
+    },
+    {
+      "start": 90.06,
+      "end": 92.69,
+      "chord": "E"
+    },
+    {
+      "start": 92.69,
+      "end": 97.78,
+      "chord": "F#m"
+    },
+    {
+      "start": 97.78,
+      "end": 102.26,
+      "chord": "D"
+    },
+    {
+      "start": 102.26,
+      "end": 106.23,
+      "chord": "E"
+    },
+    {
+      "start": 106.23,
+      "end": 109.9,
+      "chord": "C#m"
+    },
+    {
+      "start": 109.9,
+      "end": 116.89,
+      "chord": "Bm"
+    },
+    {
+      "start": 116.89,
+      "end": 119.33,
+      "chord": "A"
+    },
+    {
+      "start": 119.33,
+      "end": 124.16,
+      "chord": "E"
+    },
+    {
+      "start": 124.16,
+      "end": 126.88,
+      "chord": "F#m"
+    },
+    {
+      "start": 126.88,
+      "end": 129.61,
+      "chord": "Bm"
+    },
+    {
+      "start": 129.61,
+      "end": 132.33,
+      "chord": "E"
+    },
+    {
+      "start": 132.33,
+      "end": 134.86,
+      "chord": "C#m"
+    },
+    {
+      "start": 134.86,
+      "end": 138.0,
+      "chord": "D"
+    },
+    {
+      "start": 138.0,
+      "end": 140.53,
+      "chord": "A"
+    },
+    {
+      "start": 140.53,
+      "end": 143.03,
+      "chord": "E"
+    },
+    {
+      "start": 143.03,
+      "end": 145.54,
+      "chord": "F#m"
+    },
+    {
+      "start": 145.54,
+      "end": 148.05,
+      "chord": "D"
+    },
+    {
+      "start": 148.05,
+      "end": 150.56,
+      "chord": "A"
+    },
+    {
+      "start": 150.56,
+      "end": 153.07,
+      "chord": "E"
+    },
+    {
+      "start": 153.07,
+      "end": 155.57,
+      "chord": "F#m"
+    },
+    {
+      "start": 155.57,
+      "end": 159.0,
+      "chord": "D"
+    },
+    {
+      "start": 159.0,
+      "end": 162.0,
+      "chord": "E"
+    },
+    {
+      "start": 162.0,
+      "end": 163.58,
+      "chord": "A"
+    },
+    {
+      "start": 163.58,
+      "end": 166.07,
+      "chord": "E"
+    },
+    {
+      "start": 166.07,
+      "end": 171.18,
+      "chord": "A"
+    },
+    {
+      "start": 171.18,
+      "end": 176.31,
+      "chord": "E"
+    },
+    {
+      "start": 176.31,
+      "end": 179.07,
+      "chord": "D"
+    },
+    {
+      "start": 179.07,
+      "end": 181.8,
+      "chord": "E"
+    },
+    {
+      "start": 181.8,
+      "end": 185.0,
+      "chord": "A"
+    },
+    {
+      "start": 185.0,
+      "end": 185.67,
+      "chord": "C#m"
+    },
+    {
+      "start": 185.67,
+      "end": 188.17,
+      "chord": "A"
+    },
+    {
+      "start": 188.17,
+      "end": 190.68,
+      "chord": "C#m"
+    },
+    {
+      "start": 190.68,
+      "end": 193.19,
+      "chord": "D"
+    },
+    {
+      "start": 193.19,
+      "end": 195.7,
+      "chord": "A"
+    },
+    {
+      "start": 195.7,
+      "end": 198.21,
+      "chord": "E"
+    },
+    {
+      "start": 198.21,
+      "end": 200.71,
+      "chord": "F#m"
+    },
+    {
+      "start": 200.71,
+      "end": 203.22,
+      "chord": "Bm"
+    },
+    {
+      "start": 203.22,
+      "end": 207.4,
+      "chord": "E"
+    },
+    {
+      "start": 207.4,
+      "end": 212.88,
+      "chord": "A"
+    },
+    {
+      "start": 212.88,
+      "end": 212.9,
+      "chord": "E"
+    },
+    {
+      "start": 212.9,
+      "end": 216.9,
+      "chord": "A"
+    },
+    {
+      "start": 216.9,
+      "end": 220.9,
+      "chord": "E"
+    },
+    {
+      "start": 220.9,
+      "end": 224.9,
+      "chord": "F#m"
+    },
+    {
+      "start": 224.9,
+      "end": 228.9,
+      "chord": "D"
+    },
+    {
+      "start": 228.9,
+      "end": 232.9,
+      "chord": "A"
+    },
+    {
+      "start": 232.9,
+      "end": 236.9,
+      "chord": "E"
+    },
+    {
+      "start": 236.9,
+      "end": 240.9,
+      "chord": "D"
+    },
+    {
+      "start": 240.9,
+      "end": 244.9,
+      "chord": "E"
+    },
+    {
+      "start": 244.9,
+      "end": 249.06,
+      "chord": "D"
+    },
+    {
+      "start": 249.06,
+      "end": 254.44,
+      "chord": "A"
+    }
+  ]
+}

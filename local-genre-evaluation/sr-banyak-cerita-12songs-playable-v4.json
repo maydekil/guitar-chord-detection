@@ -1,0 +1,79 @@
+{
+  "version": 4,
+  "name": "SR Banyak Cerita 12 songs manual playable reference v4",
+  "notes": "Bar-aligned manual playable guitar rhythm reference for all 12 songs in SR Banyak Cerita (full audio, not lyric-based).",
+  "items": [
+    {
+      "id": "01-album-lama-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/01. Album Lama/Album Lama.wav",
+      "annotationPath": "annotations/manual-reference-v4/album-lama.manual-v4.gt.json"
+    },
+    {
+      "id": "02-foto-kita-berdua-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/02. Foto Kita Berdua/Foto Kita Berdua.wav",
+      "annotationPath": "annotations/manual-reference-v4/foto-kita-berdua.manual-v4.gt.json"
+    },
+    {
+      "id": "03-mau-kenalan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/03. Mau Kenalan/Mau Kenalan.mp3",
+      "annotationPath": "annotations/manual-reference-v4/mau-kenalan.manual-v4.gt.json"
+    },
+    {
+      "id": "04-cuma-kebetulan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/04. Cuma Kebetulan/Cuma Kebetulan.wav",
+      "annotationPath": "annotations/manual-reference-v4/cuma-kebetulan.manual-v4.gt.json"
+    },
+    {
+      "id": "05-bukan-kangen-kok-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/05. Bukan Kangen Kok/Bukan Kangen Kok.wav",
+      "annotationPath": "annotations/manual-reference-v4/bukan-kangen-kok.manual-v4.gt.json"
+    },
+    {
+      "id": "06-bukan-kencan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/06. Bukan Kencan/Bukan Kencan.wav",
+      "annotationPath": "annotations/manual-reference-v4/bukan-kencan.manual-v4.gt.json"
+    },
+    {
+      "id": "07-kamu-kok-betah-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/07. Kamu Kok Betah/Kamu Ko Betah.wav",
+      "annotationPath": "annotations/manual-reference-v4/kamu-kok-betah.manual-v4.gt.json"
+    },
+    {
+      "id": "08-salah-pesan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/08. Salah Pesan/Salah Pesan.wav",
+      "annotationPath": "annotations/manual-reference-v4/salah-pesan.manual-v4.gt.json"
+    },
+    {
+      "id": "09-hari-minggu-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/09. Hari Minggu/Hari Minggu.wav",
+      "annotationPath": "annotations/manual-reference-v4/hari-minggu.manual-v4.gt.json"
+    },
+    {
+      "id": "10-pulangnya-kok-lama-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/10. Pulangnya Kok Lama/Pulangnya Kok Lama.wav",
+      "annotationPath": "annotations/manual-reference-v4/pulangnya-kok-lama.manual-v4.gt.json"
+    },
+    {
+      "id": "11-salah-jalan-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/11. Salah Jalan/Salah Jalan.wav",
+      "annotationPath": "annotations/manual-reference-v4/salah-jalan.manual-v4.gt.json"
+    },
+    {
+      "id": "12-rebutan-playlist-manual-v4",
+      "genre": "reggae",
+      "audioPath": "${HOME}/MyMusic/SR Banyak Cerita/12. Rebutan Playlist/Rebutan Playlist.wav",
+      "annotationPath": "annotations/manual-reference-v4/rebutan-playlist.manual-v4.gt.json"
+    }
+  ]
+}

@@ -1,0 +1,225 @@
+{
+  "version": 4,
+  "key": "G major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 238.36,
+  "notes": "Manual playable guitar rhythm reference v4 for Pulangnya Kok Lama (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 3.74,
+      "chord": "G"
+    },
+    {
+      "start": 3.74,
+      "end": 8.24,
+      "chord": "Bm"
+    },
+    {
+      "start": 8.24,
+      "end": 13.82,
+      "chord": "C"
+    },
+    {
+      "start": 13.82,
+      "end": 16.28,
+      "chord": "Am"
+    },
+    {
+      "start": 16.28,
+      "end": 18.76,
+      "chord": "D"
+    },
+    {
+      "start": 18.76,
+      "end": 24.31,
+      "chord": "G"
+    },
+    {
+      "start": 24.31,
+      "end": 32.9,
+      "chord": "D"
+    },
+    {
+      "start": 32.9,
+      "end": 40.94,
+      "chord": "G"
+    },
+    {
+      "start": 40.94,
+      "end": 47.42,
+      "chord": "D"
+    },
+    {
+      "start": 47.42,
+      "end": 52.43,
+      "chord": "G"
+    },
+    {
+      "start": 52.43,
+      "end": 59.03,
+      "chord": "Bm"
+    },
+    {
+      "start": 59.03,
+      "end": 67.99,
+      "chord": "Am"
+    },
+    {
+      "start": 67.99,
+      "end": 70.54,
+      "chord": "C"
+    },
+    {
+      "start": 70.54,
+      "end": 78.03,
+      "chord": "Bm"
+    },
+    {
+      "start": 78.03,
+      "end": 80.53,
+      "chord": "Am"
+    },
+    {
+      "start": 80.53,
+      "end": 83.6,
+      "chord": "D"
+    },
+    {
+      "start": 83.6,
+      "end": 87.8,
+      "chord": "G"
+    },
+    {
+      "start": 87.8,
+      "end": 92.0,
+      "chord": "D"
+    },
+    {
+      "start": 92.0,
+      "end": 96.2,
+      "chord": "Em"
+    },
+    {
+      "start": 96.2,
+      "end": 100.4,
+      "chord": "C"
+    },
+    {
+      "start": 100.4,
+      "end": 104.6,
+      "chord": "Am"
+    },
+    {
+      "start": 104.6,
+      "end": 108.8,
+      "chord": "D"
+    },
+    {
+      "start": 108.8,
+      "end": 113.0,
+      "chord": "G"
+    },
+    {
+      "start": 113.0,
+      "end": 119.89,
+      "chord": "D"
+    },
+    {
+      "start": 119.89,
+      "end": 122.75,
+      "chord": "C"
+    },
+    {
+      "start": 122.75,
+      "end": 125.6,
+      "chord": "D"
+    },
+    {
+      "start": 125.6,
+      "end": 133.86,
+      "chord": "Am"
+    },
+    {
+      "start": 133.86,
+      "end": 136.23,
+      "chord": "D"
+    },
+    {
+      "start": 136.23,
+      "end": 141.27,
+      "chord": "G"
+    },
+    {
+      "start": 141.27,
+      "end": 144.82,
+      "chord": "C"
+    },
+    {
+      "start": 144.82,
+      "end": 147.38,
+      "chord": "Bm"
+    },
+    {
+      "start": 147.38,
+      "end": 150.47,
+      "chord": "Em"
+    },
+    {
+      "start": 150.47,
+      "end": 152.87,
+      "chord": "Am"
+    },
+    {
+      "start": 152.87,
+      "end": 157.69,
+      "chord": "D"
+    },
+    {
+      "start": 157.69,
+      "end": 174.03,
+      "chord": "C"
+    },
+    {
+      "start": 174.03,
+      "end": 178.17,
+      "chord": "G"
+    },
+    {
+      "start": 178.17,
+      "end": 188.43,
+      "chord": "C"
+    },
+    {
+      "start": 188.43,
+      "end": 196.63,
+      "chord": "G"
+    },
+    {
+      "start": 196.63,
+      "end": 209.03,
+      "chord": "C"
+    },
+    {
+      "start": 209.03,
+      "end": 213.16,
+      "chord": "G"
+    },
+    {
+      "start": 213.16,
+      "end": 220.94,
+      "chord": "C"
+    },
+    {
+      "start": 220.94,
+      "end": 231.92,
+      "chord": "Am"
+    },
+    {
+      "start": 231.92,
+      "end": 238.36,
+      "chord": "G"
+    }
+  ]
+}

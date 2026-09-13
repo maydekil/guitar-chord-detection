@@ -1,0 +1,260 @@
+{
+  "version": 4,
+  "key": "C major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 213.04,
+  "notes": "Manual playable guitar rhythm reference v4 for Bukan Kangen Kok (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 5.43,
+      "chord": "C"
+    },
+    {
+      "start": 5.43,
+      "end": 10.59,
+      "chord": "Em"
+    },
+    {
+      "start": 10.59,
+      "end": 12.99,
+      "chord": "F"
+    },
+    {
+      "start": 12.99,
+      "end": 16.09,
+      "chord": "C"
+    },
+    {
+      "start": 16.09,
+      "end": 19.41,
+      "chord": "G"
+    },
+    {
+      "start": 19.41,
+      "end": 22.95,
+      "chord": "Am"
+    },
+    {
+      "start": 22.95,
+      "end": 25.64,
+      "chord": "Dm"
+    },
+    {
+      "start": 25.64,
+      "end": 27.84,
+      "chord": "G"
+    },
+    {
+      "start": 27.84,
+      "end": 31.46,
+      "chord": "C"
+    },
+    {
+      "start": 31.46,
+      "end": 34.81,
+      "chord": "Em"
+    },
+    {
+      "start": 34.81,
+      "end": 37.39,
+      "chord": "F"
+    },
+    {
+      "start": 37.39,
+      "end": 39.78,
+      "chord": "C"
+    },
+    {
+      "start": 39.78,
+      "end": 42.56,
+      "chord": "G"
+    },
+    {
+      "start": 42.56,
+      "end": 45.93,
+      "chord": "Am"
+    },
+    {
+      "start": 45.93,
+      "end": 50.57,
+      "chord": "Dm"
+    },
+    {
+      "start": 50.57,
+      "end": 52.92,
+      "chord": "C"
+    },
+    {
+      "start": 52.92,
+      "end": 55.27,
+      "chord": "Am"
+    },
+    {
+      "start": 55.27,
+      "end": 57.62,
+      "chord": "Em"
+    },
+    {
+      "start": 57.62,
+      "end": 69.85,
+      "chord": "G"
+    },
+    {
+      "start": 69.85,
+      "end": 73.63,
+      "chord": "Em"
+    },
+    {
+      "start": 73.63,
+      "end": 81.43,
+      "chord": "F"
+    },
+    {
+      "start": 81.43,
+      "end": 89.86,
+      "chord": "C"
+    },
+    {
+      "start": 89.86,
+      "end": 95.36,
+      "chord": "F"
+    },
+    {
+      "start": 95.36,
+      "end": 101.05,
+      "chord": "G"
+    },
+    {
+      "start": 101.05,
+      "end": 104.1,
+      "chord": "C"
+    },
+    {
+      "start": 104.1,
+      "end": 107.1,
+      "chord": "Em"
+    },
+    {
+      "start": 107.1,
+      "end": 110.1,
+      "chord": "F"
+    },
+    {
+      "start": 110.1,
+      "end": 113.1,
+      "chord": "C"
+    },
+    {
+      "start": 113.1,
+      "end": 116.1,
+      "chord": "G"
+    },
+    {
+      "start": 116.1,
+      "end": 119.1,
+      "chord": "Am"
+    },
+    {
+      "start": 119.1,
+      "end": 122.1,
+      "chord": "Dm"
+    },
+    {
+      "start": 122.1,
+      "end": 125.1,
+      "chord": "G"
+    },
+    {
+      "start": 125.1,
+      "end": 128.03,
+      "chord": "C"
+    },
+    {
+      "start": 128.03,
+      "end": 135.02,
+      "chord": "G"
+    },
+    {
+      "start": 135.02,
+      "end": 144.2,
+      "chord": "C"
+    },
+    {
+      "start": 144.2,
+      "end": 146.77,
+      "chord": "Dm"
+    },
+    {
+      "start": 146.77,
+      "end": 149.07,
+      "chord": "G"
+    },
+    {
+      "start": 149.07,
+      "end": 151.19,
+      "chord": "C"
+    },
+    {
+      "start": 151.19,
+      "end": 153.98,
+      "chord": "Em"
+    },
+    {
+      "start": 153.98,
+      "end": 156.78,
+      "chord": "Am"
+    },
+    {
+      "start": 156.78,
+      "end": 162.38,
+      "chord": "Em"
+    },
+    {
+      "start": 162.38,
+      "end": 168.44,
+      "chord": "Dm"
+    },
+    {
+      "start": 168.44,
+      "end": 171.22,
+      "chord": "G"
+    },
+    {
+      "start": 171.22,
+      "end": 176.36,
+      "chord": "C"
+    },
+    {
+      "start": 176.36,
+      "end": 178.92,
+      "chord": "G"
+    },
+    {
+      "start": 178.92,
+      "end": 186.62,
+      "chord": "C"
+    },
+    {
+      "start": 186.62,
+      "end": 191.03,
+      "chord": "F"
+    },
+    {
+      "start": 191.03,
+      "end": 201.48,
+      "chord": "C"
+    },
+    {
+      "start": 201.48,
+      "end": 207.15,
+      "chord": "G"
+    },
+    {
+      "start": 207.15,
+      "end": 213.04,
+      "chord": "C"
+    }
+  ]
+}

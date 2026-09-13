@@ -1,0 +1,235 @@
+{
+  "version": 4,
+  "key": "C major",
+  "capo": "No capo",
+  "clipStart": 0.0,
+  "clipEnd": 229.36,
+  "notes": "Manual playable guitar rhythm reference v4 for Salah Jalan (full audio)",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 5.55,
+      "chord": "Em"
+    },
+    {
+      "start": 5.55,
+      "end": 7.96,
+      "chord": "F"
+    },
+    {
+      "start": 7.96,
+      "end": 22.48,
+      "chord": "C"
+    },
+    {
+      "start": 22.48,
+      "end": 25.38,
+      "chord": "Dm"
+    },
+    {
+      "start": 25.38,
+      "end": 31.7,
+      "chord": "G"
+    },
+    {
+      "start": 31.7,
+      "end": 38.96,
+      "chord": "C"
+    },
+    {
+      "start": 38.96,
+      "end": 44.77,
+      "chord": "F"
+    },
+    {
+      "start": 44.77,
+      "end": 59.84,
+      "chord": "G"
+    },
+    {
+      "start": 59.84,
+      "end": 70.47,
+      "chord": "C"
+    },
+    {
+      "start": 70.47,
+      "end": 78.69,
+      "chord": "G"
+    },
+    {
+      "start": 78.69,
+      "end": 83.31,
+      "chord": "C"
+    },
+    {
+      "start": 83.31,
+      "end": 92.07,
+      "chord": "F"
+    },
+    {
+      "start": 92.07,
+      "end": 100.98,
+      "chord": "C"
+    },
+    {
+      "start": 100.98,
+      "end": 111.69,
+      "chord": "G"
+    },
+    {
+      "start": 111.69,
+      "end": 116.1,
+      "chord": "C"
+    },
+    {
+      "start": 116.1,
+      "end": 121.42,
+      "chord": "F"
+    },
+    {
+      "start": 121.42,
+      "end": 125.32,
+      "chord": "G"
+    },
+    {
+      "start": 125.32,
+      "end": 131.66,
+      "chord": "C"
+    },
+    {
+      "start": 131.66,
+      "end": 131.7,
+      "chord": "G"
+    },
+    {
+      "start": 131.7,
+      "end": 135.3,
+      "chord": "C"
+    },
+    {
+      "start": 135.3,
+      "end": 138.9,
+      "chord": "G"
+    },
+    {
+      "start": 138.9,
+      "end": 142.5,
+      "chord": "Am"
+    },
+    {
+      "start": 142.5,
+      "end": 146.1,
+      "chord": "F"
+    },
+    {
+      "start": 146.1,
+      "end": 149.7,
+      "chord": "Dm"
+    },
+    {
+      "start": 149.7,
+      "end": 153.3,
+      "chord": "G"
+    },
+    {
+      "start": 153.3,
+      "end": 156.9,
+      "chord": "C"
+    },
+    {
+      "start": 156.9,
+      "end": 162.21,
+      "chord": "G"
+    },
+    {
+      "start": 162.21,
+      "end": 169.69,
+      "chord": "C"
+    },
+    {
+      "start": 169.69,
+      "end": 178.68,
+      "chord": "G"
+    },
+    {
+      "start": 178.68,
+      "end": 185.67,
+      "chord": "C"
+    },
+    {
+      "start": 185.67,
+      "end": 191.66,
+      "chord": "F"
+    },
+    {
+      "start": 191.66,
+      "end": 195.67,
+      "chord": "C"
+    },
+    {
+      "start": 195.67,
+      "end": 198.67,
+      "chord": "F"
+    },
+    {
+      "start": 198.67,
+      "end": 205.66,
+      "chord": "C"
+    },
+    {
+      "start": 205.66,
+      "end": 210.19,
+      "chord": "G"
+    },
+    {
+      "start": 210.19,
+      "end": 210.74,
+      "chord": "Am"
+    },
+    {
+      "start": 210.74,
+      "end": 212.69,
+      "chord": "C"
+    },
+    {
+      "start": 212.69,
+      "end": 214.65,
+      "chord": "G"
+    },
+    {
+      "start": 214.65,
+      "end": 216.6,
+      "chord": "Am"
+    },
+    {
+      "start": 216.6,
+      "end": 218.55,
+      "chord": "F"
+    },
+    {
+      "start": 218.55,
+      "end": 220.5,
+      "chord": "Dm"
+    },
+    {
+      "start": 220.5,
+      "end": 222.45,
+      "chord": "G"
+    },
+    {
+      "start": 222.45,
+      "end": 224.4,
+      "chord": "C"
+    },
+    {
+      "start": 224.4,
+      "end": 226.35,
+      "chord": "G"
+    },
+    {
+      "start": 226.35,
+      "end": 229.36,
+      "chord": "C"
+    }
+  ]
+}
